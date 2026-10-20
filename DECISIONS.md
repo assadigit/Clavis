@@ -1,0 +1,40 @@
+# DECISIONS.md — Clavis
+
+One line each: what was unclear, what was chosen, why. (SPEC §0.2.)
+
+## Platform & tooling
+
+1. **Wails version** — pinned `github.com/wailsapp/wails/v3 v3.0.0-beta.33` (the newest beta at build time, read from the official Go module proxy, not from memory) + `@wailsio/runtime@3.0.0-beta.33` on the npm side so the JS runtime matches the Go backend exactly.
+2. **Cross-compilation host** — this build machine is Linux, not Windows. Wails v3 on Windows is pure Go (WebView2 via registry + syscalls, no CGO), so `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build` produces a real Windows binary from Linux. The fallback in SPEC §2 (Wails v2 + fyne tray) was NOT needed.
+3. **Build tooling without the wails3 CLI** — the app is built with plain `go build` + hand-written resource tooling (`tools/icopack`, `tools/syso` mirroring the Wails build's winres usage). The wails3 CLI mainly scaffolds and generates bindings; the runtime supports `Call.ByName("main.Clavis.…")`, so generated bindings are unnecessary and one less moving part.
+4. **Frontend stack** — the exact React components, `design-tokens.css` and CSS recipes from the verified reference implementation (web edition), built with Vite (two entries: `popup.html`, `manager.html`) + Tailwind v4 (only for the utility classes the components already use). No visual value was added — tokens only.
+
+## Behavior choices where the spec allowed latitude
+
+5. **Manager visibility at launch** — normal launch shows the Manager window (so the app has a face on first run); the `--hidden` flag (used by Start-with-Windows) starts tray-only. The spec fixed the hidden case but not the normal one.
+6. **Autostart syncing** — the HKCU `Run` value is synced to the *Start with Windows* setting on every launch (not only first run), so the setting self-heals if other software removes the entry. Value name "Clavis", command `…\Clavis.exe --hidden` via Wails' built-in autostart manager.
+7. **Shortcut-conflict reporting at startup** — if `RegisterHotKey` fails at launch, Go emits a `clavis:shortcut-conflict` event and the Manager shows a dismissible banner with the spec message; changing the shortcut later re-registers and rolls the setting back on failure, so a dead combo is never saved.
+8. **Popup hide-on-focus-loss** — implemented with Wails' `HideOnFocusLost` (native) plus a `clavis:popup-shown/hidden` event pair so the palette resets (query cleared, selection on top) on every open, per §3.3b.
+9. **Esc in the popup** — handled in JS (back one level first, hide only at top level), so Wails' `HideOnEscape` is NOT used (it would hide the window on every Esc).
+10. **Popup window sizing** — the webview reports its panel size (`ResizeObserver`, 640 px + 2×32 px shadow pad) and Go applies it in DIPs, so the window grows/shrinks with the rows and stays DPI-correct on any monitor.
+11. **Alt-Tab suppression** — popup window uses `HiddenOnTaskbar` + `WS_EX_TOOLWINDOW` (`ExStyle 0x80`).
+12. **Tray icon variants** — Wails' Windows tray does not support separate light/dark icons, so one icon ships: the primary-blue key with a contrasting outline, legible on both light and dark taskbars.
+13. **Manager maximized look** — the Manager is a transparent frameless window that draws its own rounded glass frame with the token shadow pad; when maximized it goes edge-to-edge (detected by window-size heuristic).
+14. **Manager geometry persistence** — bounds are saved when hiding/closing/minimizing/ quitting (never while maximized, so the last normal bounds survive).
+15. **Browser-reserved shortcut rejection kept** — combos like Ctrl+T / Ctrl+W stay rejected in the capture UI even though Windows would accept them globally: owning them system-wide would break normal browser usage.
+16. **Second instance** — Wails' `SingleInstance` (unique id + no encryption key needed on a local mutex); the second launch signals the first to open the Manager and exits, per §3.1.
+17. **"Import backup" JSON** — read via the standard file input inside the webview (works natively in WebView2); folder import goes through a native folder picker in Go. Both feed the same conflict-resolution flow.
+
+## Divergences fixed relative to the reference (web) implementation
+
+18. **Daily-backup "today" check off-by-one** — the reference used `slice(0, 19)` of `clavis-data-YYYYMMDD-…`, which matches a 10-day window of dates sharing 7 date digits; the Go edition uses the full 20-char day prefix (verified by test: one daily backup per calendar day, newest 10 kept).
+19. **Tiered search comparator crash** — the reference's `compareRanked` passed `Tiered` objects into `compareEntries` (a latent crash whenever two results shared a rank tier in a word query). Fixed to `a.entry`/`b.entry` in the desktop frontend; the web edition in the sandbox preview has the same fix queued.
+20. **Corrupt-file recovery order** — recovery walks backups newest-first (the spec's "newest valid backup"); a naive oldest-first reading was caught and fixed by a test before release.
+21. **Empty `categoryId: ""`** — treated as "no category" (null) rather than storing an empty string, keeping the file format clean.
+22. **`slice` of `ManagerBounds` on empty settings** — a hand-edited empty shortcut string now falls back to the default instead of persisting "".
+
+## Honest limits of this build host (no Windows available)
+
+23. **Runtime behaviors that compile but could not be executed here**: OS-global hotkey while another app has focus, tray clicks, native clipboard-history exclusion formats, single-instance mutex, autostart registry value, WebView2 window rendering, installer flows. All are implemented through Wails v3's supported APIs (RegisterHotKey/Shell_NotifyIcon/SetClipboardData/registry, per the beta.33 source) and the pure-Go core under them is fully tested; the popup-open ≤150 ms budget is met by design (pre-created window + pre-loaded webview, measured 26.3 ms in the browser harness for the same UI) but could not be re-measured on real Windows hardware.
+24. **Verification substitute** — the exact Go backend (store/dispatcher) + exact frontend were verified end-to-end in a real browser via Wails' official `-tags server` mode (headless HTTP+WebSocket runtime): UI → `Call.ByName` → Go store → `clavis-data.json` on disk → back to the UI, including item creation, category default-secret, masked previews, fuzzy search, copy side-effects, settings persistence, and the recovery/read-only behaviors covered by the Go test suite (68 tests, race-clean).
+25. **WebView2 runtime in the installer** — checked via the EdgeUpdate ClientState registry keys (machine + user); when missing, Microsoft's official bootstrapper (embedded, 1.8 MB) runs per-user. It downloads from Microsoft only in that rare case — Clavis itself never goes online at runtime.

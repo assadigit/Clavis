@@ -1,0 +1,11 @@
+# Build outputs (release binaries live in GitHub Releases)
+dist/
+frontend/node_modules/
+frontend/dist/
+build/png/
+*.exe
+*.syso
+
+# Local dev
+*.log
+.DS_Store

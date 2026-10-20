@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Clavis tray icon: the primary-blue key, legible at 16×16 on light and
+       dark taskbars thanks to the contrasting outline. -->
+  <g stroke="#FFFFFF" stroke-width="14" fill="none" stroke-linejoin="round" paint-order="stroke">
+    <circle cx="128" cy="88" r="42"/>
+    <path d="M116 112 h24 v96 a8 8 0 0 1 -8 8 h-8 a8 8 0 0 1 -8 -8 z" fill="none"/>
+    <path d="M116 146 h-32 a6 6 0 0 0 -6 6 v14 a6 6 0 0 0 6 6 h32 z" fill="none"/>
+    <path d="M116 178 h-22 a6 6 0 0 0 -6 6 v14 a6 6 0 0 0 6 6 h22 z" fill="none"/>
+  </g>
+  <g fill="#2F6FEB">
+    <circle cx="128" cy="88" r="42" fill="none" stroke="#2F6FEB" stroke-width="24"/>
+    <path d="M116 112 h24 v96 a8 8 0 0 1 -8 8 h-8 a8 8 0 0 1 -8 -8 z"/>
+    <path d="M116 146 h-32 a6 6 0 0 0 -6 6 v14 a6 6 0 0 0 6 6 h32 z"/>
+    <path d="M116 178 h-22 a6 6 0 0 0 -6 6 v14 a6 6 0 0 0 6 6 h22 z"/>
+  </g>
+</svg>
