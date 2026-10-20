@@ -17,7 +17,7 @@ import {
   metaLine,
   sharedCountMap,
 } from "./derive";
-import { EntryTypeIcon, Ix } from "./icons";
+import { EntryTile, Ix } from "./icons";
 import { Btn, Menu, MenuItem } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
@@ -157,16 +157,16 @@ export function EntryList({
         tabIndex={-1}
         data-selected={selected ? "true" : "false"}
         className="glass-row clavis-focusable flex cursor-pointer items-center"
-        style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)", minHeight: "calc(var(--space-4) + var(--space-4))" }}
+        style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)", minHeight: "calc(var(--space-4) + var(--space-4))", borderRadius: 0 }}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
           onSelect({ kind: row.kind, id: row.id });
           rowRefs.current[i]?.focus();
         }}
       >
-        <EntryTypeIcon kind={row.kind} isSecret={row.isSecret} size="md" />
+        <EntryTile kind={row.kind} isSecret={row.isSecret} />
         <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)" }}>
-          <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>
+          <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>
             {row.name}
           </span>
           {row.meta !== "" ? (
@@ -241,8 +241,8 @@ export function EntryList({
   return (
     <section
       aria-label={isTrash ? "Trash list" : "Entry list"}
-      className="glass-panel flex min-w-0 flex-1 flex-col md:flex-none"
-      style={{ width: "min(100%, calc(var(--space-6) * 10))", padding: "var(--space-2)", gap: "var(--space-2)", overflow: "hidden" }}
+      className="clavis-col flex min-w-0 flex-1 flex-col md:flex-none"
+      style={{ width: "min(100%, calc(var(--space-6) * 10))", padding: "var(--space-2)", gap: "var(--space-2)", overflow: "hidden", borderRight: "1px solid var(--glass-border)" }}
     >
       <header className="flex items-center" style={{ gap: "var(--space-2)" }}>
         <div className="relative min-w-0 flex-1">
@@ -318,19 +318,19 @@ export function EntryList({
         <div
           role="list"
           aria-label="Deleted entries"
-          className="clavis-scroll flex flex-col"
-          style={{ gap: "var(--space-1)", overflowY: "auto", flex: 1, minHeight: 0, padding: "0 var(--space-1) var(--space-1)" }}
+          className="clavis-scroll clavis-divided flex flex-col"
+          style={{ overflowY: "auto", flex: 1, minHeight: 0, paddingBottom: "var(--space-1)" }}
         >
           {trashResults.map((e) => (
             <div
               key={`${e.kind}:${e.id}`}
               role="listitem"
               className="glass-row flex items-center"
-              style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)" }}
+              style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)", borderRadius: 0 }}
             >
-              <EntryTypeIcon kind={e.kind} isSecret={e.isSecret} size="md" />
+              <EntryTile kind={e.kind} isSecret={e.isSecret} />
               <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)" }}>
-                <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>
+                <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>
                   {e.name}
                 </span>
                 <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
@@ -367,8 +367,8 @@ export function EntryList({
           role="listbox"
           aria-label="Entries"
           tabIndex={0}
-          className="clavis-scroll clavis-focusable flex flex-col"
-          style={{ gap: "var(--space-1)", overflowY: "auto", flex: 1, minHeight: 0, padding: "0 var(--space-1) var(--space-1)" }}
+          className="clavis-scroll clavis-focusable clavis-divided flex flex-col"
+          style={{ overflowY: "auto", flex: 1, minHeight: 0, paddingBottom: "var(--space-1)" }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();

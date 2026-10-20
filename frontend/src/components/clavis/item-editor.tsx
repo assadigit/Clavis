@@ -25,7 +25,7 @@ import { autoKey } from "@/lib/clavis/dotenv";
 import type { ClavisState, Group, Item } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupsContaining, maskValue } from "./derive";
-import { EntryTypeIcon, Ix } from "./icons";
+import { EntryTile, Ix } from "./icons";
 import { SharedDeleteModal, SharedEditModal } from "./shared-modals";
 import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
@@ -251,7 +251,7 @@ export function ItemEditor(props: ItemEditorProps) {
     >
       <header className="flex flex-col" style={{ gap: "var(--space-2)" }}>
         <div className="flex items-center" style={{ gap: "var(--space-3)" }}>
-          <EntryTypeIcon kind="item" isSecret={effectiveSecret} size="lg" style={{ color: "var(--color-accent-text)" }} />
+          <EntryTile kind="item" isSecret={effectiveSecret} lg />
           <h2 className="flex-1 truncate" style={{ margin: 0, fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }} dir="auto">
             {mode === "create" ? (forGroupId ? "New item" : "New item") : draft.name}
           </h2>

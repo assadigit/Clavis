@@ -337,7 +337,7 @@ export function Toggle({
           height: "calc(var(--space-4) + var(--space-1))",
           borderRadius: "var(--radius-chip)",
           border: "1px solid var(--glass-border)",
-          background: checked ? "var(--color-primary)" : "var(--glass-bg-hover)",
+          background: checked ? "var(--color-primary)" : "var(--control-track)",
           display: "inline-flex",
           alignItems: "center",
           padding: "calc(var(--space-1) / 2)",
@@ -350,7 +350,7 @@ export function Toggle({
             width: "var(--space-4)",
             height: "var(--space-4)",
             borderRadius: "var(--radius-chip)",
-            background: "var(--text)",
+            background: "var(--text-on-primary)",
             transform: checked ? "translateX(calc(var(--space-4) + var(--space-1)))" : "translateX(0)",
             transition: `transform var(--motion-toast) var(--ease)`,
           }}

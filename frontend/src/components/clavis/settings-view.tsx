@@ -31,7 +31,7 @@ import { downloadExport } from "@/lib/clavis/client";
 import { platform } from "@/desktop/platform";
 import type { ImportConflict } from "@/lib/clavis/types";
 import type { ClavisState } from "@/lib/clavis/types";
-import { applyGlassVars } from "./glass";
+import { applyTheme } from "./glass";
 import {
   activeModifiers,
   displayKey,
@@ -73,9 +73,6 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
   const [draftShortcut, setDraftShortcut] = useState<string | null>(null);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [savingShortcut, setSavingShortcut] = useState(false);
-
-  /* ---- Glass slider (live preview, commit on release) ---- */
-  const [glassLocal, setGlassLocal] = useState<number | null>(null);
 
   /* ---- Imports ---- */
   const backupInputRef = useRef<HTMLInputElement | null>(null);
@@ -248,8 +245,6 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
     if (res.ok) toast.success(`Backup “${name}” restored.`);
   }
 
-  const glassValue = glassLocal ?? settings.glassIntensity;
-
   /* Conflicts grouped per file. */
   const conflictGroups: Map<number, ImportConflict[]> = new Map();
   if (filesImport) {
@@ -266,8 +261,8 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
   return (
     <section
       aria-label="Settings"
-      className="glass-panel clavis-scroll flex flex-col"
-      style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "var(--space-5)", gap: "var(--space-5)" }}
+      className="clavis-col clavis-scroll flex flex-col"
+      style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "var(--space-5)", gap: "var(--space-5)", borderLeft: "1px solid var(--glass-border)", background: "var(--glass-bg)" }}
     >
       {/* ---------------- Shortcut ---------------- */}
       <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
@@ -321,44 +316,14 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
       {/* ---------------- Appearance ---------------- */}
       <div className="flex flex-col" style={{ gap: "var(--space-3)" }}>
         <SectionHeader icon={Palette} title="Appearance" />
-        <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
-          <div className="flex items-center justify-between">
-            <FieldLabel>Glass intensity</FieldLabel>
-            <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
-              {glassValue}
-            </span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={glassValue}
-            disabled={readOnly}
-            aria-label="Glass intensity"
-            className="clavis-slider"
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setGlassLocal(v);
-              applyGlassVars(v, settings.solidMode);
-            }}
-            onPointerUp={() => {
-              if (glassLocal !== null && !readOnly) void call("updateSettings", { patch: { glassIntensity: glassLocal } });
-              setGlassLocal(null);
-            }}
-            onKeyUp={() => {
-              if (glassLocal !== null && !readOnly) void call("updateSettings", { patch: { glassIntensity: glassLocal } });
-              setGlassLocal(null);
-            }}
-          />
-        </div>
         <Toggle
           checked={settings.solidMode}
           onChange={(v) => {
+            applyTheme(v);
             if (!readOnly) void call("updateSettings", { patch: { solidMode: v } });
           }}
-          label="Solid mode"
-          note="Swap glass for solid surfaces"
+          label={<span className="flex items-center" style={{ gap: "var(--space-2)" }}><Ix icon={MoonStar} size="sm" /> Dark mode</span>}
+          note="Bitwarden-style dark theme"
           disabled={readOnly}
         />
         <Toggle

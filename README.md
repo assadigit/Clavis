@@ -24,8 +24,10 @@ Copied secrets are automatically kept out of the Windows clipboard history
   guard for files from newer versions.
 - **Import / export** — full JSON backups (replace or merge), per-item/group
   Markdown and TXT, whole-folder import, "export all as Markdown".
-- **Dark glass design** — self-drawn glassmorphism that works on Windows 10
-  (no Windows 11 effects needed), token-driven styling, AA contrast.
+- **Bitwarden design system** — a clean, flat, light interface built from
+  Bitwarden's own published design tokens (brand blue `#175DDC`, white
+  surfaces, 1px borders), with a built-in dark mode. Token-driven styling,
+  AA contrast.
 - **In-app self-update** — Settings → About checks GitHub for a newer release; one click downloads and installs it (installed and portable editions), relaunches Clavis, and never touches your data. Pull-only network use: two GETs to github.com when you check (or once per 12 h in the background). No telemetry, no analytics, no accounts.
 
 Data lives in `%APPDATA%\Clavis` (shared by the installed and portable
@@ -37,8 +39,8 @@ Download from [Releases](../../releases):
 
 | File | What it is |
 | --- | --- |
-| `Clavis-Setup-1.0.3.exe` | The installer (per-user, no admin needed) |
-| `Clavis-Portable-1.0.3.exe` | The portable single file (no install) |
+| `Clavis-Setup-1.1.0.exe` | The installer (per-user, no admin needed) |
+| `Clavis-Portable-1.1.0.exe` | The portable single file (no install) |
 
 ## Build from source
 

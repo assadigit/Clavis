@@ -52,6 +52,25 @@ export function EntryTypeIcon({
   return <Ix icon={AlignLeft} size={size} style={style} />;
 }
 
+/** Bitwarden-style icon tile: the entry type icon inside a bordered square. */
+export function EntryTile({
+  kind,
+  isSecret,
+  lg,
+  style,
+}: {
+  kind: "item" | "group";
+  isSecret: boolean;
+  lg?: boolean;
+  style?: CSSProperties;
+}) {
+  return (
+    <span className="clavis-icon-tile" data-lg={lg ? "true" : undefined} style={style}>
+      <EntryTypeIcon kind={kind} isSecret={isSecret} size={lg ? "md" : "sm"} />
+    </span>
+  );
+}
+
 /** Keycap-styled shortcut fragment (e.g. one per part of Ctrl+Shift+Space). */
 export function ShortcutKeycaps({ shortcut }: { shortcut: string }) {
   const parts = shortcut.split("+").filter(Boolean);

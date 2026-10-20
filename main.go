@@ -107,7 +107,7 @@ func main() {
 		DisableResize:    true,
 		URL:              "/popup.html",
 		BackgroundType:   application.BackgroundTypeSolid,
-		BackgroundColour: application.NewRGBA(0x0B, 0x16, 0x30, 0xFF), /* --backdrop-base */
+		BackgroundColour: application.NewRGBA(0xFF, 0xFF, 0xFF, 0xFF), /* popup panel: white (Bitwarden light) */
 		HideOnFocusLost:  true,                                        // §3.3b: hides when it loses focus
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar:                   true,       // no taskbar entry
@@ -132,7 +132,7 @@ func main() {
 		Frameless:        true,
 		URL:              "/manager.html",
 		BackgroundType:   application.BackgroundTypeSolid,
-		BackgroundColour: application.NewRGBA(0x0B, 0x16, 0x30, 0xFF), /* --backdrop-base */
+		BackgroundColour: application.NewRGBA(0xF3, 0xF6, 0xF9, 0xFF), /* --backdrop-base (Bitwarden canvas) */
 		Hidden:           hidden,                                      // --hidden (autostart): tray only (§3.1)
 		Windows: application.WindowsWindow{
 			DisableFramelessWindowDecorations: true,

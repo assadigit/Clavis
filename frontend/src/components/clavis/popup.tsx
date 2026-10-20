@@ -315,7 +315,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
       >
         <div className="clavis-pop-in relative" style={{ pointerEvents: "auto" }}>
           <div className="clavis-backdrop-layer" aria-hidden />
-          <div className="glass-panel relative flex flex-col" style={{ overflow: "hidden" }}>
+          <div className="glass-panel relative flex flex-col" style={{ overflow: "hidden", boxShadow: fill ? undefined : "var(--overlay-shadow)" }}>
             {drillGroup ? (
               <div
                 className="flex items-center"
@@ -343,7 +343,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
                 </span>
               </div>
             ) : null}
-            <div style={{ padding: "var(--space-3) var(--space-4)" }}>
+            <div style={{ padding: "var(--space-3) var(--space-4)", borderBottom: "1px solid var(--glass-border)" }}>
               <input
                 ref={inputRef}
                 autoFocus

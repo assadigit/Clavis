@@ -236,7 +236,7 @@ export function Manager(props: ManagerProps) {
       >
         <header
           className="flex select-none items-center justify-between"
-          style={{ height: "calc(var(--space-5) * 2)", padding: "0 var(--space-2)", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}
+          style={{ height: "calc(var(--space-5) * 2)", padding: "0 var(--space-2)", borderBottom: "1px solid var(--glass-border)", background: "var(--glass-bg)", flexShrink: 0 }}
         >
           <div className="flex items-center" style={{ gap: "var(--space-2)" }}>
             <button
@@ -287,7 +287,7 @@ export function Manager(props: ManagerProps) {
           <div
             className="flex flex-wrap items-center"
             role="alert"
-            style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-4)", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}
+            style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-4)", borderBottom: "1px solid var(--glass-border)", background: "var(--glass-bg)", flexShrink: 0 }}
           >
             <Ix icon={Lock} size="sm" style={{ color: "var(--color-warning-text)" }} />
             <span className="t-warning" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>
@@ -300,7 +300,7 @@ export function Manager(props: ManagerProps) {
           </div>
         ) : null}
 
-        <div className="flex min-h-0 flex-1" style={{ gap: "var(--space-3)", padding: "var(--space-3)" }}>
+        <div className="flex min-h-0 flex-1" style={{ gap: 0, padding: 0 }}>
           {mobileSidebarOpen ? (
             <div className="clavis-scrim fixed inset-0 md:hidden" style={{ zIndex: 45 }} onClick={() => setMobileSidebarOpen(false)} aria-hidden />
           ) : null}
@@ -335,8 +335,8 @@ export function Manager(props: ManagerProps) {
               />
               <aside
                 aria-label="Details"
-                className={`clavis-detail-col glass-panel flex flex-col ${hasDetailContent ? "flex" : "hidden md:flex"}`}
-                style={{ flex: 1, minWidth: 0, overflow: "hidden" }}
+                className={`clavis-detail-col clavis-col flex flex-col ${hasDetailContent ? "flex" : "hidden md:flex"}`}
+                style={{ flex: 1, minWidth: 0, overflow: "hidden", background: "var(--glass-bg)" }}
               >
                 {hasDetailContent ? (
                   <div className="flex items-center md:hidden" style={{ padding: "var(--space-2)", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>

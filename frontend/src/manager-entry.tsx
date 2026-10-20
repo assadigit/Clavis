@@ -15,7 +15,7 @@ import { apiCall, fetchState } from "@/lib/clavis/client";
 import type { ApiResult } from "@/lib/clavis/client";
 import type { ClavisState } from "@/lib/clavis/types";
 import type { Creating, ListFilter, Selection } from "@/components/clavis/app-types";
-import { applyGlassVars } from "@/components/clavis/glass";
+import { applyTheme } from "@/components/clavis/glass";
 import { Manager } from "@/components/clavis/manager";
 import { Ix } from "@/components/clavis/icons";
 import { platform } from "@/desktop/platform";
@@ -129,8 +129,9 @@ function ManagerRoot() {
   useEffect(() => {
     stateRef.current = state;
     if (state) {
-      const solid = state.data.settings.solidMode || state.osTransparency === false;
-      applyGlassVars(state.data.settings.glassIntensity, solid);
+      /* Dark mode is a pure user preference now — the flat Bitwarden theme
+         needs no OS transparency, so osTransparency no longer forces it. */
+      applyTheme(state.data.settings.solidMode);
     }
   }, [state]);
 

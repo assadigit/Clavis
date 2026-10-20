@@ -9,7 +9,7 @@ import { RotateCcw, Trash2 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState } from "@/lib/clavis/types";
 import { deletedEntries, formatDateTime } from "./derive";
-import { EntryTypeIcon, Ix } from "./icons";
+import { EntryTile, Ix } from "./icons";
 import { Btn } from "./ui-bits";
 
 export interface TrashViewProps {
@@ -72,7 +72,7 @@ export function TrashView({ state, call, readOnly }: TrashViewProps) {
               className="glass-row flex items-center"
               style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)" }}
             >
-              <EntryTypeIcon kind={e.kind} isSecret={e.isSecret} size="md" />
+              <EntryTile kind={e.kind} isSecret={e.isSecret} />
               <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)" }}>
                 <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>
                   {e.name}

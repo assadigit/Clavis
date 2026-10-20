@@ -30,7 +30,7 @@ import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
 import type { ClavisState, Group } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupMemberKeys, maskValue, sharedCountMap } from "./derive";
-import { EntryTypeIcon, Ix } from "./icons";
+import { EntryTile, EntryTypeIcon, Ix } from "./icons";
 import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 
@@ -219,7 +219,7 @@ export function GroupEditor(props: GroupEditorProps) {
       onKeyDown={handleKeyDown}
     >
       <header className="flex items-center" style={{ gap: "var(--space-3)" }}>
-        <EntryTypeIcon kind="group" isSecret={false} size="lg" style={{ color: "var(--color-accent-text)" }} />
+        <EntryTile kind="group" isSecret={false} lg />
         <h2 className="flex-1 truncate" style={{ margin: 0, fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }} dir="auto">
           {mode === "create" ? "New group" : draft.name}
         </h2>

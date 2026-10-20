@@ -1,114 +1,101 @@
 /* ==========================================================================
-   CLAVIS DESIGN TOKENS  (white + blue, dark glass)
-   Single source of truth for every color, glass, type, spacing and motion value.
-   RULE: the app must NEVER hard-code a color. Every color comes from a variable here.
-   This keeps an alternate theme (e.g. khaki) a one-file change later.
-   Contrast values below were verified with a WCAG script (AA needs 4.5:1 for normal text).
+   CLAVIS DESIGN TOKENS — Bitwarden design system edition
+   Values mirror bitwarden/clients `libs/components/src/tw-theme.css` so Clavis
+   matches the Bitwarden look exactly: white surfaces, 1px borders, flat
+   panels, brand blue #175DDC, Inter.
+   RULE: the app must NEVER hard-code a color. Every color comes from a
+   variable here. The previous token names are kept so every component and
+   recipe keeps working; "glass" tokens now drive FLAT surfaces.
+   Theme: light by default; `html.solid` selects the Bitwarden dark theme
+   (was "solid mode" — repurposed as the Dark mode toggle).
    ========================================================================== */
 
 :root {
-  /* scales */
-  --blue-50: #F2F6FD;
-  --blue-100: #E1E9FA;
-  --blue-200: #B9CFF8;
-  --blue-300: #86ABF3;
-  --blue-400: #4E85EE;
-  --blue-500: #2F6FEB;
-  --blue-600: #134FC3;
-  --blue-700: #0E3C95;
-  --blue-800: #0A2966;
-  --blue-900: #0B1C3D;
-  --navy-50: #F3F6FB;
-  --navy-100: #E4E9F7;
-  --navy-200: #C1CFF1;
-  --navy-300: #93ACE6;
-  --navy-400: #6185DB;
-  --navy-500: #305FCF;
-  --navy-600: #2850AE;
-  --navy-700: #1E3D85;
-  --navy-800: #152A5B;
-  --navy-900: #0B1630;
-  --sky-50: #F1F9FE;
-  --sky-100: #DEF2FC;
-  --sky-200: #B2E5FF;
-  --sky-300: #5CC8FF;
-  --sky-400: #3DBEFF;
-  --sky-500: #00A9FF;
-  --sky-600: #008ED6;
-  --sky-700: #006CA3;
-  --sky-800: #004A70;
-  --sky-900: #052E42;
-  --slate-50: #F6F7F9;
-  --slate-100: #EAECF0;
-  --slate-200: #D2D6E0;
-  --slate-300: #B1B8C9;
-  --slate-400: #8C98B0;
-  --slate-500: #6B7A99;
-  --slate-600: #57647F;
-  --slate-700: #434C61;
-  --slate-800: #2E3542;
-  --slate-900: #1E2229;
+  /* scales — Bitwarden brand + neutral + status scales */
+  --brand-50: #EEF6FF;
+  --brand-100: #DBE5F6;   /* BW primary-100 — selected rows, tinted fills */
+  --brand-300: #79A1E9;
+  --brand-600: #175DDC;   /* BW brand blue — the signature color */
+  --brand-700: #1A41AC;   /* BW primary-700 — hover / pressed */
+  --brand-800: #0D43AF;
+  --gray-50: #F7F9FA;
+  --gray-100: #E6ECF2;    /* dividers between list rows */
+  --gray-200: #D5DDE8;    /* control borders */
+  --gray-300: #B4C2D4;    /* disabled, scrollbar thumb */
+  --gray-400: #8496B0;    /* placeholders */
+  --gray-500: #62748E;
+  --gray-600: #45556C;
+  --gray-700: #314158;
+  --gray-800: #1D293D;
+  --gray-900: #0F172B;
+  --green-600: #0C8018;   /* BW success-600 */
+  --green-700: #08510F;
+  --red-600: #CB263A;     /* BW danger-600 */
+  --red-700: #951B2A;     /* BW danger-700 */
+  --amber-600: #FFBF00;   /* BW warning-600 */
+  --amber-700: #8E4000;   /* readable warning text on white */
 
   /* ---- Core roles ---- */
-  --color-primary: var(--blue-500);      /* #2F6FEB  fills, selection bar, main buttons. NEVER use as text on glass (fails contrast) */
-  --color-primary-strong: var(--blue-600);/* #134FC3  button hover/pressed. White text on it = 7.2:1 */
-  --color-secondary: var(--navy-900);    /* #0B1630  the dark backdrop base (the 60%) */
-  --color-accent: var(--sky-300);        /* #5CC8FF  small marks only */
-  --color-accent-text: #8FD9FF;          /* accent for TEXT and ICONS on glass: 8.8:1 on glass, 5.3:1 over brightest glow */
-  --color-neutral: var(--slate-500);     /* #6B7A99  borders, disabled */
+  --color-primary: var(--brand-600);        /* #175DDC — fills, selection bar, main buttons */
+  --color-primary-strong: var(--brand-700); /* #1A41AC — button hover/pressed */
+  --color-secondary: #F3F6F9;               /* BW background-alt — the app canvas */
+  --color-accent: var(--brand-600);
+  --color-accent-text: var(--brand-600);    /* 4.7:1 on white */
+  --color-neutral: var(--gray-300);         /* borders when disabled, quiet fills */
 
-  /* ---- Text on glass (all verified) ---- */
-  --text: #FFFFFF;                       /* 13.7:1 on glass over base, 8.2:1 over brightest glow */
-  --text-muted: #C1CFF1;                 /* 8.8:1 on glass over base, 5.2:1 over brightest glow */
-  --text-on-primary: #FFFFFF;            /* on --color-primary fill = 4.6:1 */
-  --text-on-accent: #0B1630;             /* on --color-accent fill = 9.5:1 */
+  /* ---- Text ---- */
+  --text: #1B2029;                          /* BW text-main — 15.6:1 on white */
+  --text-muted: #606D91;                    /* BW text-muted — 5.6:1 on white */
+  --text-on-primary: #FFFFFF;               /* on #175DDC = 4.7:1 */
+  --text-on-accent: #FFFFFF;
 
-  /* ---- Status colors (never rely on color alone: always pair with an icon + label) ---- */
-  --color-success-text: #4ADE9A;         /* 8.0:1 on glass. Used for the "Copied" check */
-  --color-danger-fill: #C23642;          /* white text on it = 5.4:1. Delete buttons */
-  --color-danger-text: #FF8A91;          /* 6.1:1 on glass. Danger text */
-  --color-warning-text: #FFC857;
+  /* ---- Status colors (never rely on color alone: pair with icon + label) ---- */
+  --color-success-text: var(--green-600);   /* the "Copied" check */
+  --color-danger-fill: var(--red-600);      /* delete buttons; white text = 5.4:1 */
+  --color-danger-text: var(--red-700);
+  --color-warning-text: var(--amber-700);
 
-  /* ---- Backdrop (the app draws its own background; Windows 10 has no native blur) ---- */
-  --backdrop-base: #0B1630;
-  --backdrop-glow-primary: rgba(47, 111, 235, 0.40);   /* HARD CAP 0.40. Brighter breaks text contrast */
-  --backdrop-glow-accent: rgba(92, 200, 255, 0.18);    /* HARD CAP 0.20 */
-  --backdrop-image:
-    radial-gradient(60% 55% at 12% 0%,  var(--backdrop-glow-primary) 0%, transparent 70%),
-    radial-gradient(50% 50% at 100% 100%, var(--backdrop-glow-accent) 0%, transparent 70%),
-    linear-gradient(160deg, #0F1F45 0%, var(--backdrop-base) 60%);
+  /* ---- Backdrop / canvas ---- */
+  --backdrop-base: #F3F6F9;                 /* flat canvas (BW background-alt) */
+  --backdrop-glow-primary: transparent;     /* flat design: no glows */
+  --backdrop-glow-accent: transparent;
+  --backdrop-image: none;
 
-  /* ---- Glass ---- */
-  --glass-bg: rgba(255, 255, 255, 0.10);
-  --glass-bg-hover: rgba(255, 255, 255, 0.14);
-  --glass-bg-selected: rgba(255, 255, 255, 0.20);   /* selected row: fill + left bar, never color alone */
-  --glass-border: rgba(255, 255, 255, 0.18);
-  --glass-highlight: rgba(255, 255, 255, 0.28);     /* 1px inner top edge */
-  --glass-blur: 20px;                               /* blur ONLY on the outer panel(s). Rows are flat translucent, no blur */
-  --glass-saturate: 140%;
-  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-  --selected-bar: var(--color-primary);             /* 3px left bar on the selected row */
+  /* ---- Surfaces (flat; the glass tokens now drive Bitwarden surfaces) ---- */
+  --glass-bg: #FFFFFF;                           /* cards, panels, inputs, chips */
+  --glass-bg-hover: rgba(26, 65, 172, 0.08);     /* BW --color-hover-default tint */
+  --glass-bg-selected: var(--brand-100);         /* BW primary-100 — selected row */
+  --glass-border: var(--gray-200);               /* 1px control/divider borders */
+  --glass-highlight: transparent;                /* no inner bevel in flat design */
+  --glass-blur: 0px;                             /* kept for compatibility — unused */
+  --glass-saturate: 100%;
+  --glass-shadow: 0 1px 2px rgba(29, 41, 61, 0.05), 0 4px 16px rgba(29, 41, 61, 0.07);
+  --overlay-shadow: 0 12px 32px rgba(29, 41, 61, 0.16);   /* menus, modals, popup */
+  --selected-bar: var(--color-primary);          /* 3px left bar on the selected row */
 
-  /* ---- Solid mode (Settings toggle AND automatic when Windows "Transparency effects" is off) ---- */
-  --solid-surface: #17233F;
-  --solid-surface-raised: #1E2D50;
-  --solid-border: #2C3F6B;
+  /* ---- Dark theme surfaces (html.solid) ---- */
+  --solid-surface: #202733;                      /* BW dark background */
+  --solid-surface-raised: #26303E;
+  --solid-border: #3D4756;
 
-  /* ---- Focus ---- */
-  --focus-ring: 0 0 0 2px var(--backdrop-base), 0 0 0 4px var(--color-accent);
+  /* ---- Controls ---- */
+  --control-track: var(--gray-200);              /* unchecked toggle track */
+  --divider: var(--gray-100);                    /* hairline between list rows */
+  --overlay-scrim: rgba(15, 23, 43, 0.45);       /* behind modals / popup */
+  --focus-ring: 0 0 0 3px rgba(23, 93, 220, 0.25);
 
-  /* ---- Typography (fonts are bundled inside the app via npm, so portable works anywhere) ---- */
+  /* ---- Typography (Bitwarden uses Inter — already bundled) ---- */
   --font-ui: "Inter Variable", "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;   /* all secret values, keys, prompts */
   --text-xs: 12px;  --text-sm: 13px;  --text-md: 14px;  --text-lg: 16px;  --text-xl: 20px;
-  --weight-regular: 450; --weight-medium: 550; --weight-semibold: 650;     /* never lighter than regular on glass */
+  --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
 
   /* ---- Spacing / shape (8px rhythm) ---- */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
-  --radius-panel: 16px;   /* the app draws its own rounded corners (Windows 10 frameless windows are square) */
-  --radius-row: 10px;
+  --radius-panel: 8px;    /* cards, dialogs, the window frame */
+  --radius-row: 6px;      /* buttons, inputs, rows, menus */
   --radius-chip: 999px;
-  --window-shadow-pad: 32px; /* transparent margin around the panel so the CSS shadow is not clipped */
+  --window-shadow-pad: 32px; /* transparent margin around a panel so the CSS shadow is not clipped */
 
   /* ---- Motion ---- */
   --motion-popup-in: 100ms;  /* popup fade/scale-in. Must never delay the popup */
@@ -121,20 +108,55 @@
   :root { --motion-popup-in: 0ms; --motion-toast: 0ms; }
 }
 
-/* Reference glass surface (copy this recipe, do not invent variants) */
+/* ==========================================================================
+   DARK THEME — Bitwarden dark tokens (bitwarden/clients .theme_dark).
+   Selected by the "solid" class on <html> (Settings → Appearance → Dark mode).
+   ========================================================================== */
+html.solid {
+  --color-primary: #65ABFF;                      /* BW dark primary-600 */
+  --color-primary-strong: #AAC3EF;               /* BW dark primary-700 (lighter) */
+  --color-secondary: #121A27;                    /* BW dark background-alt */
+  --color-accent: #65ABFF;
+  --color-accent-text: #65ABFF;                  /* ~7:1 on dark surfaces */
+  --color-neutral: #525B6A;
+
+  --text: #F3F6F9;                               /* BW dark text-main */
+  --text-muted: #8898B5;                         /* BW dark text-muted */
+  --text-on-primary: #121A27;                    /* dark text on the light-blue button */
+  --text-on-accent: #121A27;
+
+  --color-success-text: #6BF178;                 /* BW dark success-600 */
+  --color-danger-fill: #CB263A;
+  --color-danger-text: #FF4E63;                  /* BW dark danger-600 */
+  --color-warning-text: #FFBF00;
+
+  --backdrop-base: #121A27;
+  --backdrop-image: none;
+
+  --glass-bg: #202733;                           /* panels */
+  --glass-bg-hover: rgba(170, 195, 239, 0.10);   /* BW dark hover-default */
+  --glass-bg-selected: #2A3A52;
+  --glass-border: #3D4756;
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.40), 0 4px 16px rgba(0, 0, 0, 0.32);
+  --overlay-shadow: 0 12px 32px rgba(0, 0, 0, 0.50);
+  --selected-bar: #65ABFF;
+
+  --solid-surface: #202733;
+  --solid-surface-raised: #26303E;
+  --solid-border: #3D4756;
+
+  --control-track: #3D4756;
+  --divider: #2C3542;
+  --overlay-scrim: rgba(0, 0, 0, 0.55);
+  --focus-ring: 0 0 0 3px rgba(101, 171, 255, 0.35);
+}
+
+/* Reference surface recipe (copy this recipe, do not invent variants) */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
-  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow);
+  box-shadow: var(--glass-shadow);
   border-radius: var(--radius-panel);
 }
 
-/* Solid mode: toggled by adding class "solid" on <html> */
-html.solid .glass-panel {
-  background: var(--solid-surface);
-  backdrop-filter: none; -webkit-backdrop-filter: none;
-  border-color: var(--solid-border);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
+/* Dark theme: same recipe — the html.solid token overrides above do the work */

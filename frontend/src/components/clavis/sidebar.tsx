@@ -128,8 +128,8 @@ export function Sidebar({ state, call, readOnly, filter, setFilter, mobileOpen, 
     <aside
       role="tree"
       aria-label="Clavis navigation"
-      className={`clavis-sidebar-col glass-panel clavis-scroll ${mobileOpen ? "flex" : "hidden md:flex"} flex-col`}
-      style={{ width: "calc(var(--space-6) * 7)", flexShrink: 0, padding: "var(--space-3)", gap: "var(--space-1)", overflowY: "auto" }}
+      className={`clavis-sidebar-col clavis-col clavis-scroll ${mobileOpen ? "flex" : "hidden md:flex"} flex-col`}
+      style={{ width: "calc(var(--space-6) * 7)", flexShrink: 0, padding: "var(--space-3)", gap: "var(--space-1)", overflowY: "auto", borderRight: "1px solid var(--glass-border)" }}
     >
       {mobileOpen ? (
         <button
