@@ -23,14 +23,15 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, Check, Copy, FileText, GripVertical, Layers, Link2, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ClipboardPaste, Copy, FileText, GripVertical, Layers, Link2, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { copyToClipboard, downloadExport } from "@/lib/clavis/client";
+import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
 import type { ClavisState, Group } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupMemberKeys, maskValue, sharedCountMap } from "./derive";
 import { EntryTypeIcon, Ix } from "./icons";
-import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextInput, Toggle } from "./ui-bits";
+import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 
 export interface GroupEditorProps {
@@ -69,6 +70,9 @@ export function GroupEditor(props: GroupEditorProps) {
   const [adding, setAdding] = useState(false);
   const [addQuery, setAddQuery] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  /* Create mode: paste a whole project's credentials as KEY=value lines and
+     Clavis builds the group AND every member item in one shot. */
+  const [envText, setEnvText] = useState("");
 
   /* The manager remounts this editor with a fresh key whenever the group or
      its updatedAt changes, so the draft resets by remounting. */
@@ -100,11 +104,26 @@ export function GroupEditor(props: GroupEditorProps) {
     return searchEntries(addQuery, entries);
   }, [state.data, memberIds, addQuery]);
 
+  /* Live parse of the pasted block: keys preview + bad-line detection,
+     exactly what will be created (deduped like the store will dedupe). */
+  const envPreview = useMemo(() => {
+    if (mode !== "create") return null;
+    const keys: string[] = [];
+    let bad = 0;
+    for (const line of envText.split(/\r?\n/)) {
+      if (line.trim() === "") continue;
+      const parsed = parseDotenvLine(line);
+      if (parsed) keys.push(parsed.key);
+      else bad++;
+    }
+    return { keys: dedupeKeys(keys), bad };
+  }, [mode, envText]);
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key !== "Enter") return;
     const tag = (e.target as HTMLElement).tagName;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (tag === "BUTTON" || tag === "A" || tag === "KBD") return;
+    if (tag === "BUTTON" || tag === "A" || tag === "KBD" || tag === "TEXTAREA") return;
     e.preventDefault();
     void save();
   }
@@ -118,10 +137,22 @@ export function GroupEditor(props: GroupEditorProps) {
     }
     setSaving(true);
     if (mode === "create") {
-      const res = await call("createGroup", { input: { name, categoryId: draft.categoryId, tags: draft.tags, pinned: draft.pinned } });
-      if (res.ok && res.id) {
-        toast.success(`Group “${name}” added.`);
-        onDone({ kind: "group", id: res.id });
+      /* With a pasted KEY=value block: group + all member items in one shot. */
+      const text = envText.trim();
+      if (text !== "" && envPreview && envPreview.keys.length > 0) {
+        const res = await call("createGroupFromEnv", {
+          input: { name, categoryId: draft.categoryId, tags: draft.tags, pinned: draft.pinned, text },
+        });
+        if (res.ok && res.id) {
+          toast.success(`Group “${name}” added with ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}.`);
+          onDone({ kind: "group", id: res.id });
+        }
+      } else {
+        const res = await call("createGroup", { input: { name, categoryId: draft.categoryId, tags: draft.tags, pinned: draft.pinned } });
+        if (res.ok && res.id) {
+          toast.success(`Group “${name}” added.`);
+          onDone({ kind: "group", id: res.id });
+        }
       }
     } else if (group) {
       const res = await call("updateGroup", { id: group.id, patch: { name, categoryId: draft.categoryId, tags: draft.tags, pinned: draft.pinned } });
@@ -169,7 +200,7 @@ export function GroupEditor(props: GroupEditorProps) {
     if (!group) return;
     const res = await call("copy", { kind: "group", id: group.id });
     if (res.ok && typeof res.text === "string") {
-      const ok = await copyToClipboard(res.text, res.containsSecret === true);
+      const ok = await copyToClipboard(res.text);
       if (ok) {
         toast.success(res.lineCount != null ? `Copied ${res.lineCount} lines.` : "Copied.");
         if (res.containsSecret) {
@@ -392,14 +423,75 @@ export function GroupEditor(props: GroupEditorProps) {
           )}
         </section>
       ) : (
-        <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
-          Save the group first, then add items to it.
-        </p>
+        <section className="flex flex-col" style={{ gap: "var(--space-2)" }} aria-label="Members">
+          <div className="flex items-baseline justify-between" style={{ gap: "var(--space-2)" }}>
+            <FieldLabel>Credentials for the whole project — paste them here</FieldLabel>
+          </div>
+          <TextArea
+            value={envText}
+            onChange={(e) => setEnvText(e.target.value)}
+            disabled={readOnly}
+            mono
+            rows={6}
+            id="clavis-group-env"
+            placeholder={"DATABASE_URL=postgres://…\nAPI_KEY=sk-live-…\nSTRIPE_SECRET=…"}
+            aria-label="Paste KEY=value lines — one credential per line"
+            spellCheck={false}
+            dir="auto"
+            style={{ fontSize: "var(--text-sm)" }}
+          />
+          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-xs)" }}>
+            One <span className="t-mono">KEY=value</span> per line (.env format). Saving creates the group and an item for every line — each masked as a secret, ready to copy together or one by one.
+          </p>
+          {envPreview && envText.trim() !== "" ? (
+            <div className="glass-row flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", padding: "var(--space-2) var(--space-3)", border: "1px solid var(--glass-border)" }} aria-live="polite">
+              <Ix icon={Layers} size="sm" style={{ color: "var(--color-accent-text)" }} />
+              {envPreview.keys.length === 0 ? (
+                <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
+                  No KEY=value lines yet — keep typing or paste your project's .env.
+                </span>
+              ) : (
+                <span className="flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", minWidth: 0 }}>
+                  <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)" }}>
+                    {envPreview.keys.length} credential{envPreview.keys.length === 1 ? "" : "s"}:
+                  </span>
+                  {envPreview.keys.map((k) => (
+                    <span key={k} className="t-mono glass-chip" style={{ fontSize: "var(--text-xs)", padding: "calc(var(--space-1) / 2) var(--space-2)", maxWidth: "calc(var(--space-6) * 6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {k}
+                    </span>
+                  ))}
+                  {envPreview.bad > 0 ? (
+                    <span className="t-warning" style={{ fontSize: "var(--text-xs)" }}>
+                      {envPreview.bad} line{envPreview.bad === 1 ? "" : "s"} without KEY=value will be skipped
+                    </span>
+                  ) : null}
+                </span>
+              )}
+            </div>
+          ) : null}
+          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-xs)" }}>
+            Prefer to bundle entries you already have? Save this group empty, then use “Add item” inside it.
+          </p>
+        </section>
       )}
 
       <footer className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
         {dirty && !readOnly ? (
-          <Btn variant="primary" icon={Check} label={saving ? "Saving…" : "Save"} onClick={() => void save()} disabled={saving} />
+          <Btn
+            variant="primary"
+            icon={mode === "create" ? ClipboardPaste : Check}
+            label={
+              saving
+                ? "Saving…"
+                : mode === "create" && envPreview && envPreview.keys.length > 0
+                  ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
+                  : mode === "create"
+                    ? "Create group"
+                    : "Save"
+            }
+            onClick={() => void save()}
+            disabled={saving}
+          />
         ) : null}
         {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
         <span className="t-muted flex-1" style={{ fontSize: "var(--text-xs)" }}>

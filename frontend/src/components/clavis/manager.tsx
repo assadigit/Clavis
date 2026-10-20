@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { ChevronLeft, Key, Maximize2, Menu as MenuIcon, Minimize2, Minus, Plus, Lock, X } from "lucide-react";
 import { platform } from "@/desktop/platform";
 import type { Creating, ListFilter, Selection } from "./app-types";
@@ -18,6 +19,7 @@ import { SettingsView } from "./settings-view";
 import { Sidebar } from "./sidebar";
 import { TrashView } from "./trash-view";
 import { Btn } from "./ui-bits";
+import { copyToClipboard } from "@/lib/clavis/client";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState } from "@/lib/clavis/types";
 
@@ -60,6 +62,41 @@ export function Manager(props: ManagerProps) {
     setSelection(null);
     setCreating({ kind });
   }
+
+  /* Instant copy from a list row: value for items, KEY=value block for groups.
+     Returns true only when the clipboard write succeeded (row shows ✓). */
+  const copyEntry = useCallback(
+    async (kind: "item" | "group", id: string): Promise<boolean> => {
+      const res = await call("copy", { kind, id });
+      if (res.ok && typeof res.text === "string") {
+        const ok = await copyToClipboard(res.text, res.containsSecret === true);
+        if (ok) {
+          const name =
+            kind === "item"
+              ? data.items.find((i) => i.id === id)?.name
+              : data.groups.find((g) => g.id === id)?.name;
+          toast.success(
+            res.lineCount != null
+              ? `Copied ${res.lineCount} lines${name ? ` — ${name}` : ""}.`
+              : `Copied ${name ?? "entry"}.`
+          );
+          return true;
+        }
+        toast.error("Could not copy to the clipboard. Try again.");
+      }
+      return false;
+    },
+    [call, data.items, data.groups]
+  );
+
+  /* Pin/unpin straight from the row (SPEC §5.1: pinned entries show first). */
+  const togglePin = useCallback(
+    (kind: "item" | "group", id: string, pinned: boolean) => {
+      const action = kind === "item" ? "updateItem" : "updateGroup";
+      void call(action, { id, patch: { pinned } });
+    },
+    [call]
+  );
 
   function mobileBack() {
     setSelection(null);
@@ -293,6 +330,8 @@ export function Manager(props: ManagerProps) {
                 onCreate={startCreating}
                 onOpenSettings={() => setFilter({ view: "settings" })}
                 readOnly={readOnly}
+                copyEntry={copyEntry}
+                togglePin={togglePin}
               />
               <aside
                 aria-label="Details"

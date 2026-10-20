@@ -809,6 +809,85 @@ func (s *Store) DuplicateItem(id string) (Item, error) {
 	return copyItem, s.saveLocked(kindDaily)
 }
 
+// CreateGroupFromEnv creates a group AND its member items in one shot from
+// pasted KEY=value lines (the "credentials for a whole project" flow). Each
+// line becomes an item (name = key, key = key, IsSecret = true — never
+// under-mask; the user can relax it per item). Keys are deduped (KEY_2, …)
+// so the group block round-trips (§10).
+func (s *Store) CreateGroupFromEnv(input NewGroup, text string) (Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.assertWritable(); err != nil {
+		return Group{}, err
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return Group{}, errors.New("give the group a name first")
+	}
+	type line struct{ key, value string }
+	var lines []line
+	for _, raw := range strings.Split(text, "\n") {
+		l := strings.TrimSuffix(raw, "\r") // tolerate CRLF pastes
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		if k, v, ok := exchange.ParseDotenvLine(l); ok {
+			lines = append(lines, line{key: k, value: v})
+		}
+	}
+	if len(lines) == 0 {
+		return Group{}, errors.New("no KEY=value lines found; paste one credential per line, like DATABASE_URL=postgres://…")
+	}
+	keys := exchange.DedupeKeys(func() []string {
+		ks := make([]string, len(lines))
+		for i, l := range lines {
+			ks[i] = l.key
+		}
+		return ks
+	}())
+	var categoryID *string
+	if input.CategoryID != nil && *input.CategoryID != "" {
+		categoryID = input.CategoryID
+	}
+	now := NowISO(s.now())
+	itemIDs := make([]string, 0, len(lines))
+	for i, l := range lines {
+		item := Item{
+			ID:         s.newID(),
+			Name:       keys[i],
+			Key:        keys[i],
+			Value:      l.value,
+			Note:       "",
+			CategoryID: categoryID,
+			Tags:       []string{},
+			IsSecret:   true,
+			Pinned:     false,
+			UseCount:   0,
+			LastUsedAt: nil,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+			DeletedAt:  nil,
+		}
+		s.data.Items = append(s.data.Items, item)
+		itemIDs = append(itemIDs, item.ID)
+	}
+	group := Group{
+		ID:         s.newID(),
+		Name:       name,
+		CategoryID: categoryID,
+		Tags:       cleanTags(input.Tags),
+		ItemIDs:    itemIDs,
+		Pinned:     input.Pinned,
+		UseCount:   0,
+		LastUsedAt: nil,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		DeletedAt:  nil,
+	}
+	s.data.Groups = append(s.data.Groups, group)
+	return group, s.saveLocked(kindDaily)
+}
+
 // CreateGroup adds a group; itemIds are filtered to live items.
 func (s *Store) CreateGroup(input NewGroup) (Group, error) {
 	s.mu.Lock()

@@ -71,7 +71,8 @@ function PopupRoot() {
       const w = Math.ceil(el.offsetWidth);
       const h = Math.ceil(el.offsetHeight);
       if (w > 0 && h > 0) {
-        platform.setPopupSize(w + 64 /* 2 × --window-shadow-pad */, h + 64);
+        /* The window IS the panel now — no shadow pad (solid background). */
+        platform.setPopupSize(w, h);
       }
     };
     push();

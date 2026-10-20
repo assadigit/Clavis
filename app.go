@@ -33,7 +33,7 @@ import (
 )
 
 // AppVersion is embedded in the exe and written into the data file.
-const AppVersion = "1.0.1"
+const AppVersion = "1.0.2"
 
 // shortcutTakenMessage is the §3.3 conflict message.
 const shortcutTakenMessage = "This shortcut is used by another app. Choose a different one."
@@ -251,6 +251,19 @@ func (c *Clavis) dispatch(action string, p map[string]any) map[string]any {
 			Pinned:     deref(getBool(input, "pinned")),
 			ItemIDs:    getStrArr(input, "itemIds"),
 		})
+		if err != nil {
+			return failErr(err)
+		}
+		return c.done(map[string]any{"id": group.ID})
+	}
+	case "createGroupFromEnv": {
+		input := subMap(p, "input")
+		group, err := c.store.CreateGroupFromEnv(store.NewGroup{
+			Name:       getStr(input, "name"),
+			CategoryID: getStrPtr(input, "categoryId"),
+			Tags:       getStrArr(input, "tags"),
+			Pinned:     deref(getBool(input, "pinned")),
+		}, getStr(input, "text"))
 		if err != nil {
 			return failErr(err)
 		}
@@ -711,7 +724,7 @@ func (c *Clavis) HidePopup() {
 	c.hidePopup()
 }
 
-// SetPopupSize is driven by the popup content (640px panel + shadow pad;
+// SetPopupSize is driven by the popup content (the window IS the panel;
 // height grows with rows, §3.3b).
 func (c *Clavis) SetPopupSize(w, h int) {
 	c.popupMu.Lock()
@@ -903,7 +916,7 @@ func (c *Clavis) positionPopup() {
 	pw, ph := c.popupSize[0], c.popupSize[1]
 	c.popupMu.Unlock()
 	if pw <= 0 {
-		pw = 704 // 640px panel + 2 × 32px shadow pad
+		pw = 640 // the window IS the panel (solid window, no pad)
 	}
 	if ph <= 0 {
 		ph = 200

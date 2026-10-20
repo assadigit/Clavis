@@ -1,11 +1,12 @@
 /**
  * CLAVIS — manager list column (SPEC §5.3): instant search, New menu,
  * items and groups mixed; rows select on click and with Up/Down arrows.
+ * Every row carries an instant-copy button and a working pin toggle.
  */
 "use client";
 
-import { useMemo, useRef } from "react";
-import { Key, Layers, Link2, MoreHorizontal, Pin, Plus, Search, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ClipboardCopy, Key, Layers, Link2, MoreHorizontal, Pin, Plus, Search, Upload } from "lucide-react";
 import type { ListFilter, Selection } from "./app-types";
 import {
   categoryName,
@@ -31,6 +32,10 @@ export interface EntryListProps {
   onCreate: (kind: "item" | "group") => void;
   onOpenSettings: () => void;
   readOnly: boolean;
+  /** Instant copy: returns true when the value actually reached the clipboard. */
+  copyEntry: (kind: "item" | "group", id: string) => Promise<boolean>;
+  /** Pin/unpin straight from the row. */
+  togglePin: (kind: "item" | "group", id: string, pinned: boolean) => void;
 }
 
 interface ListRow {
@@ -54,9 +59,18 @@ export function EntryList({
   onCreate,
   onOpenSettings,
   readOnly,
+  copyEntry,
+  togglePin,
 }: EntryListProps) {
   const data = state.data;
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  /* Row-level copy feedback: which row copied, and when (for the check icon). */
+  const [copiedRow, setCopiedRow] = useState<string | null>(null);
+  useEffect(() => {
+    if (copiedRow === null) return;
+    const t = window.setTimeout(() => setCopiedRow(null), 1400);
+    return () => window.clearTimeout(t);
+  }, [copiedRow]);
 
   const entries = useMemo(() => buildSearchEntries(data), [data]);
 
@@ -129,9 +143,11 @@ export function EntryList({
 
   const renderRow = (row: ListRow, i: number) => {
     const selected = selection !== null && selection.kind === row.kind && selection.id === row.id;
+    const rowKey = `${row.kind}:${row.id}`;
+    const isCopied = copiedRow === rowKey;
     return (
       <div
-        key={`${row.kind}:${row.id}`}
+        key={rowKey}
         ref={(el) => {
           rowRefs.current[i] = el;
         }}
@@ -159,7 +175,6 @@ export function EntryList({
             </span>
           ) : null}
         </span>
-        {row.pinned ? <Ix icon={Pin} size="sm" style={{ color: "var(--color-accent-text)" }} /> : null}
         {row.shared > 0 ? (
           <span
             className="flex items-center t-muted"
@@ -175,6 +190,50 @@ export function EntryList({
             {row.memberCount} items
           </span>
         ) : null}
+        {/* Instant copy — one click, no round-trip through the editor. */}
+        <button
+          type="button"
+          className="clavis-btn clavis-btn-ghost clavis-focusable clavis-row-action"
+          aria-label={isCopied ? `Copied ${row.name}` : `Copy ${row.name}${row.kind === "group" ? " (whole block)" : ""}`}
+          title={row.kind === "group" ? "Copy the whole KEY=value block" : "Copy to clipboard instantly"}
+          style={{
+            padding: "var(--space-1)",
+            color: isCopied ? "var(--color-success-text)" : undefined,
+            flexShrink: 0,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isCopied) return;
+            void copyEntry(row.kind, row.id).then((ok) => {
+              if (ok) setCopiedRow(rowKey);
+            });
+          }}
+        >
+          <Ix icon={isCopied ? Check : ClipboardCopy} size="sm" />
+        </button>
+        {/* Pin toggle — always visible, accent when pinned (SPEC §5.1 ranking). */}
+        <button
+          type="button"
+          className="clavis-btn clavis-btn-ghost clavis-focusable clavis-row-action"
+          role="switch"
+          aria-checked={row.pinned}
+          aria-label={`${row.pinned ? "Unpin" : "Pin"} ${row.name}`}
+          title={row.pinned ? "Unpin — stop showing first" : "Pin — show first"}
+          disabled={readOnly}
+          style={{
+            padding: "var(--space-1)",
+            flexShrink: 0,
+            color: row.pinned ? "var(--color-accent-text)" : "var(--text-muted)",
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePin(row.kind, row.id, !row.pinned);
+          }}
+        >
+          <Ix icon={Pin} size="sm" />
+        </button>
       </div>
     );
   };
@@ -227,8 +286,30 @@ export function EntryList({
             disabled={readOnly}
             triggerStyle={{ flexShrink: 0 }}
           >
-            <MenuItem icon={Key} label="New item" onClick={() => onCreate("item")} />
-            <MenuItem icon={Layers} label="New group" onClick={() => onCreate("group")} />
+            <MenuItem
+              icon={Key}
+              label={
+                <span className="flex flex-col" style={{ lineHeight: 1.3 }}>
+                  <span>New item</span>
+                  <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
+                    One key, prompt or note
+                  </span>
+                </span>
+              }
+              onClick={() => onCreate("item")}
+            />
+            <MenuItem
+              icon={Layers}
+              label={
+                <span className="flex flex-col" style={{ lineHeight: 1.3 }}>
+                  <span>New group</span>
+                  <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
+                    All credentials for a project (.env)
+                  </span>
+                </span>
+              }
+              onClick={() => onCreate("group")}
+            />
           </Menu>
         ) : null}
       </header>

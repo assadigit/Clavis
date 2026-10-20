@@ -24,10 +24,11 @@ html.clavis-root body {
   overflow: hidden; /* Clavis is an app surface, not a document */
 }
 
-/* Desktop windows are inset by the shadow pad, so 100dvh is NOT the visible
-   frame height. Modals size themselves against this variable instead. */
+/* Desktop windows are solid and edge-to-edge (no shadow pad — the pad
+   rendered as a gray slab on some Windows 10 setups), so 100dvh is the
+   visible frame height. Kept as a variable for modal sizing. */
 :root {
-  --clavis-modal-vh: calc(100dvh - var(--window-shadow-pad) * 2);
+  --clavis-modal-vh: 100dvh;
 }
 
 /* Every component recipe below lives in @layer components, BELOW Tailwind's
@@ -171,6 +172,21 @@ html.solid .glass-row[data-selected="true"] {
 .clavis-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Row actions (instant copy / pin toggle): quiet at idle so rows stay
+   scannable, unmistakably visible on hover, focus, selection or copy. */
+.clavis-row-action {
+  opacity: 0.55;
+}
+.clavis-row-action:hover,
+.clavis-row-action:focus-visible,
+.glass-row[data-selected="true"] .clavis-row-action,
+.glass-row:hover .clavis-row-action {
+  opacity: 1;
+}
+.glass-row[data-selected="true"] .clavis-row-action[aria-checked="true"] {
+  opacity: 1; /* a pinned row keeps its accent pin at full strength */
 }
 
 /* ---- Text helpers (tokens only) ---- */
@@ -454,25 +470,21 @@ html.solid [data-sonner-toast] {
   background: transparent;
 }
 
-/* Manager window: the floating glass frame inside the shadow pad. The
-   window itself is transparent + frameless; this wrapper draws the panel
-   with rounded corners + shadow (§3.4). */
-.clavis-desk-manager {
+/* Manager window: the window is solid dark + frameless and this wrapper
+   fills it edge to edge (§3.4). The old transparent-margin "floating frame"
+   showed a gray slab on some Windows 10 setups — removed. */
+.clavis-desk-manager,
+.clavis-desk-manager.is-max {
   position: fixed;
-  inset: var(--window-shadow-pad);
+  inset: 0;
   z-index: 1;
 }
-.clavis-desk-manager .clavis-desk-frame {
+.clavis-desk-manager .clavis-desk-frame,
+.clavis-desk-manager.is-max .clavis-desk-frame {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-}
-/* When the native window is maximized the frame goes edge to edge. */
-.clavis-desk-manager.is-max {
-  inset: 0;
-}
-.clavis-desk-manager.is-max .clavis-desk-frame {
   border-radius: 0;
   border: none;
   box-shadow: none;

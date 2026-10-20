@@ -28,7 +28,7 @@ var appIcon []byte
 var trayIcon []byte
 
 const (
-	popupWidthDefault  = 704 // 640px panel + 2 × 32px shadow pad (tokens)
+	popupWidthDefault  = 640 // the window IS the panel (solid window, no pad)
 	popupHeightDefault = 208
 )
 
@@ -104,7 +104,8 @@ func main() {
 		AlwaysOnTop:      true,
 		DisableResize:    true,
 		URL:              "/popup.html",
-		BackgroundType:   application.BackgroundTypeTransparent,
+		BackgroundType:   application.BackgroundTypeSolid,
+		BackgroundColour: application.NewRGBA(0x0B, 0x16, 0x30, 0xFF), /* --backdrop-base */
 		HideOnFocusLost:  true, // §3.3b: hides when it loses focus
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true, // no taskbar entry
@@ -128,7 +129,8 @@ func main() {
 		MinHeight:      520,
 		Frameless:      true,
 		URL:            "/manager.html",
-		BackgroundType: application.BackgroundTypeTransparent,
+		BackgroundType: application.BackgroundTypeSolid,
+		BackgroundColour: application.NewRGBA(0x0B, 0x16, 0x30, 0xFF), /* --backdrop-base */
 		Hidden:         hidden, // --hidden (autostart): tray only (§3.1)
 		Windows: application.WindowsWindow{
 			DisableFramelessWindowDecorations: true,

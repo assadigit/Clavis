@@ -17,7 +17,8 @@ Copied secrets are automatically kept out of the Windows clipboard history
   dotenv quoting.
 - **Manager window** — items, groups (shared by reference: edit once, every
   group sees it), categories, tags, trash with 30-day retention and Undo
-  on every delete.
+  on every delete. Every row has an instant-copy button and a pin toggle;
+  new groups can be built by pasting a whole project's `.env`.
 - **Safe by design** — atomic writes, automatic daily backups (plus backups
   before every import/migration), corrupt-file auto-recovery, a read-only
   guard for files from newer versions.
@@ -36,8 +37,8 @@ Download from [Releases](../../releases):
 
 | File | What it is |
 | --- | --- |
-| `Clavis-Setup-1.0.1.exe` | The installer (per-user, no admin needed) |
-| `Clavis-Portable-1.0.1.exe` | The portable single file (no install) |
+| `Clavis-Setup-1.0.2.exe` | The installer (per-user, no admin needed) |
+| `Clavis-Portable-1.0.2.exe` | The portable single file (no install) |
 
 ## Build from source
 

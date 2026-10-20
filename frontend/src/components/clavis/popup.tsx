@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronLeft, Layers, Search } from "lucide-react";
+import { Check, ChevronLeft, ClipboardCopy, Layers, Search } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { copyToClipboard } from "@/lib/clavis/client";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
@@ -279,6 +279,11 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
         >
           {row.preview}
         </span>
+        <Ix
+          icon={ClipboardCopy}
+          size="sm"
+          style={{ color: i === selIdx ? "var(--color-accent-text)" : "var(--text-muted)" }}
+        />
       </div>
     );
   };
@@ -295,9 +300,9 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
         style={
           fill
             ? {
+                /* Desktop: the window IS the panel — solid background, no pad. */
                 position: "absolute",
                 inset: 0,
-                padding: "var(--window-shadow-pad)",
               }
             : {
                 position: "absolute",
