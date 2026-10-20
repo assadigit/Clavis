@@ -1,0 +1,140 @@
+/* ==========================================================================
+   CLAVIS DESIGN TOKENS  (white + blue, dark glass)
+   Single source of truth for every color, glass, type, spacing and motion value.
+   RULE: the app must NEVER hard-code a color. Every color comes from a variable here.
+   This keeps an alternate theme (e.g. khaki) a one-file change later.
+   Contrast values below were verified with a WCAG script (AA needs 4.5:1 for normal text).
+   ========================================================================== */
+
+:root {
+  /* scales */
+  --blue-50: #F2F6FD;
+  --blue-100: #E1E9FA;
+  --blue-200: #B9CFF8;
+  --blue-300: #86ABF3;
+  --blue-400: #4E85EE;
+  --blue-500: #2F6FEB;
+  --blue-600: #134FC3;
+  --blue-700: #0E3C95;
+  --blue-800: #0A2966;
+  --blue-900: #0B1C3D;
+  --navy-50: #F3F6FB;
+  --navy-100: #E4E9F7;
+  --navy-200: #C1CFF1;
+  --navy-300: #93ACE6;
+  --navy-400: #6185DB;
+  --navy-500: #305FCF;
+  --navy-600: #2850AE;
+  --navy-700: #1E3D85;
+  --navy-800: #152A5B;
+  --navy-900: #0B1630;
+  --sky-50: #F1F9FE;
+  --sky-100: #DEF2FC;
+  --sky-200: #B2E5FF;
+  --sky-300: #5CC8FF;
+  --sky-400: #3DBEFF;
+  --sky-500: #00A9FF;
+  --sky-600: #008ED6;
+  --sky-700: #006CA3;
+  --sky-800: #004A70;
+  --sky-900: #052E42;
+  --slate-50: #F6F7F9;
+  --slate-100: #EAECF0;
+  --slate-200: #D2D6E0;
+  --slate-300: #B1B8C9;
+  --slate-400: #8C98B0;
+  --slate-500: #6B7A99;
+  --slate-600: #57647F;
+  --slate-700: #434C61;
+  --slate-800: #2E3542;
+  --slate-900: #1E2229;
+
+  /* ---- Core roles ---- */
+  --color-primary: var(--blue-500);      /* #2F6FEB  fills, selection bar, main buttons. NEVER use as text on glass (fails contrast) */
+  --color-primary-strong: var(--blue-600);/* #134FC3  button hover/pressed. White text on it = 7.2:1 */
+  --color-secondary: var(--navy-900);    /* #0B1630  the dark backdrop base (the 60%) */
+  --color-accent: var(--sky-300);        /* #5CC8FF  small marks only */
+  --color-accent-text: #8FD9FF;          /* accent for TEXT and ICONS on glass: 8.8:1 on glass, 5.3:1 over brightest glow */
+  --color-neutral: var(--slate-500);     /* #6B7A99  borders, disabled */
+
+  /* ---- Text on glass (all verified) ---- */
+  --text: #FFFFFF;                       /* 13.7:1 on glass over base, 8.2:1 over brightest glow */
+  --text-muted: #C1CFF1;                 /* 8.8:1 on glass over base, 5.2:1 over brightest glow */
+  --text-on-primary: #FFFFFF;            /* on --color-primary fill = 4.6:1 */
+  --text-on-accent: #0B1630;             /* on --color-accent fill = 9.5:1 */
+
+  /* ---- Status colors (never rely on color alone: always pair with an icon + label) ---- */
+  --color-success-text: #4ADE9A;         /* 8.0:1 on glass. Used for the "Copied" check */
+  --color-danger-fill: #C23642;          /* white text on it = 5.4:1. Delete buttons */
+  --color-danger-text: #FF8A91;          /* 6.1:1 on glass. Danger text */
+  --color-warning-text: #FFC857;
+
+  /* ---- Backdrop (the app draws its own background; Windows 10 has no native blur) ---- */
+  --backdrop-base: #0B1630;
+  --backdrop-glow-primary: rgba(47, 111, 235, 0.40);   /* HARD CAP 0.40. Brighter breaks text contrast */
+  --backdrop-glow-accent: rgba(92, 200, 255, 0.18);    /* HARD CAP 0.20 */
+  --backdrop-image:
+    radial-gradient(60% 55% at 12% 0%,  var(--backdrop-glow-primary) 0%, transparent 70%),
+    radial-gradient(50% 50% at 100% 100%, var(--backdrop-glow-accent) 0%, transparent 70%),
+    linear-gradient(160deg, #0F1F45 0%, var(--backdrop-base) 60%);
+
+  /* ---- Glass ---- */
+  --glass-bg: rgba(255, 255, 255, 0.10);
+  --glass-bg-hover: rgba(255, 255, 255, 0.14);
+  --glass-bg-selected: rgba(255, 255, 255, 0.20);   /* selected row: fill + left bar, never color alone */
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.28);     /* 1px inner top edge */
+  --glass-blur: 20px;                               /* blur ONLY on the outer panel(s). Rows are flat translucent, no blur */
+  --glass-saturate: 140%;
+  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --selected-bar: var(--color-primary);             /* 3px left bar on the selected row */
+
+  /* ---- Solid mode (Settings toggle AND automatic when Windows "Transparency effects" is off) ---- */
+  --solid-surface: #17233F;
+  --solid-surface-raised: #1E2D50;
+  --solid-border: #2C3F6B;
+
+  /* ---- Focus ---- */
+  --focus-ring: 0 0 0 2px var(--backdrop-base), 0 0 0 4px var(--color-accent);
+
+  /* ---- Typography (fonts are bundled inside the app via npm, so portable works anywhere) ---- */
+  --font-ui: "Inter Variable", "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;   /* all secret values, keys, prompts */
+  --text-xs: 12px;  --text-sm: 13px;  --text-md: 14px;  --text-lg: 16px;  --text-xl: 20px;
+  --weight-regular: 450; --weight-medium: 550; --weight-semibold: 650;     /* never lighter than regular on glass */
+
+  /* ---- Spacing / shape (8px rhythm) ---- */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --radius-panel: 16px;   /* the app draws its own rounded corners (Windows 10 frameless windows are square) */
+  --radius-row: 10px;
+  --radius-chip: 999px;
+  --window-shadow-pad: 32px; /* transparent margin around the panel so the CSS shadow is not clipped */
+
+  /* ---- Motion ---- */
+  --motion-popup-in: 100ms;  /* popup fade/scale-in. Must never delay the popup */
+  --motion-toast: 150ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Respect OS motion setting */
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion-popup-in: 0ms; --motion-toast: 0ms; }
+}
+
+/* Reference glass surface (copy this recipe, do not invent variants) */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow);
+  border-radius: var(--radius-panel);
+}
+
+/* Solid mode: toggled by adding class "solid" on <html> */
+html.solid .glass-panel {
+  background: var(--solid-surface);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  border-color: var(--solid-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
