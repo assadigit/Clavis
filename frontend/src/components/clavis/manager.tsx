@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, Key, Maximize2, Menu as MenuIcon, Minimize2, Minus, Plus, Lock, X } from "lucide-react";
 import { platform } from "@/desktop/platform";
 import type { Creating, ListFilter, Selection } from "./app-types";
+import { liveGroups, liveItems } from "./derive";
 import { EntryList } from "./entry-list";
 import { GroupEditor } from "./group-editor";
 import { Ix } from "./icons";
@@ -49,6 +50,7 @@ export function Manager(props: ManagerProps) {
   }, []);
 
   const data = state.data;
+  const liveCount = liveItems(data).length + liveGroups(data).length;
   const selItem = selection?.kind === "item" ? data.items.find((i) => i.id === selection.id && !i.deletedAt) : undefined;
   const selGroup = selection?.kind === "group" ? data.groups.find((g) => g.id === selection.id && !g.deletedAt) : undefined;
   const activeSelection: Selection | null =
@@ -143,14 +145,29 @@ export function Manager(props: ManagerProps) {
         />
       );
     }
+    /* Empty store: orient a brand-new user instead of repeating the
+       list column's call-to-action (which confused first-time users). */
+    if (liveCount === 0) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: "var(--space-3)", padding: "var(--space-5)", textAlign: "center" }}>
+          <Ix icon={Key} size="lg" style={{ color: "var(--color-accent-text)" }} />
+          <p style={{ margin: 0, fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>Welcome to Clavis</p>
+          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", maxWidth: "calc(var(--space-6) * 15)", lineHeight: 1.6 }}>
+            Your keys, prompts and notes will live here. Add your first item in the list, then press{" "}
+            <span className="clavis-keycap">{data.settings.shortcut}</span>{" "}
+            anytime to summon it.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: "var(--space-3)", padding: "var(--space-5)", textAlign: "center" }}>
         <Ix icon={Key} size="lg" style={{ color: "var(--color-accent-text)" }} />
         <p style={{ margin: 0, fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>Nothing selected</p>
-        <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)" }}>
-          Pick something from the list, or add something new.
+        <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", maxWidth: "calc(var(--space-6) * 15)" }}>
+          Pick an entry from the list to see it here.
         </p>
-        <div className="flex flex-wrap justify-center" style={{ gap: "var(--space-2)" }}>
+        <div className="flex flex-wrap justify-center" style={{ gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
           <Btn variant="primary" icon={Plus} label="New item" onClick={() => startCreating("item")} disabled={readOnly} />
           <Btn variant="glass" icon={Key} label="New group" onClick={() => startCreating("group")} disabled={readOnly} />
         </div>
@@ -162,7 +179,10 @@ export function Manager(props: ManagerProps) {
     <div
       className="clavis-app-shell"
       style={{
-        height: "100dvh",
+        /* The desk frame already insets the window by the shadow pad; sizing
+           to 100dvh here made the manager 2×pad taller than the visible frame,
+           clipping the bottom of every view (Settings looked cut off). */
+        height: "100%",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -277,7 +297,7 @@ export function Manager(props: ManagerProps) {
               <aside
                 aria-label="Details"
                 className={`clavis-detail-col glass-panel flex flex-col ${hasDetailContent ? "flex" : "hidden md:flex"}`}
-                style={{ flex: 1, minWidth: 0, overflow: "hidden", paddingBottom: "calc(var(--space-5) * 2 + var(--space-2))" }}
+                style={{ flex: 1, minWidth: 0, overflow: "hidden" }}
               >
                 {hasDetailContent ? (
                   <div className="flex items-center md:hidden" style={{ padding: "var(--space-2)", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>

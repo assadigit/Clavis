@@ -36,8 +36,8 @@ Download from [Releases](../../releases):
 
 | File | What it is |
 | --- | --- |
-| `Clavis-Setup-1.0.0.exe` | The installer (per-user, no admin needed) |
-| `Clavis-Portable-1.0.0.exe` | The portable single file (no install) |
+| `Clavis-Setup-1.0.1.exe` | The installer (per-user, no admin needed) |
+| `Clavis-Portable-1.0.1.exe` | The portable single file (no install) |
 
 ## Build from source
 

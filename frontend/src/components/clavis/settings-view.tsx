@@ -265,7 +265,7 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
     <section
       aria-label="Settings"
       className="glass-panel clavis-scroll flex flex-col"
-      style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "var(--space-5)", paddingBottom: "calc(var(--space-5) * 2 + var(--space-2))", gap: "var(--space-5)" }}
+      style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "var(--space-5)", gap: "var(--space-5)" }}
     >
       {/* ---------------- Shortcut ---------------- */}
       <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>

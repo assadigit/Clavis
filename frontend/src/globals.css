@@ -24,6 +24,18 @@ html.clavis-root body {
   overflow: hidden; /* Clavis is an app surface, not a document */
 }
 
+/* Desktop windows are inset by the shadow pad, so 100dvh is NOT the visible
+   frame height. Modals size themselves against this variable instead. */
+:root {
+  --clavis-modal-vh: calc(100dvh - var(--window-shadow-pad) * 2);
+}
+
+/* Every component recipe below lives in @layer components, BELOW Tailwind's
+   utilities layer on purpose: unlayered CSS would beat layered utilities in
+   the cascade (an unlayered .clavis-btn{display:inline-flex} defeats the
+   md:hidden utility on the mobile nav button). Utilities must always win. */
+@layer components {
+
 /* The ambient backdrop the app draws itself (works on Windows 10, no OS blur).
    z-index 0 + the app shell's z-index 1 make stacking explicit, so the
    content ALWAYS sits above the backdrop even in browsers where
@@ -238,9 +250,13 @@ html.solid .glass-row[data-selected="true"] {
 .clavis-focusable { outline: none; }
 .clavis-focusable:focus-visible { box-shadow: var(--focus-ring); }
 
-/* ---- Dropdown / context menus (small glass popovers) ---- */
+/* ---- Dropdown / context menus (floating glass popovers) ----
+   A menu floats OVER dense content (sidebar rows, list rows). A 10%-white
+   glass fill lets the text underneath bleed through and read as a collision,
+   so menus use a near-opaque raised surface (still token-derived), keeping
+   the glass blur for the last hint of depth. */
 .clavis-menu {
-  background: var(--glass-bg);
+  background: color-mix(in srgb, var(--solid-surface-raised) 96%, transparent);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
@@ -461,3 +477,5 @@ html.solid [data-sonner-toast] {
   border: none;
   box-shadow: none;
 }
+
+} /* end @layer components */

@@ -124,7 +124,7 @@ func main() {
 		Title:          "Clavis",
 		Width:          mgrW,
 		Height:         mgrH,
-		MinWidth:       760,
+		MinWidth:       800, /* >= 48rem: the 3-column desktop layout must always fit */
 		MinHeight:      520,
 		Frameless:      true,
 		URL:            "/manager.html",

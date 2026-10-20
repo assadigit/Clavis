@@ -261,7 +261,7 @@ export function Modal({
         aria-label={typeof title === "string" ? title : "Clavis dialog"}
         style={{
           width: width ?? "min(560px, calc(100vw - var(--space-6)))",
-          maxHeight: "calc(100dvh - var(--space-6))",
+          maxHeight: "calc(var(--clavis-modal-vh, 100dvh) - var(--space-6))",
         }}
       >
         <header
