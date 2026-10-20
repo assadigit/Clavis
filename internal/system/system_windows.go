@@ -8,6 +8,7 @@ package system
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -53,4 +54,19 @@ func openFolder(path string) error {
 		return fmt.Errorf("could not open the folder: %w", err)
 	}
 	return nil
+}
+
+// installDir reads HKCU\Software\Clavis\InstallDir (written by the NSIS
+// installer). Empty string = portable run / fresh machine.
+func installDir() string {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Clavis`, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	v, _, err := k.GetStringValue("InstallDir")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(v)
 }

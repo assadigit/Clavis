@@ -26,7 +26,7 @@ Copied secrets are automatically kept out of the Windows clipboard history
   Markdown and TXT, whole-folder import, "export all as Markdown".
 - **Dark glass design** — self-drawn glassmorphism that works on Windows 10
   (no Windows 11 effects needed), token-driven styling, AA contrast.
-- **Offline forever** — no telemetry, no update checks, no network at all.
+- **In-app self-update** — Settings → About checks GitHub for a newer release; one click downloads and installs it (installed and portable editions), relaunches Clavis, and never touches your data. Pull-only network use: two GETs to github.com when you check (or once per 12 h in the background). No telemetry, no analytics, no accounts.
 
 Data lives in `%APPDATA%\Clavis` (shared by the installed and portable
 builds), with automatic backups in `%APPDATA%\Clavis\backups`.
@@ -37,8 +37,8 @@ Download from [Releases](../../releases):
 
 | File | What it is |
 | --- | --- |
-| `Clavis-Setup-1.0.2.exe` | The installer (per-user, no admin needed) |
-| `Clavis-Portable-1.0.2.exe` | The portable single file (no install) |
+| `Clavis-Setup-1.0.3.exe` | The installer (per-user, no admin needed) |
+| `Clavis-Portable-1.0.3.exe` | The portable single file (no install) |
 
 ## Build from source
 

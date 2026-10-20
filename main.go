@@ -11,8 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"clavis/internal/store"
+	"clavis/internal/updater"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -106,10 +108,10 @@ func main() {
 		URL:              "/popup.html",
 		BackgroundType:   application.BackgroundTypeSolid,
 		BackgroundColour: application.NewRGBA(0x0B, 0x16, 0x30, 0xFF), /* --backdrop-base */
-		HideOnFocusLost:  true, // §3.3b: hides when it loses focus
+		HideOnFocusLost:  true,                                        // §3.3b: hides when it loses focus
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true, // no taskbar entry
-			ExStyle:         0x00000080, // WS_EX_TOOLWINDOW — skip Alt-Tab
+			HiddenOnTaskbar:                   true,       // no taskbar entry
+			ExStyle:                           0x00000080, // WS_EX_TOOLWINDOW — skip Alt-Tab
 			DisableFramelessWindowDecorations: true,
 		},
 	})
@@ -121,17 +123,17 @@ func main() {
 	// The Manager (§3.4): normal resizable window, frameless with the app's
 	// own title bar, remembers its bounds.
 	managerOpts := application.WebviewWindowOptions{
-		Name:           "manager",
-		Title:          "Clavis",
-		Width:          mgrW,
-		Height:         mgrH,
-		MinWidth:       800, /* >= 48rem: the 3-column desktop layout must always fit */
-		MinHeight:      520,
-		Frameless:      true,
-		URL:            "/manager.html",
-		BackgroundType: application.BackgroundTypeSolid,
+		Name:             "manager",
+		Title:            "Clavis",
+		Width:            mgrW,
+		Height:           mgrH,
+		MinWidth:         800, /* >= 48rem: the 3-column desktop layout must always fit */
+		MinHeight:        520,
+		Frameless:        true,
+		URL:              "/manager.html",
+		BackgroundType:   application.BackgroundTypeSolid,
 		BackgroundColour: application.NewRGBA(0x0B, 0x16, 0x30, 0xFF), /* --backdrop-base */
-		Hidden:         hidden, // --hidden (autostart): tray only (§3.1)
+		Hidden:           hidden,                                      // --hidden (autostart): tray only (§3.1)
 		Windows: application.WindowsWindow{
 			DisableFramelessWindowDecorations: true,
 		},
@@ -156,6 +158,16 @@ func main() {
 
 	svc.SetRuntime(app, popup, manager, tray)
 
+	// Self-update housekeeping (DECISIONS.md §34): clear any leftover swap
+	// file from a previous portable update, then run the background check.
+	if exe, err := os.Executable(); err == nil {
+		updater.CleanupOld(exe)
+	}
+	go func() {
+		time.Sleep(30 * time.Second) // let the UI settle first
+		svc.AutoCheckIfDue()
+	}()
+
 	// Global shortcut (§3.3). A failure is surfaced to the Manager UI.
 	if err := svc.RegisterShortcut(settings.Shortcut); err != nil {
 		log.Printf("shortcut registration failed: %v", err)
@@ -178,6 +190,34 @@ func buildTrayMenu(app *application.App, svc *Clavis) *application.Menu {
 	menu := app.NewMenu()
 	menu.Add("Open Clavis").OnClick(func(*application.Context) { svc.ShowManager() })
 	menu.Add("Quick search").OnClick(func(*application.Context) { svc.showPopup() })
+	menu.Add("Check for updates…").OnClick(func(*application.Context) {
+		st := svc.CheckUpdate(true)
+		if !st.Ok {
+			svc.ShowManager()
+			if svc.app != nil {
+				svc.app.Event.Emit("clavis:update-progress", map[string]any{
+					"stage": "failed",
+					"error": st.Error,
+				})
+			}
+			return
+		}
+		if st.Available {
+			svc.ShowManager()
+			if svc.app != nil {
+				svc.app.Event.Emit("clavis:update-available", map[string]any{
+					"current": st.Current,
+					"latest":  st.Latest,
+					"url":     st.URL,
+					"notes":   st.Notes,
+				})
+			}
+		} else if svc.app != nil {
+			svc.app.Event.Emit("clavis:update-uptodate", map[string]any{
+				"latest": st.Latest,
+			})
+		}
+	})
 	if svc.ShortcutPaused() {
 		menu.Add("Resume shortcut").OnClick(func(*application.Context) {
 			svc.ResumeShortcut()

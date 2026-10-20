@@ -13,6 +13,8 @@ func openFolder(path string) error {
 	return errUnsupported
 }
 
+func installDir() string { return "" }
+
 type sysErr string
 
 func (e sysErr) Error() string { return string(e) }

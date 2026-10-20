@@ -56,6 +56,43 @@ export const platform = {
   quit(): void {
     void Call.ByName("main.Clavis.QuitApp");
   },
+  /* ---- self-update (DECISIONS.md §34) ---- */
+  async checkUpdate(force: boolean): Promise<{
+    ok: boolean;
+    error?: string;
+    current: string;
+    latest: string;
+    available: boolean;
+    notes: string;
+    url: string;
+    mode: string;
+    installable: boolean;
+    checkedAt: string;
+  }> {
+    return (await Call.ByName("main.Clavis.CheckUpdate", force)) as {
+      ok: boolean;
+      error?: string;
+      current: string;
+      latest: string;
+      available: boolean;
+      notes: string;
+      url: string;
+      mode: string;
+      installable: boolean;
+      checkedAt: string;
+    };
+  },
+  async installUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean; mode?: string }> {
+    return (await Call.ByName("main.Clavis.InstallUpdate")) as {
+      ok: boolean;
+      error?: string;
+      restarting?: boolean;
+      mode?: string;
+    };
+  },
+  async openReleasePage(url: string): Promise<boolean> {
+    return ((await Call.ByName("main.Clavis.OpenReleasePage", url)) as boolean) ?? false;
+  },
   /** Go → JS events. */
   onPopupShown(cb: () => void): () => void {
     return Events.On("clavis:popup-shown", cb);
@@ -73,5 +110,29 @@ export const platform = {
   },
   onShortcutConflict(cb: (message: string) => void): () => void {
     return Events.On("clavis:shortcut-conflict", (e: { data: unknown }) => cb(String(e.data ?? "")));
+  },
+  onUpdateProgress(cb: (p: { stage: string; pct: number; error?: string }) => void): () => void {
+    return Events.On("clavis:update-progress", (e: { data: { stage?: string; pct?: number; error?: string } }) =>
+      cb({
+        stage: String(e.data?.stage ?? ""),
+        pct: Number(e.data?.pct ?? 0),
+        error: e.data?.error,
+      })
+    );
+  },
+  onUpdateAvailable(cb: (a: { current: string; latest: string; url: string; notes: string }) => void): () => void {
+    return Events.On("clavis:update-available", (e: { data: { current?: string; latest?: string; url?: string; notes?: string } }) =>
+      cb({
+        current: String(e.data?.current ?? ""),
+        latest: String(e.data?.latest ?? ""),
+        url: String(e.data?.url ?? ""),
+        notes: String(e.data?.notes ?? ""),
+      })
+    );
+  },
+  onUpdateUpToDate(cb: (a: { latest: string }) => void): () => void {
+    return Events.On("clavis:update-uptodate", (e: { data: { latest?: string } }) =>
+      cb({ latest: String(e.data?.latest ?? "") })
+    );
   },
 };
