@@ -473,6 +473,15 @@ export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor
   );
 }
 
+/** Small muted hint rendered directly under a field it explains. */
+export function FieldHint({ children, id }: { children: ReactNode; id?: string }) {
+  return (
+    <p id={id} className="t-muted" style={{ margin: 0, fontSize: "var(--text-xs)" }}>
+      {children}
+    </p>
+  );
+}
+
 export function SectionHeader({ icon, title }: { icon: LucideIcon; title: string }) {
   return (
     <div className="flex items-center" style={{ gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>

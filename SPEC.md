@@ -180,9 +180,10 @@ Adding an item must take one short form: name, value (multi-line), category, tag
 
 ### 5.4 Item editor
 - Fields: name, key (shown only when the item belongs to a group or the user expands "Advanced"), value, category (dropdown, can create new inline), tags (chips with autocomplete), note, "Secret" toggle, "Pinned" toggle.
-- Value display: if `isSecret`, show dots with an eye button to reveal; clicking again hides. Revealed state resets when the selection changes or the window hides.
+- Value display: if `isSecret`, show dots with an eye button to reveal; clicking again hides. Revealed state resets when the selection changes or the window hides. A small hint under the value field reads **Enter saves · Ctrl+Enter adds a line** (the keyboard behavior lives where the typing happens — never in the action bar).
+- The secret/pinned toggles sit in an equal-width two-column grid (one column on narrow panes) so they stay vertically aligned.
 - A **Used in** list shows every group containing this item (click to jump to the group).
-- Buttons: **Copy**, **Duplicate**, **Delete**.
+- Action bar (bottom, anchored by a hairline divider): **Save** (left, only when dirty) and **Cancel** (left, create mode); **Copy**, **Duplicate**, and a **⋯ menu** (right) holding Export Markdown, Export Text, and **Delete item** (danger, below a divider — same pattern as the group editor). Delete never appears as a standalone red button in the bar itself.
 
 ### 5.5 Group editor
 - Fields: name, category, tags, pinned.

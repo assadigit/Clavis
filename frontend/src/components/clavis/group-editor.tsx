@@ -31,7 +31,7 @@ import type { ClavisState, Group } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupMemberKeys, maskValue, sharedCountMap } from "./derive";
 import { EntryTile, EntryTypeIcon, Ix } from "./icons";
-import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
+import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 
 export interface GroupEditorProps {
@@ -440,9 +440,9 @@ export function GroupEditor(props: GroupEditorProps) {
             dir="auto"
             style={{ fontSize: "var(--text-sm)" }}
           />
-          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-xs)" }}>
+          <FieldHint>
             One <span className="t-mono">KEY=value</span> per line (.env format). Saving creates the group and an item for every line — each masked as a secret, ready to copy together or one by one.
-          </p>
+          </FieldHint>
           {envPreview && envText.trim() !== "" ? (
             <div className="glass-row flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", padding: "var(--space-2) var(--space-3)", border: "1px solid var(--glass-border)" }} aria-live="polite">
               <Ix icon={Layers} size="sm" style={{ color: "var(--color-accent-text)" }} />
@@ -469,40 +469,46 @@ export function GroupEditor(props: GroupEditorProps) {
               )}
             </div>
           ) : null}
-          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-xs)" }}>
-            Prefer to bundle entries you already have? Save this group empty, then use “Add item” inside it.
-          </p>
+          <FieldHint>Prefer to bundle entries you already have? Save this group empty, then use “Add item” inside it.</FieldHint>
         </section>
       )}
 
-      <footer className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
-        {dirty && !readOnly ? (
-          <Btn
-            variant="primary"
-            icon={mode === "create" ? ClipboardPaste : Check}
-            label={
-              saving
-                ? "Saving…"
-                : mode === "create" && envPreview && envPreview.keys.length > 0
-                  ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
-                  : mode === "create"
-                    ? "Create group"
-                    : "Save"
-            }
-            onClick={() => void save()}
-            disabled={saving}
-          />
-        ) : null}
-        {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
-        <span className="t-muted flex-1" style={{ fontSize: "var(--text-xs)" }}>
-          {mode === "edit" ? "Enter saves" : ""}
-        </span>
+      <footer
+        className="flex flex-wrap items-center"
+        style={{
+          gap: "var(--space-2)",
+          marginTop: "var(--space-1)",
+          paddingTop: "var(--space-4)",
+          borderTop: "1px solid var(--glass-border)",
+        }}
+      >
+        <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
+          {dirty && !readOnly ? (
+            <Btn
+              variant="primary"
+              icon={mode === "create" ? ClipboardPaste : Check}
+              label={
+                saving
+                  ? "Saving…"
+                  : mode === "create" && envPreview && envPreview.keys.length > 0
+                    ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
+                    : mode === "create"
+                      ? "Create group"
+                      : "Save"
+              }
+              onClick={() => void save()}
+              disabled={saving}
+            />
+          ) : null}
+          {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
+        </div>
         {mode === "edit" && group ? (
-          <>
+          <div className="flex flex-1 flex-wrap items-center justify-end" style={{ gap: "var(--space-2)" }}>
             <Btn variant="glass" icon={Copy} label="Copy group" onClick={() => void copyGroup()} title="Copy the NAME=value block" disabled={readOnly} />
             <Menu triggerIcon={MoreHorizontal} triggerTitle="More actions" align="end" triggerVariant="glass" disabled={readOnly}>
               <MenuItem icon={FileText} label="Export Markdown" onClick={() => downloadExport("group-md", group.id)} />
               <MenuItem icon={FileText} label="Export Text" onClick={() => downloadExport("group-txt", group.id)} />
+              <div aria-hidden style={{ borderTop: "1px solid var(--glass-border)", margin: "var(--space-1) 0" }} />
               <MenuItem
                 icon={Trash2}
                 label="Delete group"
@@ -510,7 +516,7 @@ export function GroupEditor(props: GroupEditorProps) {
                 onClick={() => deleteEntry("group", group.id)}
               />
             </Menu>
-          </>
+          </div>
         ) : null}
       </footer>
     </div>

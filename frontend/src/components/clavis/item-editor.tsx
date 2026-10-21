@@ -27,7 +27,7 @@ import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupsContaining, maskValue } from "./derive";
 import { EntryTile, Ix } from "./icons";
 import { SharedDeleteModal, SharedEditModal } from "./shared-modals";
-import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
+import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
 interface ItemDraft {
   name: string;
@@ -328,7 +328,7 @@ export function ItemEditor(props: ItemEditorProps) {
             <Btn variant="glass" icon={Eye} label="Reveal" onClick={() => setRevealed(true)} ariaLabel="Reveal value" />
           </div>
         ) : (
-          <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
+          <div className="flex flex-col" style={{ gap: "var(--space-1)", width: "100%" }}>
             {mode === "edit" && effectiveSecret ? (
               <div className="flex justify-end">
                 <Btn variant="ghost" icon={EyeOff} label="Hide" onClick={() => setRevealed(false)} ariaLabel="Hide value" />
@@ -346,6 +346,7 @@ export function ItemEditor(props: ItemEditorProps) {
               rows={6}
               onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value }))}
             />
+            <FieldHint>Enter saves · Ctrl+Enter adds a line</FieldHint>
           </div>
         )}
       </div>
@@ -387,7 +388,10 @@ export function ItemEditor(props: ItemEditorProps) {
         />
       </div>
 
-      <div className="flex flex-wrap" style={{ gap: "var(--space-4)" }}>
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "var(--space-4) var(--space-6)" }}
+      >
         <Toggle
           checked={effectiveSecret}
           onChange={(v) => setDraft((d) => ({ ...d, isSecret: v }))}
@@ -427,24 +431,32 @@ export function ItemEditor(props: ItemEditorProps) {
         </div>
       ) : null}
 
-      <footer className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
-        {dirty && !readOnly ? (
-          <Btn variant="primary" icon={Check} label={saving ? "Saving…" : "Save"} onClick={() => void save()} disabled={saving} />
-        ) : null}
-        {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
-        <span className="t-muted flex-1" style={{ fontSize: "var(--text-xs)" }}>
-          Enter saves{mode === "edit" ? " · Ctrl+Enter adds a line" : ""}
-        </span>
+      <footer
+        className="flex flex-wrap items-center"
+        style={{
+          gap: "var(--space-2)",
+          marginTop: "var(--space-1)",
+          paddingTop: "var(--space-4)",
+          borderTop: "1px solid var(--glass-border)",
+        }}
+      >
+        <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
+          {dirty && !readOnly ? (
+            <Btn variant="primary" icon={Check} label={saving ? "Saving…" : "Save"} onClick={() => void save()} disabled={saving} />
+          ) : null}
+          {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
+        </div>
         {mode === "edit" && item ? (
-          <>
+          <div className="flex flex-1 flex-wrap items-center justify-end" style={{ gap: "var(--space-2)" }}>
             <Btn variant="glass" icon={Copy} label="Copy" onClick={() => void copyItem()} title="Copy value" disabled={readOnly} />
             <Btn variant="glass" icon={Copy} label="Duplicate" onClick={() => void duplicate()} title="Duplicate item" disabled={readOnly} />
             <Menu triggerIcon={MoreHorizontal} triggerTitle="More actions" align="end" triggerVariant="glass" disabled={readOnly}>
               <MenuItem icon={FileText} label="Export Markdown" onClick={() => downloadExport("item-md", item.id)} />
               <MenuItem icon={FileText} label="Export Text" onClick={() => downloadExport("item-txt", item.id)} />
+              <div aria-hidden style={{ borderTop: "1px solid var(--glass-border)", margin: "var(--space-1) 0" }} />
+              <MenuItem icon={Trash2} label="Delete item" danger onClick={onDeleteClick} disabled={readOnly} />
             </Menu>
-            <Btn variant="danger" icon={Trash2} label="Delete" onClick={onDeleteClick} title="Delete item" disabled={readOnly} />
-          </>
+          </div>
         ) : null}
       </footer>
 
