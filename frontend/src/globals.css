@@ -95,6 +95,42 @@ html.clavis-root body {
   background: var(--glass-bg-hover);
 }
 
+/* ---- Member wells: a group's item list lives in one recessed, bounded,
+   scrollable surface instead of naked rows on the panel (SPEC §5.5). ---- */
+.clavis-members-box {
+  background: var(--well-bg);
+  border: 1px solid var(--well-border);
+  border-radius: var(--radius-row);
+  padding: var(--space-2);
+  overflow-y: auto;
+  max-height: calc(var(--space-6) * 12); /* ≈6 two-line rows, then it scrolls */
+}
+
+/* Member rows are raised cards inside the well — the list reads as a single
+   object next to the Name/Tags inputs instead of a floating data grid. */
+.clavis-member-row {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-row);
+}
+.clavis-member-row:hover {
+  background: var(--glass-bg-hover);
+}
+.clavis-member-row[data-dragging="true"] {
+  box-shadow: var(--overlay-shadow);
+  position: relative;
+  z-index: 1;
+}
+/* Row utilities stay quiet until the row is engaged (same rule as the vault list). */
+.clavis-member-row .clavis-row-action {
+  opacity: 0.6;
+}
+.clavis-member-row:hover .clavis-row-action,
+.clavis-member-row:focus-within .clavis-row-action,
+.clavis-member-row .clavis-row-action:focus-visible {
+  opacity: 1;
+}
+
 .glass-input {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);

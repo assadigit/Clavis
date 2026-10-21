@@ -5,7 +5,7 @@
  */
 
 export const CURRENT_SCHEMA_VERSION = 1;
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.1.3";
 
 export type EntryKind = "item" | "group";
 

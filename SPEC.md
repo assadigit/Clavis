@@ -187,7 +187,7 @@ Adding an item must take one short form: name, value (multi-line), category, tag
 
 ### 5.5 Group editor
 - Fields: name, category, tags, pinned.
-- Member list in order, drag to reorder. Each row shows name, key, masked preview, shared marker, and an **×** that **removes it from this group** (not delete). The × tooltip reads "Remove from group".
+- Member list in order, drag to reorder. The list lives in a **member well** — one recessed, faintly tinted, bordered container (`--well-bg`/`--well-border`) that reads as a single form control next to the Name/Tags inputs, not a floating data grid. Inside it each member is a raised card (white on light, panel-tint on dark) with two lines: the item name with a small shared-count badge, then `KEY · masked value` in mono. Row actions (move up, move down, remove) sit on the right behind a full-height hairline; they stay quiet (60% opacity) until the row is hovered or focused. The well holds ~6 rows and then **scrolls inside itself** instead of growing the editor. The **×** **removes an item from this group** (never deletes it); its tooltip reads "Remove from group". The add-item picker shows its candidates in the same well treatment, so both lists look like the same kind of object.
 - **Add item** button: a search field over existing items (pick one or several) plus "Create new item here" that opens the item form and adds it to the group on save. One-click adds, no extra steps.
 - **Copy group** button (copies the `KEY=value` block).
 - Deleting a group never deletes its items; they remain as standalone items.

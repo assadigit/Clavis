@@ -320,7 +320,7 @@ export function GroupEditor(props: GroupEditorProps) {
                   disabled={readOnly || picked.size === 0}
                 />
               </div>
-              <div className="clavis-scroll flex flex-col" style={{ gap: "var(--space-1)", maxHeight: "calc(var(--space-6) * 5)", overflowY: "auto" }}>
+              <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
                 {candidates.map((c) => {
                   const it = state.data.items.find((i) => i.id === c.id && !i.deletedAt);
                   const on = picked.has(c.id);
@@ -328,7 +328,7 @@ export function GroupEditor(props: GroupEditorProps) {
                     <button
                       key={c.id}
                       type="button"
-                      className="glass-row clavis-focusable flex items-center"
+                      className="clavis-member-row clavis-focusable flex items-center"
                       style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", cursor: "pointer", textAlign: "left" }}
                       onClick={() => {
                         setPicked((p) => {
@@ -356,17 +356,19 @@ export function GroupEditor(props: GroupEditorProps) {
                         {on ? <Ix icon={Check} size="sm" style={{ color: "var(--text-on-primary)", width: "var(--text-sm)", height: "var(--text-sm)" }} /> : null}
                       </span>
                       <EntryTypeIcon kind="item" isSecret={it?.isSecret ?? false} size="sm" />
-                      <span className="flex-1 truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>
-                        {c.name}
-                      </span>
-                      <span className="t-mono t-muted" dir="auto" style={{ fontSize: "var(--text-xs)" }}>
-                        {maskValue(it?.value ?? "", showLast4)}
+                      <span className="flex min-w-0 flex-1 flex-col items-start" style={{ gap: "calc(var(--space-1) / 2)" }}>
+                        <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)", maxWidth: "100%" }}>
+                          {c.name}
+                        </span>
+                        <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
+                          {maskValue(it?.value ?? "", showLast4)}
+                        </span>
                       </span>
                     </button>
                   );
                 })}
                 {candidates.length === 0 ? (
-                  <span className="t-muted" style={{ fontSize: "var(--text-sm)", padding: "var(--space-2)" }}>
+                  <span className="t-muted" style={{ fontSize: "var(--text-sm)", padding: "var(--space-2) var(--space-3)", textAlign: "center" }}>
                     Nothing found.
                   </span>
                 ) : null}
@@ -385,7 +387,7 @@ export function GroupEditor(props: GroupEditorProps) {
           ) : null}
 
           {members.length === 0 ? (
-            <div className="glass-row flex flex-col items-center" style={{ gap: "var(--space-2)", padding: "var(--space-4)", textAlign: "center" }}>
+            <div className="clavis-members-box clavis-scroll flex flex-col items-center" style={{ gap: "var(--space-2)", padding: "var(--space-4)", textAlign: "center" }}>
               <Ix icon={Layers} size="lg" style={{ color: "var(--color-accent-text)" }} />
               <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
                 No items yet. Add the items you want to copy together.
@@ -397,7 +399,7 @@ export function GroupEditor(props: GroupEditorProps) {
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
               <SortableContext items={memberIds} strategy={verticalListSortingStrategy}>
-                <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
+                <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
                   {members.map((m, i) => (
                     <SortableMemberRow
                       key={m.item.id}
@@ -558,13 +560,14 @@ function SortableMemberRow({
   return (
     <div
       ref={setNodeRef}
-      className="glass-row flex items-center"
+      className="clavis-member-row clavis-focusable flex items-center"
+      data-dragging={isDragging ? "true" : undefined}
       style={{
         gap: "var(--space-2)",
         padding: "var(--space-2) var(--space-3)",
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.8 : 1,
+        opacity: isDragging ? 0.85 : 1,
       }}
     >
       {isDraggingEnabled ? (
@@ -589,37 +592,47 @@ function SortableMemberRow({
         type="button"
         onClick={onOpen}
         className="clavis-focusable flex min-w-0 flex-1 flex-col items-start"
-        style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left", gap: "calc(var(--space-1) / 2)" }}
+        style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left", gap: "calc(var(--space-1) / 2)", minWidth: 0 }}
         title={`Edit ${name}`}
       >
-        <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>
-          {name}
+        <span className="flex w-full min-w-0 items-center" style={{ gap: "var(--space-2)", minWidth: 0 }}>
+          <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)", minWidth: 0 }}>
+            {name}
+          </span>
+          {shared > 0 ? (
+            <span
+              className="flex items-center t-muted"
+              style={{ gap: "calc(var(--space-1) / 2)", fontSize: "var(--text-xs)", flexShrink: 0 }}
+              title={`Used in ${shared} groups`}
+            >
+              <Ix icon={Link2} size="sm" />
+              {shared}
+            </span>
+          ) : null}
         </span>
-        <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-xs)" }}>
+        <span className="t-mono t-muted truncate w-full" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
           {valueKey}
+          {preview ? <span aria-hidden>{" · "}</span> : null}
+          {preview}
         </span>
       </button>
-      <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "calc(var(--space-6) * 6)", flexShrink: 0 }}>
-        {preview}
-      </span>
-      {shared > 0 ? (
-        <span
-          className="flex items-center t-muted"
-          style={{ gap: "calc(var(--space-1) / 2)", fontSize: "var(--text-xs)", flexShrink: 0 }}
-          title={`Used in ${shared} groups`}
-        >
-          <Ix icon={Link2} size="sm" />
-          {shared}
-        </span>
-      ) : null}
-      <span className="flex items-center" style={{ gap: "calc(var(--space-1) / 2)", flexShrink: 0 }}>
+      <span
+        className="flex items-center"
+        style={{
+          gap: "calc(var(--space-1) / 2)",
+          flexShrink: 0,
+          alignSelf: "stretch",
+          borderLeft: "1px solid var(--glass-border)",
+          paddingLeft: "var(--space-2)",
+        }}
+      >
         <button
           type="button"
           onClick={onMoveUp}
           disabled={disabled || !canMoveUp}
           aria-label={`Move ${name} up`}
           title="Move up"
-          className="clavis-btn clavis-btn-ghost"
+          className="clavis-btn clavis-btn-ghost clavis-row-action"
           style={{ padding: "var(--space-1)" }}
         >
           <Ix icon={ArrowUp} size="sm" />
@@ -630,7 +643,7 @@ function SortableMemberRow({
           disabled={disabled || !canMoveDown}
           aria-label={`Move ${name} down`}
           title="Move down"
-          className="clavis-btn clavis-btn-ghost"
+          className="clavis-btn clavis-btn-ghost clavis-row-action"
           style={{ padding: "var(--space-1)" }}
         >
           <Ix icon={ArrowDown} size="sm" />
@@ -641,7 +654,7 @@ function SortableMemberRow({
           disabled={disabled}
           aria-label={`Remove ${name} from group`}
           title="Remove from group"
-          className="clavis-btn clavis-btn-ghost"
+          className="clavis-btn clavis-btn-ghost clavis-row-action"
           style={{ padding: "var(--space-1)", color: "var(--color-danger-text)" }}
         >
           <Ix icon={X} size="sm" />

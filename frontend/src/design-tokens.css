@@ -73,6 +73,10 @@
   --overlay-shadow: 0 12px 32px rgba(29, 41, 61, 0.16);   /* menus, modals, popup */
   --selected-bar: var(--color-primary);          /* 3px left bar on the selected row */
 
+  /* ---- Wells: recessed list surfaces (a group's member list) ---- */
+  --well-bg: var(--backdrop-base);               /* faint recessed tint on white cards */
+  --well-border: var(--gray-200);                /* 1px bound so the list reads as one object */
+
   /* ---- Dark theme surfaces (html.solid) ---- */
   --solid-surface: #202733;                      /* BW dark background */
   --solid-surface-raised: #26303E;
@@ -140,6 +144,9 @@ html.solid {
   --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.40), 0 4px 16px rgba(0, 0, 0, 0.32);
   --overlay-shadow: 0 12px 32px rgba(0, 0, 0, 0.50);
   --selected-bar: #65ABFF;
+
+  --well-bg: #1A222E;                             /* recessed below the #202733 panel */
+  --well-border: var(--divider);
 
   --solid-surface: #202733;
   --solid-surface-raised: #26303E;
