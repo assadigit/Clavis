@@ -5,6 +5,8 @@
  */
 package system
 
+import "unsafe"
+
 // TransparencyEnabled reports whether Windows "Transparency effects" is on
 // (§5.9: solid mode switches on automatically when it is off).
 func TransparencyEnabled() bool { return transparencyEnabled() }
@@ -19,3 +21,11 @@ func OpenFolder(path string) error { return openFolder(path) }
 // installer (HKCU\Software\Clavis\InstallDir), or "" when Clavis was not
 // installed (portable run).
 func InstallDir() string { return installDir() }
+
+// ForceForeground brings a window to the foreground even when Windows would
+// normally refuse the switch (tray-click context). Wails' Focus() only calls
+// SetForegroundWindow, which the foreground lock silently denies; this uses
+// the classic AttachThreadInput recipe used by tray quick-launchers.
+// hwnd is the native window handle (WebviewWindow.NativeWindow()); nil is a
+// safe no-op. Non-Windows builds stub it out.
+func ForceForeground(hwnd unsafe.Pointer) { forceForeground(hwnd) }

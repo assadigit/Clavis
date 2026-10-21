@@ -3,15 +3,21 @@
  * Keyboard-first: Up/Down move selection (wrap), Enter copies, Right drills
  * into a group, Left/Backspace-on-empty/Esc go back, Esc at top hides.
  * Never shows secret values — only masked previews.
+ *
+ * Empty query (§5.1): "Recent" — the 10 most recently used/copied entries
+ * (items AND groups; copying a whole group counts) — topped up to 10 rows
+ * with pinned/most-used entries. Every open starts fresh: query cleared,
+ * selection at the top, copy state cleared.
  */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronLeft, ClipboardCopy, Layers, Search } from "lucide-react";
+import { AppWindow, Check, ChevronLeft, ClipboardCopy, Layers, Search } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { copyToClipboard } from "@/lib/clavis/client";
-import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
+import { buildSearchEntries, compareEntries, compareRecent, searchEntries } from "@/lib/clavis/search";
+import type { SearchEntry } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { groupById, groupMemberKeys, liveGroups, liveItems, maskValue, metaLine } from "./derive";
@@ -28,6 +34,12 @@ interface PopupRow {
 
 const rowKeyOf = (row: PopupRow) => `${row.kind}:${row.id}`;
 
+/** How many rows the default (empty-query) list shows. */
+const RECENT_LIMIT = 10;
+
+/** The drill-down view has no section headers. */
+const NO_HEADERS = new Map<number, string>();
+
 export interface PopupProps {
   open: boolean;
   onHide: () => void;
@@ -35,19 +47,29 @@ export interface PopupProps {
   call: CallFn;
   /** Open the Manager with the new-item form (optionally prefilled). */
   onOpenManagerNewItem: (prefillName?: string) => void;
+  /** Open the full Manager window — the popup's "Open Clavis" button. */
+  onOpenManager: () => void;
   /** Reports the currently selected row (used by the global Ctrl+E). */
   onReportSelection: (sel: Selection | null) => void;
   /** Desktop: the window IS the panel — fill it instead of centering. */
   fill?: boolean;
 }
 
-export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onReportSelection, fill }: PopupProps) {
+export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenManager, onReportSelection, fill }: PopupProps) {
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const [drillId, setDrillId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<{ rowKey: string; label: string } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  /* Copy feedback always clears itself, even if the hide is cancelled —
+     a leftover "copied" state must never block typing on the next show. */
+  useEffect(() => {
+    if (copied === null) return;
+    const t = window.setTimeout(() => setCopied(null), 1600);
+    return () => window.clearTimeout(t);
+  }, [copied]);
 
   const showLast4 = state.data.settings.showLast4;
   const noData = liveItems(state.data).length === 0 && liveGroups(state.data).length === 0;
@@ -63,9 +85,25 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
   );
 
   const topRows: PopupRow[] = useMemo(() => {
-    let results = searchEntries(query, entries);
-    if (query.trim() === "") results = results.slice(0, 8); /* pinned, then most-used */
-    return results.map((e) => {
+    const results = searchEntries(query, entries);
+    let list: SearchEntry[];
+    if (query.trim() === "") {
+      /* §5.1: the 10 most recently used/copied entries (items AND groups),
+         then pinned/most-used fill so the palette is never sparse. */
+      const recent = results
+        .filter((e) => e.lastUsedAt > 0)
+        .sort(compareRecent)
+        .slice(0, RECENT_LIMIT);
+      const seen = new Set(recent.map((e) => `${e.kind}:${e.id}`));
+      const fill = results
+        .filter((e) => !seen.has(`${e.kind}:${e.id}`))
+        .sort(compareEntries)
+        .slice(0, Math.max(0, RECENT_LIMIT - recent.length));
+      list = [...recent, ...fill];
+    } else {
+      list = results;
+    }
+    return list.map((e) => {
       if (e.kind === "group") {
         const g = groupMap.get(e.id);
         const count = g ? g.itemIds.filter((id) => itemMap.has(id)).length : 0;
@@ -82,6 +120,24 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
       };
     });
   }, [query, entries, itemMap, groupMap, showLast4]);
+
+  /* Section labels for the default list: "Recent" over the recent block,
+     "Pinned & frequent" over the fill. Headers are presentation-only —
+     selection indices still address the flat row list. */
+  const topHeaders = useMemo(() => {
+    const map = new Map<number, string>();
+    if (query.trim() !== "") return map;
+    /* Must mirror topRows: recent = used entries, most-recent-first. */
+    const used = entries.filter((e) => e.lastUsedAt > 0).sort(compareRecent);
+    const recentCount = Math.min(used.length, RECENT_LIMIT);
+    if (recentCount > 0) map.set(0, "Recent");
+    const fillCount = Math.min(
+      entries.length - used.length,
+      Math.max(0, RECENT_LIMIT - recentCount)
+    );
+    if (fillCount > 0) map.set(recentCount, "Pinned & frequent");
+    return map;
+  }, [query, entries]);
 
   const drillGroup = drillId ? groupById(state.data, drillId) : null;
 
@@ -107,6 +163,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
   }, [drillGroup, query, entries, itemMap, state.data, showLast4]);
 
   const rows = drillGroup ? memberRows : topRows;
+  const headers = drillGroup ? NO_HEADERS : topHeaders;
 
   /* Selection is kept inside the list by deriving a clamped index (no
      setState-in-effect): rows shrink → the index rides along. */
@@ -295,7 +352,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
       role="dialog"
       aria-label="Clavis quick search"
     >
-      <div className="clavis-scrim absolute inset-0" onMouseDown={onHide} aria-hidden />
+      {!fill ? <div className="clavis-scrim absolute inset-0" onMouseDown={onHide} aria-hidden /> : null}
       <div
         style={
           fill
@@ -376,7 +433,16 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
               className="clavis-popup-rows clavis-scroll flex flex-col"
               style={{ gap: "var(--space-1)", padding: "0 var(--space-2) var(--space-2)" }}
             >
-              {rows.map(renderRow)}
+              {rows.map((row, i) => (
+                <Fragment key={rowKeyOf(row)}>
+                  {headers.get(i) ? (
+                    <div className="clavis-pop-header" role="presentation">
+                      {headers.get(i)}
+                    </div>
+                  ) : null}
+                  {renderRow(row, i)}
+                </Fragment>
+              ))}
               {rows.length === 0 ? (
                 noData ? (
                   <button
@@ -432,6 +498,21 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onRepor
                 <kbd className="clavis-keycap">Esc</kbd>
                 <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>Close</span>
               </span>
+              <button
+                type="button"
+                onClick={() => {
+                  onHide();
+                  onOpenManager();
+                }}
+                title="Open the full Clavis window (Esc closes the popup)"
+                className="clavis-btn clavis-btn-ghost clavis-focusable ml-auto flex items-center"
+                style={{ gap: "var(--space-1)", padding: "var(--space-1) var(--space-2)", flexShrink: 0 }}
+              >
+                <Ix icon={AppWindow} size="sm" />
+                <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)" }}>
+                  Open Clavis
+                </span>
+              </button>
             </footer>
           </div>
         </div>

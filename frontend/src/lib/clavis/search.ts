@@ -13,8 +13,9 @@
  * 3. Secret values are NEVER matched — they are not part of the index.
  * 4. Ranking: exact name match first, then name prefix, then anything
  *    else; within the same tier: pinned, then useCount, then lastUsedAt.
- * 5. Empty query: pinned first, then most-used (useCount, then
- *    lastUsedAt). The popup shows the first 8 rows.
+ * 5. Empty query: the popup shows the 10 most recently used/copied entries
+ *    first (items AND groups — copying a whole group counts as using it),
+ *    topped up with pinned/most-used entries when fewer than 10 exist.
  */
 
 import type { VaultData } from "./types";
@@ -117,10 +118,20 @@ function wordTier(word: string, entry: SearchEntry): number {
   return 0;
 }
 
-function compareEntries(a: SearchEntry, b: SearchEntry): number {
+/** The shared order for fill rows (and the empty-query default):
+ *  pinned first, then most-used. */
+export function compareEntries(a: SearchEntry, b: SearchEntry): number {
   if (b.pinned !== a.pinned) return b.pinned ? 1 : -1;
   if (b.useCount !== a.useCount) return b.useCount - a.useCount;
   if (b.lastUsedAt !== a.lastUsedAt) return b.lastUsedAt - a.lastUsedAt;
+  return a.name.localeCompare(b.name);
+}
+
+/** Recency order (§5.1): most recently used/copied first — the popup's
+ *  "Recent" list. Never-used entries never reach this comparator. */
+export function compareRecent(a: SearchEntry, b: SearchEntry): number {
+  if (b.lastUsedAt !== a.lastUsedAt) return b.lastUsedAt - a.lastUsedAt;
+  if (b.useCount !== a.useCount) return b.useCount - a.useCount;
   return a.name.localeCompare(b.name);
 }
 

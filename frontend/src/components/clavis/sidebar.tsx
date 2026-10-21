@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   Folder,
   Hash,
+  History,
   Inbox,
   Key,
   MoreHorizontal,
@@ -86,6 +87,9 @@ export function Sidebar({ state, call, readOnly, filter, setFilter, mobileOpen, 
 
   const data = state.data;
   const liveCount = liveItems(data).length + liveGroups(data).length;
+  const recentCount =
+    liveItems(data).filter((i) => i.lastUsedAt !== null).length +
+    liveGroups(data).filter((g) => g.lastUsedAt !== null).length;
   const pinnedCount =
     liveItems(data).filter((i) => i.pinned).length + liveGroups(data).filter((g) => g.pinned).length;
   const trashCount = deletedEntries(data).length;
@@ -143,6 +147,7 @@ export function Sidebar({ state, call, readOnly, filter, setFilter, mobileOpen, 
         </button>
       ) : null}
       <NavRow icon={Inbox} label="All" count={liveCount} active={filter.view === "all"} onClick={() => pick({ view: "all" })} />
+      <NavRow icon={History} label="Recent" count={recentCount} active={filter.view === "recent"} onClick={() => pick({ view: "recent" })} />
       <NavRow icon={Pin} label="Pinned" count={pinnedCount} active={filter.view === "pinned"} onClick={() => pick({ view: "pinned" })} />
 
       <div style={{ height: "var(--space-2)" }} />

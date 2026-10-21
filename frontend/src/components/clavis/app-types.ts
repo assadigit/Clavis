@@ -6,6 +6,7 @@ import type { ClavisState } from "@/lib/clavis/types";
 
 export type ListFilter =
   | { view: "all" }
+  | { view: "recent" }
   | { view: "pinned" }
   | { view: "category"; categoryId: string }
   | { view: "tag"; tag: string }

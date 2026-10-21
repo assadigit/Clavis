@@ -2,10 +2,10 @@
  * CLAVIS — popup entry (desktop).
  *
  * Runs inside the pre-created popup window (§3.1). The window is shown and
- * hidden by Go (global shortcut / tray); this entry resets the palette on
- * every show (query cleared, selection at top, autofocus — §3.3b) and keeps
- * the window sized to the panel (640px + shadow pad; height grows with the
- * rows, §3.3b).
+ * hidden by Go (global shortcut / tray); this entry mounts the palette only
+ * while the window is open — every show is a fresh mount (query cleared,
+ * selection at top, copy state cleared, autofocus — §3.3b) and keeps the
+ * window sized to the panel (height grows with the rows, §3.3b).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -62,6 +62,19 @@ function PopupRoot() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
+
+  /* The window can be shown without OS focus in edge cases (Go forces the
+     foreground, but be defensive): whenever the window gains focus, put it
+     in the search box so typing always lands in the palette. */
+  useEffect(() => {
+    if (!open) return;
+    const onFocus = () => {
+      const el = document.querySelector<HTMLInputElement>('input[aria-label="Search Clavis"]');
+      if (el && document.activeElement !== el) el.focus();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [open]);
 
   /* ---- keep the window sized to the panel + shadow pad (§3.3b) ---- */
   useEffect(() => {
@@ -130,20 +143,30 @@ function PopupRoot() {
 
   return (
     <>
-      <Popup
-        open={open}
-        onHide={onHide}
-        state={state}
-        call={call}
-        fill
-        onOpenManagerNewItem={(prefillName) => {
-          platform.managerNewItem(prefillName);
-          onHide();
-        }}
-        onReportSelection={(sel) => {
-          selRef.current = sel;
-        }}
-      />
+      {/* Mounted only while the window is open: every show starts fresh —
+          query cleared, selection at the top, copy state cleared, autofocus.
+          (Keeping it mounted across hides left a stale "copied" state that
+          blocked every keystroke on the next show — the stuck search bar.) */}
+      {open ? (
+        <Popup
+          open={open}
+          onHide={onHide}
+          state={state}
+          call={call}
+          fill
+          onOpenManagerNewItem={(prefillName) => {
+            platform.managerNewItem(prefillName);
+            onHide();
+          }}
+          onOpenManager={() => {
+            onHide();
+            platform.showManager();
+          }}
+          onReportSelection={(sel) => {
+            selRef.current = sel;
+          }}
+        />
+      ) : null}
       <Toaster position="bottom-center" duration={2500} />
     </>
   );

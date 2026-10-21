@@ -325,12 +325,25 @@ html.solid .clavis-keycap { background: var(--solid-surface-raised); }
   border-radius: var(--radius-panel);
 }
 
-/* ---- Popup rows: at most 8 rows visible, then scroll ---- */
+/* ---- Popup rows: at most 10 rows visible, then scroll. The desktop popup
+     window auto-sizes to the panel, so the natural 10-row budget applies
+     (the web edition additionally caps by viewport height). ---- */
 .clavis-popup-rows {
   --clavis-row-h: calc(var(--space-4) + var(--space-4) + var(--space-4)); /* 48px, token math */
-  max-height: calc(var(--clavis-row-h) * 8);
+  max-height: calc(var(--clavis-row-h) * 10 + var(--space-6)); /* 10 rows + section labels */
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* ---- Popup section labels ("Recent" / "Pinned & frequent", §5.1) ---- */
+.clavis-pop-header {
+  padding: var(--space-2) var(--space-3) calc(var(--space-1) / 2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  user-select: none;
 }
 
 /* ---- Range slider (kept for compatibility) ---- */

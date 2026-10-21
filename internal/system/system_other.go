@@ -5,15 +5,19 @@
  */
 package system
 
+import "unsafe"
+
 func transparencyEnabled() bool { return true }
 
 func cursorPoint() (int, int) { return 0, 0 }
 
 func openFolder(path string) error {
-	return errUnsupported
+        return errUnsupported
 }
 
 func installDir() string { return "" }
+
+func forceForeground(hwnd unsafe.Pointer) { _ = hwnd /* development builds only */ }
 
 type sysErr string
 

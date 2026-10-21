@@ -68,8 +68,9 @@ Companion file: `design-tokens.css` (all colors, glass, type, spacing, motion).
 - Frameless, transparent webview, always on top, no taskbar entry, skips the taskbar and Alt-Tab.
 - Centered horizontally, positioned in the upper third of the screen the mouse cursor is on.
 - Hides when it loses focus, and on Esc.
-- Opens with the search box focused and the previous query cleared.
-- Size: 640 px wide panel (plus the shadow margin, see tokens). Height grows with the number of rows, up to 8 rows visible, then scrolls.
+- Opens with the search box focused and the previous query cleared; every open starts from a clean state (query, selection, drill position and copy feedback are reset — a leftover copy state must never block typing).
+- Size: 640 px wide panel (plus the shadow margin, see tokens). Height grows with the number of rows, up to 10 rows visible, then scrolls.
+- The footer carries a clear **Open Clavis** button that closes the popup and shows the Manager window.
 - The popup **never** shows secret values in full. See 5.2.
 
 ### 3.4 Manager window
@@ -149,7 +150,8 @@ Create three categories: **Credentials**, **Prompts**, **Notes**. No sample item
   - `@word` restricts to a category.
 - Ranking: exact/prefix name match first, then pinned, then most-used (`useCount`, then `lastUsedAt`).
 - Search never looks inside **secret values**.
-- With an empty query, the popup shows **pinned** first, then **most recently/frequently used**, up to 8 rows.
+- With an empty query, the popup shows a **Recent** section first — the **10 most recently used/copied entries** (items AND groups; copying a whole group counts as using it), most recent first. When fewer than 10 entries have ever been used, the list is topped up with a **Pinned & frequent** section (pinned first, then most-used) so the palette always offers up to 10 rows.
+- The Manager sidebar has a matching **Recent** view: the same 10 most recently used/copied entries, most recent first.
 - If nothing matches: show "Nothing found. Press Enter to create '<query>'", and Enter opens the Manager's new-item form with the name prefilled.
 
 ### 5.2 Popup rows and copy behavior

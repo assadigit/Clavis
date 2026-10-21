@@ -80,6 +80,9 @@ export function EntryList({
     if (filter.view === "pinned") {
       items = items.filter((i) => i.pinned);
       groups = groups.filter((g) => g.pinned);
+    } else if (filter.view === "recent") {
+      items = items.filter((i) => i.lastUsedAt !== null);
+      groups = groups.filter((g) => g.lastUsedAt !== null);
     } else if (filter.view === "category") {
       items = items.filter((i) => i.categoryId === filter.categoryId);
       groups = groups.filter((g) => g.categoryId === filter.categoryId);
@@ -90,7 +93,17 @@ export function EntryList({
     }
     const ids = new Set<string>([...items.map((i) => i.id), ...groups.map((g) => g.id)]);
     const filtered = entries.filter((e) => ids.has(e.id));
-    const ranked = searchEntries(query, filtered);
+    let ranked = searchEntries(query, filtered);
+    if (filter.view === "recent") {
+      /* §5.1: the 10 most recently used/copied — items AND groups. */
+      const lastUsed = new Map<string, number>();
+      for (const i of items) lastUsed.set(i.id, Date.parse(i.lastUsedAt ?? "") || 0);
+      for (const g of groups) lastUsed.set(g.id, Date.parse(g.lastUsedAt ?? "") || 0);
+      ranked = ranked
+        .filter((e) => (lastUsed.get(e.id) ?? 0) > 0)
+        .sort((a, b) => (lastUsed.get(b.id) ?? 0) - (lastUsed.get(a.id) ?? 0))
+        .slice(0, 10);
+    }
     const shared = sharedCountMap(data);
     const itemMap = new Map(items.map((i) => [i.id, i]));
     const groupMap = new Map(groups.map((g) => [g.id, g]));
@@ -384,7 +397,9 @@ export function EntryList({
             <div className="flex items-center" style={{ gap: "var(--space-2)", padding: "var(--space-3)" }}>
               <Ix icon={Search} size="sm" />
               <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
-                Nothing found.
+                {filter.view === "recent" && query.trim() === ""
+                  ? "Nothing used yet — copy an entry and it shows up here."
+                  : "Nothing found."}
               </span>
             </div>
           ) : null}
