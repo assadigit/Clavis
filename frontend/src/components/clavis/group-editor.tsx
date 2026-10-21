@@ -1,29 +1,13 @@
 /**
- * CLAVIS — group editor (SPEC §5.5): fields, ordered member list with
- * drag reorder + up/down buttons, add-item picker, copy, export, delete.
+ * CLAVIS — group editor (SPEC §5.5): fields plus the member well (a
+ * compact summary of the group's items). All member management — drag
+ * reorder, add, remove — happens in the dedicated Manage items modal.
  */
 "use client";
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, Check, ClipboardPaste, Copy, FileText, GripVertical, Layers, Link2, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, ClipboardPaste, Copy, FileText, Layers, Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { copyToClipboard, downloadExport } from "@/lib/clavis/client";
 import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
@@ -32,7 +16,6 @@ import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupMemberKeys, maskValue, sharedCountMap } from "./derive";
 import { EntryTile, EntryTypeIcon, Ix } from "./icons";
 import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
-import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 
 export interface GroupEditorProps {
   mode: "create" | "edit";
@@ -43,7 +26,7 @@ export interface GroupEditorProps {
   onDone: (sel: Selection) => void;
   onSelectEntry: (sel: Selection) => void;
   deleteEntry: (kind: "item" | "group", id: string) => void;
-  onCreateItemHere?: (groupId: string) => void;
+  onManageItems?: () => void;
   onCancelCreate: () => void;
 }
 
@@ -59,7 +42,7 @@ function draftFromGroup(group: Group): GroupDraft {
 }
 
 export function GroupEditor(props: GroupEditorProps) {
-  const { mode, state, call, readOnly, group, onDone, onSelectEntry, deleteEntry, onCreateItemHere, onCancelCreate } = props;
+  const { mode, state, call, readOnly, group, onDone, onSelectEntry, deleteEntry, onManageItems, onCancelCreate } = props;
 
   const [draft, setDraft] = useState<GroupDraft>(() =>
     group
@@ -67,9 +50,6 @@ export function GroupEditor(props: GroupEditorProps) {
       : { name: "", categoryId: null, tags: [], pinned: false }
   );
   const [saving, setSaving] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [addQuery, setAddQuery] = useState("");
-  const [picked, setPicked] = useState<Set<string>>(new Set());
   /* Create mode: paste a whole project's credentials as KEY=value lines and
      Clavis builds the group AND every member item in one shot. */
   const [envText, setEnvText] = useState("");
@@ -79,7 +59,6 @@ export function GroupEditor(props: GroupEditorProps) {
 
   const showLast4 = state.data.settings.showLast4;
   const members = useMemo(() => (group ? groupMemberKeys(group, state.data) : []), [group, state.data]);
-  const memberIds = useMemo(() => members.map((m) => m.item.id), [members]);
   const shared = useMemo(() => sharedCountMap(state.data), [state.data]);
 
   const dirty = useMemo(() => {
@@ -92,17 +71,6 @@ export function GroupEditor(props: GroupEditorProps) {
       o.tags.join("\u0000") !== draft.tags.join("\u0000")
     );
   }, [group, draft]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  const candidates = useMemo(() => {
-    const existing = new Set(memberIds);
-    const entries = buildSearchEntries(state.data).filter((e) => e.kind === "item" && !existing.has(e.id));
-    return searchEntries(addQuery, entries);
-  }, [state.data, memberIds, addQuery]);
 
   /* Live parse of the pasted block: keys preview + bad-line detection,
      exactly what will be created (deduped like the store will dedupe). */
@@ -159,41 +127,6 @@ export function GroupEditor(props: GroupEditorProps) {
       if (res.ok) toast.success(`Saved “${name}”.`);
     }
     setSaving(false);
-  }
-
-  function onDragEnd(e: DragEndEvent) {
-    if (!group || readOnly) return;
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const oldIndex = memberIds.indexOf(String(active.id));
-    const newIndex = memberIds.indexOf(String(over.id));
-    if (oldIndex < 0 || newIndex < 0) return;
-    const next = arrayMove(memberIds, oldIndex, newIndex);
-    void call("reorderGroupItems", { groupId: group.id, itemIds: next });
-  }
-
-  function moveMember(i: number, dir: -1 | 1) {
-    if (!group || readOnly) return;
-    const j = i + dir;
-    if (j < 0 || j >= memberIds.length) return;
-    const next = arrayMove(memberIds, i, j);
-    void call("reorderGroupItems", { groupId: group.id, itemIds: next });
-  }
-
-  function removeMember(itemId: string) {
-    if (!group || readOnly) return;
-    void call("removeItemFromGroup", { groupId: group.id, itemId });
-  }
-
-  async function applyPicked() {
-    if (!group || readOnly || picked.size === 0) return;
-    const res = await call("addItemsToGroup", { groupId: group.id, itemIds: [...picked] });
-    if (res.ok) {
-      toast.success(`Added ${picked.size} ${picked.size === 1 ? "item" : "items"} to “${group.name}”.`);
-      setPicked(new Set());
-      setAddQuery("");
-      setAdding(false);
-    }
   }
 
   async function copyGroup() {
@@ -275,153 +208,69 @@ export function GroupEditor(props: GroupEditorProps) {
 
       {mode === "edit" && group ? (
         <section className="flex flex-col" style={{ gap: "var(--space-2)" }} aria-label="Members">
-          <div className="flex items-center justify-between">
-            <FieldLabel>Members (copied as NAME=value lines, in this order)</FieldLabel>
-            <Btn
-              variant="glass"
-              icon={Plus}
-              label="Add item"
-              onClick={() => setAdding((a) => !a)}
-              disabled={readOnly}
-              ariaLabel="Add items to this group"
-            />
+          <div className="flex items-center justify-between" style={{ gap: "var(--space-2)" }}>
+            <FieldLabel>Members</FieldLabel>
+            {!readOnly ? (
+              <Btn
+                variant="primary"
+                icon={Plus}
+                label="Add item"
+                onClick={() => onManageItems?.()}
+                ariaLabel="Add and manage items in this group"
+              />
+            ) : null}
           </div>
-
-          {adding ? (
-            <div className="glass-row flex flex-col" style={{ gap: "var(--space-2)", padding: "var(--space-3)", border: "1px solid var(--glass-border)" }}>
-              <div className="flex items-center" style={{ gap: "var(--space-2)" }}>
-                <div className="relative min-w-0 flex-1">
-                  <Ix
-                    icon={Search}
-                    size="sm"
-                    style={{ position: "absolute", left: "var(--space-3)", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }}
-                  />
-                  <input
-                    className="glass-input"
-                    value={addQuery}
-                    onChange={(e) => setAddQuery(e.target.value)}
-                    placeholder="Search items to add…"
-                    aria-label="Search items to add"
-                    spellCheck={false}
-                    style={{
-                      width: "100%",
-                      padding: "var(--space-2) var(--space-3)",
-                      paddingLeft: "calc(var(--space-3) + var(--text-lg) + var(--space-1))",
-                      fontSize: "var(--text-sm)",
-                      fontFamily: "var(--font-ui)",
-                      color: "var(--text)",
-                    }}
-                  />
-                </div>
-                <Btn
-                  variant="primary"
-                  label={picked.size > 0 ? `Add ${picked.size} item${picked.size === 1 ? "" : "s"}` : "Add items"}
-                  onClick={() => void applyPicked()}
-                  disabled={readOnly || picked.size === 0}
-                />
-              </div>
-              <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
-                {candidates.map((c) => {
-                  const it = state.data.items.find((i) => i.id === c.id && !i.deletedAt);
-                  const on = picked.has(c.id);
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="clavis-member-row clavis-focusable flex items-center"
-                      style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", cursor: "pointer", textAlign: "left" }}
-                      onClick={() => {
-                        setPicked((p) => {
-                          const n = new Set(p);
-                          if (n.has(c.id)) n.delete(c.id);
-                          else n.add(c.id);
-                          return n;
-                        });
-                      }}
-                    >
-                      <span
-                        aria-hidden
-                        style={{
-                          width: "var(--text-lg)",
-                          height: "var(--text-lg)",
-                          borderRadius: "var(--radius-row)",
-                          border: "1px solid var(--glass-border)",
-                          background: on ? "var(--color-primary)" : "var(--glass-bg)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {on ? <Ix icon={Check} size="sm" style={{ color: "var(--text-on-primary)", width: "var(--text-sm)", height: "var(--text-sm)" }} /> : null}
-                      </span>
-                      <EntryTypeIcon kind="item" isSecret={it?.isSecret ?? false} size="sm" />
-                      <span className="flex min-w-0 flex-1 flex-col items-start" style={{ gap: "calc(var(--space-1) / 2)" }}>
-                        <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)", maxWidth: "100%" }}>
-                          {c.name}
-                        </span>
-                        <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
-                          {maskValue(it?.value ?? "", showLast4)}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-                {candidates.length === 0 ? (
-                  <span className="t-muted" style={{ fontSize: "var(--text-sm)", padding: "var(--space-2) var(--space-3)", textAlign: "center" }}>
-                    Nothing found.
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex items-center justify-between" style={{ gap: "var(--space-2)" }}>
-                <Btn
-                  variant="ghost"
-                  icon={Plus}
-                  label="Create new item here"
-                  onClick={() => onCreateItemHere?.(group.id)}
-                  disabled={readOnly}
-                />
-                <Btn variant="ghost" label="Close" onClick={() => setAdding(false)} />
-              </div>
-            </div>
-          ) : null}
+          <FieldHint>Copied as NAME=value lines, in this order.</FieldHint>
 
           {members.length === 0 ? (
-            <div className="clavis-members-box clavis-scroll flex flex-col items-center" style={{ gap: "var(--space-2)", padding: "var(--space-4)", textAlign: "center" }}>
+            <div className="clavis-members-box flex flex-col items-center" style={{ gap: "var(--space-2)", padding: "var(--space-4)", textAlign: "center" }}>
               <Ix icon={Layers} size="lg" style={{ color: "var(--color-accent-text)" }} />
               <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
                 No items yet. Add the items you want to copy together.
               </span>
-              {!readOnly ? (
-                <Btn variant="primary" icon={Plus} label="Add item" onClick={() => setAdding(true)} />
-              ) : null}
             </div>
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={memberIds} strategy={verticalListSortingStrategy}>
-                <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
-                  {members.map((m, i) => (
-                    <SortableMemberRow
-                      key={m.item.id}
-                      itemId={m.item.id}
-                      name={m.item.name}
-                      isSecret={m.item.isSecret}
-                      valueKey={m.key}
-                      preview={maskValue(m.item.value, showLast4)}
-                      shared={shared.get(m.item.id) ?? 0}
-                      disabled={readOnly}
-                      isDraggingEnabled={!readOnly}
-                      onOpen={() => onSelectEntry({ kind: "item", id: m.item.id, groupContextId: group.id })}
-                      onMoveUp={() => moveMember(i, -1)}
-                      onMoveDown={() => moveMember(i, 1)}
-                      onRemove={() => removeMember(m.item.id)}
-                      canMoveUp={i > 0}
-                      canMoveDown={i < members.length - 1}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
+              {members.map((m) => {
+                const sharedCount = shared.get(m.item.id) ?? 0;
+                const preview = maskValue(m.item.value, showLast4);
+                return (
+                  <button
+                    key={m.item.id}
+                    type="button"
+                    className="clavis-member-row clavis-focusable flex items-center"
+                    onClick={() => onSelectEntry({ kind: "item", id: m.item.id, groupContextId: group.id })}
+                    title={`Edit ${m.item.name}`}
+                    style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", cursor: "pointer", textAlign: "left" }}
+                  >
+                    <EntryTypeIcon kind="item" isSecret={m.item.isSecret} size="md" />
+                    <span className="flex min-w-0 flex-1 flex-col items-start" style={{ gap: "calc(var(--space-1) / 2)" }}>
+                      <span className="flex w-full min-w-0 items-center" style={{ gap: "var(--space-2)", minWidth: 0 }}>
+                        <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)", minWidth: 0 }}>
+                          {m.item.name}
+                        </span>
+                        {sharedCount > 0 ? (
+                          <span
+                            className="flex items-center t-muted"
+                            style={{ gap: "calc(var(--space-1) / 2)", fontSize: "var(--text-xs)", flexShrink: 0 }}
+                            title={`Used in ${sharedCount} groups`}
+                          >
+                            <Ix icon={Link2} size="sm" />
+                            {sharedCount}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="t-mono t-muted truncate w-full" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
+                        {m.key}
+                        {preview ? <span aria-hidden>{" · "}</span> : null}
+                        {preview}
+                      </span>
+                    </span>
+                    <Ix icon={ChevronRight} size="sm" style={{ color: "var(--color-neutral)", flexShrink: 0 }} />
+                  </button>
+                );
+              })}
+            </div>
           )}
         </section>
       ) : (
@@ -521,145 +370,6 @@ export function GroupEditor(props: GroupEditorProps) {
           </div>
         ) : null}
       </footer>
-    </div>
-  );
-}
-
-function SortableMemberRow({
-  itemId,
-  name,
-  isSecret,
-  valueKey,
-  preview,
-  shared,
-  disabled,
-  isDraggingEnabled,
-  onOpen,
-  onMoveUp,
-  onMoveDown,
-  onRemove,
-  canMoveUp,
-  canMoveDown,
-}: {
-  itemId: string;
-  name: string;
-  isSecret: boolean;
-  valueKey: string;
-  preview: string;
-  shared: number;
-  disabled: boolean;
-  isDraggingEnabled: boolean;
-  onOpen: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  onRemove: () => void;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: itemId });
-  return (
-    <div
-      ref={setNodeRef}
-      className="clavis-member-row clavis-focusable flex items-center"
-      data-dragging={isDragging ? "true" : undefined}
-      style={{
-        gap: "var(--space-2)",
-        padding: "var(--space-2) var(--space-3)",
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.85 : 1,
-      }}
-    >
-      {isDraggingEnabled ? (
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          aria-label={`Reorder ${name}`}
-          title="Drag to reorder"
-          className="clavis-focusable"
-          style={{ display: "inline-flex", color: "var(--text-muted)", background: "transparent", border: "none", cursor: "grab", padding: "var(--space-1)" }}
-        >
-          <Ix icon={GripVertical} size="sm" />
-        </button>
-      ) : (
-        <span aria-hidden style={{ display: "inline-flex", padding: "var(--space-1)" }}>
-          <Ix icon={GripVertical} size="sm" style={{ color: "var(--color-neutral)" }} />
-        </span>
-      )}
-      <EntryTypeIcon kind="item" isSecret={isSecret} size="md" />
-      <button
-        type="button"
-        onClick={onOpen}
-        className="clavis-focusable flex min-w-0 flex-1 flex-col items-start"
-        style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left", gap: "calc(var(--space-1) / 2)", minWidth: 0 }}
-        title={`Edit ${name}`}
-      >
-        <span className="flex w-full min-w-0 items-center" style={{ gap: "var(--space-2)", minWidth: 0 }}>
-          <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)", minWidth: 0 }}>
-            {name}
-          </span>
-          {shared > 0 ? (
-            <span
-              className="flex items-center t-muted"
-              style={{ gap: "calc(var(--space-1) / 2)", fontSize: "var(--text-xs)", flexShrink: 0 }}
-              title={`Used in ${shared} groups`}
-            >
-              <Ix icon={Link2} size="sm" />
-              {shared}
-            </span>
-          ) : null}
-        </span>
-        <span className="t-mono t-muted truncate w-full" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
-          {valueKey}
-          {preview ? <span aria-hidden>{" · "}</span> : null}
-          {preview}
-        </span>
-      </button>
-      <span
-        className="flex items-center"
-        style={{
-          gap: "calc(var(--space-1) / 2)",
-          flexShrink: 0,
-          alignSelf: "stretch",
-          borderLeft: "1px solid var(--glass-border)",
-          paddingLeft: "var(--space-2)",
-        }}
-      >
-        <button
-          type="button"
-          onClick={onMoveUp}
-          disabled={disabled || !canMoveUp}
-          aria-label={`Move ${name} up`}
-          title="Move up"
-          className="clavis-btn clavis-btn-ghost clavis-row-action"
-          style={{ padding: "var(--space-1)" }}
-        >
-          <Ix icon={ArrowUp} size="sm" />
-        </button>
-        <button
-          type="button"
-          onClick={onMoveDown}
-          disabled={disabled || !canMoveDown}
-          aria-label={`Move ${name} down`}
-          title="Move down"
-          className="clavis-btn clavis-btn-ghost clavis-row-action"
-          style={{ padding: "var(--space-1)" }}
-        >
-          <Ix icon={ArrowDown} size="sm" />
-        </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={disabled}
-          aria-label={`Remove ${name} from group`}
-          title="Remove from group"
-          className="clavis-btn clavis-btn-ghost clavis-row-action"
-          style={{ padding: "var(--space-1)", color: "var(--color-danger-text)" }}
-        >
-          <Ix icon={X} size="sm" />
-        </button>
-      </span>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { EntryList } from "./entry-list";
 import { GroupEditor } from "./group-editor";
 import { Ix } from "./icons";
 import { ItemEditor } from "./item-editor";
+import { ManageItemsModal } from "./manage-items-modal";
 import { SettingsView } from "./settings-view";
 import { Sidebar } from "./sidebar";
 import { TrashView } from "./trash-view";
@@ -50,11 +51,16 @@ export function Manager(props: ManagerProps) {
     onResize();
     return () => window.removeEventListener("resize", onResize);
   }, []);
+  /* The Manage items modal lives HERE (not inside the group editor) so it
+     survives the editor remounts that every membership change triggers
+     (the editor's key includes the group's updatedAt). */
+  const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
 
   const data = state.data;
   const liveCount = liveItems(data).length + liveGroups(data).length;
   const selItem = selection?.kind === "item" ? data.items.find((i) => i.id === selection.id && !i.deletedAt) : undefined;
   const selGroup = selection?.kind === "group" ? data.groups.find((g) => g.id === selection.id && !g.deletedAt) : undefined;
+  const managingGroup = managingGroupId ? data.groups.find((g) => g.id === managingGroupId && !g.deletedAt) : undefined;
   const activeSelection: Selection | null =
     selItem || selGroup ? (selection as Selection) : null;
 
@@ -177,7 +183,7 @@ export function Manager(props: ManagerProps) {
           onDone={(sel) => setSelection(sel)}
           onSelectEntry={(sel) => setSelection(sel)}
           deleteEntry={deleteEntry}
-          onCreateItemHere={(gid) => setCreating({ kind: "item", forGroupId: gid })}
+          onManageItems={() => setManagingGroupId(selGroup.id)}
           onCancelCreate={() => setCreating(null)}
         />
       );
@@ -349,6 +355,21 @@ export function Manager(props: ManagerProps) {
           )}
         </div>
       </div>
+
+      {managingGroup ? (
+        <ManageItemsModal
+          key={`manage-${managingGroup.id}`}
+          group={managingGroup}
+          state={state}
+          call={call}
+          readOnly={readOnly}
+          onClose={() => setManagingGroupId(null)}
+          onCreateItemHere={(gid) => {
+            setManagingGroupId(null);
+            setCreating({ kind: "item", forGroupId: gid });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

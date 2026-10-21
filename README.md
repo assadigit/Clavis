@@ -30,7 +30,7 @@ Copied secrets are automatically kept out of the Windows clipboard history
   AA contrast.
 - **Recent-first quick search** — the popup opens with the 10 most recently used/copied entries (whole groups included), a clear **Open Clavis** button to reach the main window, and instant search as you type.
 - **Tidy editors** — clean action bars (Save left, Copy/Duplicate/menu right, Delete tucked safely in the menu), contextual keyboard hints under the value field, aligned toggles.
-- **Member wells** — a group's items sit together in one faint, bounded, scrollable container: white two-line cards (name + KEY · masked value), drag to reorder, actions behind a hairline.
+- **Manage items screen** — a group's items sit in one faint, bounded, scrollable well of two-line cards; the blue Add item button opens a dedicated bigger dialog to drag-reorder, add, and remove items comfortably.
 - **In-app self-update** — Settings → About checks GitHub for a newer release; one click downloads and installs it (installed and portable editions), relaunches Clavis, and never touches your data. Pull-only network use: two GETs to github.com when you check (or once per 12 h in the background). No telemetry, no analytics, no accounts.
 
 Data lives in `%APPDATA%\Clavis` (shared by the installed and portable
@@ -42,8 +42,8 @@ Download from [Releases](../../releases):
 
 | File | What it is |
 | --- | --- |
-| `Clavis-Setup-1.1.3.exe` | The installer (per-user, no admin needed) |
-| `Clavis-Portable-1.1.3.exe` | The portable single file (no install) |
+| `Clavis-Setup-1.1.4.exe` | The installer (per-user, no admin needed) |
+| `Clavis-Portable-1.1.4.exe` | The portable single file (no install) |
 
 ## Build from source
 
