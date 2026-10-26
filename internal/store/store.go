@@ -612,6 +612,19 @@ func (s *Store) stateLocked() State {
 	}
 }
 
+// ItemValue returns the value of a live item. The UI state snapshot is
+// redacted (values stripped); the edit form fetches exactly one value
+// through this on demand.
+func (s *Store) ItemValue(id string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item := s.findItem(id)
+	if item == nil || item.DeletedAt != nil {
+		return "", notFound("Item", id)
+	}
+	return item.Value, nil
+}
+
 // ReadOnly reports the read-only guard state.
 func (s *Store) ReadOnly() bool {
 	s.mu.Lock()

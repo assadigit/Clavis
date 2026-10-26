@@ -109,6 +109,12 @@ export function maskValue(value: string, showLast4: boolean): string {
   return "••••••••";
 }
 
+/** Masked preview from the backend's redacted hint (valueLast4). The rule
+ *  (showLast4, ≥ 12 chars) is applied by the backend — one source of truth. */
+export function maskFromLast4(last4: string | undefined): string {
+  return last4 ? `••••••••${last4}` : "••••••••";
+}
+
 /** "category · tag1 · tag2" muted meta line used under entry names. */
 export function metaLine(category: string, tags: string[]): string {
   const parts: string[] = [];

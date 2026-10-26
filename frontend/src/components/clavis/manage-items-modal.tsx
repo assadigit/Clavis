@@ -29,7 +29,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, Check, GripVertical, Layers, Link2, Plus, Search, X } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState, Group } from "@/lib/clavis/types";
-import { groupMemberKeys, maskValue, sharedCountMap } from "./derive";
+import { groupMemberKeys, maskFromLast4, sharedCountMap } from "./derive";
 import { EntryTypeIcon, Ix } from "./icons";
 import { Btn, FieldHint, FieldLabel, Modal } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
@@ -48,7 +48,6 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
   const [addQuery, setAddQuery] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  const showLast4 = state.data.settings.showLast4;
   const members = useMemo(() => groupMemberKeys(group, state.data), [group, state.data]);
   const memberIds = useMemo(() => members.map((m) => m.item.id), [members]);
   const shared = useMemo(() => sharedCountMap(state.data), [state.data]);
@@ -155,7 +154,7 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
                     name={m.item.name}
                     isSecret={m.item.isSecret}
                     valueKey={m.key}
-                    preview={maskValue(m.item.value, showLast4)}
+                    preview={maskFromLast4(m.item.valueLast4)}
                     shared={shared.get(m.item.id) ?? 0}
                     disabled={readOnly}
                     isDraggingEnabled={!readOnly}
@@ -263,7 +262,7 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
                         {c.name}
                       </span>
                       <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
-                        {maskValue(it?.value ?? "", showLast4)}
+                        {maskFromLast4(it?.valueLast4)}
                       </span>
                     </span>
                   </button>

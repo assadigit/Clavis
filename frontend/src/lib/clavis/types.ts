@@ -20,8 +20,13 @@ export interface Item {
   name: string;
   /** Variable name used when a group is copied as NAME=value. May be "". */
   key: string;
-  /** The secret / prompt / note value. NEVER logged, NEVER searched. */
+  /** Always "" in the state snapshot — values are redacted at the backend
+   *  boundary; the edit form fetches one value via the "getValue" action.
+   *  NEVER logged, NEVER searched. */
   value: string;
+  /** Masked hint (§5.2): last 4 chars, only when showLast4 is on and the
+   *  value is ≥ 12 characters; "" otherwise. */
+  valueLast4?: string;
   note: string;
   categoryId: string | null;
   tags: string[];

@@ -20,6 +20,7 @@ package service
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf16"
 
 	"clavis/internal/clipboard"
 	"clavis/internal/store"
@@ -30,9 +31,89 @@ import (
 const shortcutTakenMessage = "This shortcut is used by another app. Choose a different one."
 
 // StateEnvelope is the state snapshot plus the OS transparency flag (§5.9).
+// Item VALUES ARE REDACTED: the UI receives "" plus a valueLast4 hint under
+// the §5.2 rule (only when showLast4 is on and the value is ≥12
+// UTF-16 units). The edit form fetches one value on demand via getValue.
 type StateEnvelope struct {
-	store.State
-	OSTransparency bool `json:"osTransparency"`
+	UIState         uiVaultData        `json:"data"`
+	Backups         []store.BackupInfo `json:"backups"`
+	ReadOnly        bool               `json:"readOnly"`
+	ReadOnlyReason  *string            `json:"readOnlyReason"`
+	RecoveredNotice *string            `json:"recoveredNotice"`
+	DataDir         string             `json:"dataDir"`
+	AppVersion      string             `json:"appVersion"`
+	OSTransparency  bool               `json:"osTransparency"`
+}
+
+// uiItem is the frontend view of an item: the embedded fields pass through,
+// but Value is shadowed to "" and valueLast4 carries the masked hint.
+type uiItem struct {
+	store.Item
+	Value      string `json:"value"`                // always "" in state
+	ValueLast4 string `json:"valueLast4,omitempty"` // §5.2 rule
+}
+
+// uiVaultData mirrors store.VaultData with redacted items.
+type uiVaultData struct {
+	SchemaVersion int              `json:"schemaVersion"`
+	AppVersion    string           `json:"appVersion"`
+	Encryption    store.Encryption `json:"encryption"`
+	Settings      store.Settings   `json:"settings"`
+	Categories    []store.Category `json:"categories"`
+	Items         []uiItem         `json:"items"`
+	Groups        []store.Group    `json:"groups"`
+}
+
+// last4PerRule implements the §5.2 masked-preview rule: expose the last
+// 4 characters only when showLast4 is on and the value is at least 12
+// characters long. UTF-16 code units are used so the hint matches what the
+// webview used to compute on its own.
+func last4PerRule(value string, show bool) string {
+	if !show {
+		return ""
+	}
+	units := utf16.Encode([]rune(value))
+	if len(units) < 12 {
+		return ""
+	}
+	return string(utf16.Decode(units[len(units)-4:]))
+}
+
+// redactState converts a store snapshot into the UI envelope (values out).
+func redactState(st store.State, osTransparency bool) StateEnvelope {
+	items := make([]uiItem, len(st.Data.Items))
+	for i := range st.Data.Items {
+		it := st.Data.Items[i]
+		v := it.Value
+		it.Value = ""
+		items[i] = uiItem{Item: it, Value: "", ValueLast4: last4PerRule(v, st.Data.Settings.ShowLast4)}
+	}
+	groups := st.Data.Groups
+	if groups == nil {
+		groups = []store.Group{}
+	}
+	cats := st.Data.Categories
+	if cats == nil {
+		cats = []store.Category{}
+	}
+	return StateEnvelope{
+		UIState: uiVaultData{
+			SchemaVersion: st.Data.SchemaVersion,
+			AppVersion:    st.Data.AppVersion,
+			Encryption:    st.Data.Encryption,
+			Settings:      st.Data.Settings,
+			Categories:    cats,
+			Items:         items,
+			Groups:        groups,
+		},
+		Backups:         st.Backups,
+		ReadOnly:        st.ReadOnly,
+		ReadOnlyReason:  st.ReadOnlyReason,
+		RecoveredNotice: st.RecoveredNotice,
+		DataDir:         st.DataDir,
+		AppVersion:      st.AppVersion,
+		OSTransparency:  osTransparency,
+	}
 }
 
 // Service is the pure dispatcher core. RegisterShortcut and SyncAutostart
@@ -58,10 +139,7 @@ func (s *Service) writeToClipboard(text string, containsSecret bool) bool {
 
 // GetState returns the full snapshot for the frontend.
 func (s *Service) GetState() StateEnvelope {
-	return StateEnvelope{
-		State:          s.Store.State(),
-		OSTransparency: system.TransparencyEnabled(),
-	}
+	return redactState(s.Store.State(), system.TransparencyEnabled())
 }
 
 func (s *Service) stateMap() map[string]any {
@@ -382,6 +460,16 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 				"lineCount":      result.LineCount,
 				"containsSecret": result.ContainsSecret,
 			})
+		}
+	case "getValue":
+		{
+			// One-item value fetch for the edit form (the state snapshot is
+			// redacted; §5.4 reveal/edit needs exactly this one value).
+			value, err := s.Store.ItemValue(getStr(p, "id"))
+			if err != nil {
+				return FailErr(err)
+			}
+			return map[string]any{"ok": true, "value": value}
 		}
 	case "importBackupPreview":
 		{

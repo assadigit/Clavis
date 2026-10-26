@@ -13,7 +13,7 @@ import { downloadExport } from "@/lib/clavis/client";
 import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
 import type { ClavisState, Group } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
-import { allTags, formatDateTime, groupMemberKeys, maskValue, sharedCountMap } from "./derive";
+import { allTags, formatDateTime, groupMemberKeys, maskFromLast4, sharedCountMap } from "./derive";
 import { EntryTile, EntryTypeIcon, Ix } from "./icons";
 import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
@@ -57,7 +57,6 @@ export function GroupEditor(props: GroupEditorProps) {
   /* The manager remounts this editor with a fresh key whenever the group or
      its updatedAt changes, so the draft resets by remounting. */
 
-  const showLast4 = state.data.settings.showLast4;
   const members = useMemo(() => (group ? groupMemberKeys(group, state.data) : []), [group, state.data]);
   const shared = useMemo(() => sharedCountMap(state.data), [state.data]);
 
@@ -236,7 +235,7 @@ export function GroupEditor(props: GroupEditorProps) {
             <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
               {members.map((m) => {
                 const sharedCount = shared.get(m.item.id) ?? 0;
-                const preview = maskValue(m.item.value, showLast4);
+                const preview = maskFromLast4(m.item.valueLast4);
                 return (
                   <button
                     key={m.item.id}

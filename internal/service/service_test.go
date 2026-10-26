@@ -9,6 +9,7 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -101,8 +102,8 @@ func TestDispatchPassthroughActions(t *testing.T) {
 
 	// The state envelope (GetState) carries the store snapshot + flag.
 	env := s.GetState()
-	if env.Data.Items[0].Name != "GitHub token" || env.AppVersion != "test" {
-		t.Fatalf("GetState envelope wrong: %+v", env.Data.Items[0])
+	if env.UIState.Items[0].Name != "GitHub token" || env.AppVersion != "test" {
+		t.Fatalf("GetState envelope wrong: %+v", env.UIState.Items[0])
 	}
 }
 
@@ -221,5 +222,93 @@ func TestCopyActionUnknownEntry(t *testing.T) {
 	}
 	if _, has := res["state"]; has {
 		t.Fatal("failed copy should not refresh state")
+	}
+}
+
+// --- state redaction (SPEC §5.2: the UI gets masked previews, not values) ---
+
+func stateJSON(t *testing.T, s *Service) string {
+	t.Helper()
+	b, err := json.Marshal(s.GetState())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestGetStateRedactsValues(t *testing.T) {
+	s := newTestService(t)
+	long := mustCreateItem(t, s, "GitHub token", "ghp_supersecretvalue", true)
+	short := mustCreateItem(t, s, "Pin", "1234", true) // < 12 units: no last4
+	plain := mustCreateItem(t, s, "Greeting", "hello world", false)
+
+	_ = long
+	_ = short
+	_ = plain
+
+	blob := stateJSON(t, s)
+	for _, secret := range []string{"ghp_supersecretvalue", "hello world", "1234"} {
+		if strings.Contains(blob, secret) {
+			t.Fatalf("GetState leaked value %q to the UI", secret)
+		}
+	}
+	if !strings.Contains(blob, `"valueLast4":"alue"`) {
+		t.Fatalf("long secret should expose last 4 chars (showLast4 default on), got: %s", blob)
+	}
+
+	env := s.GetState()
+	for _, it := range env.UIState.Items {
+		if it.Value != "" {
+			t.Fatalf("redacted item still carries a value: %+v", it)
+		}
+	}
+
+	// showLast4 off → no last4 anywhere.
+	if res := dispatchJSON(t, s, "updateSettings", `{"patch":{"showLast4":false}}`); res["ok"] != true {
+		t.Fatalf("updateSettings failed: %v", res["error"])
+	}
+	blob = stateJSON(t, s)
+	if strings.Contains(blob, `"valueLast4"`) {
+		t.Fatalf("showLast4=false must clear valueLast4, got: %s", blob)
+	}
+}
+
+// TestDispatchResponsesCarryRedactedState: every done() response embeds the
+// state snapshot, so a mutation response must never leak values either.
+func TestDispatchResponsesCarryRedactedState(t *testing.T) {
+	s, calls := recordingService(t, false)
+	id := mustCreateItem(t, s, "GitHub token", "ghp_supersecretvalue", true)
+	_ = id
+	res := dispatchJSON(t, s, "copy", `{"kind":"item","id":"`+id+`"}`)
+	if res["ok"] != true || res["copied"] != true {
+		t.Fatalf("copy failed: %v", res)
+	}
+	blob, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(blob), "ghp_supersecretvalue") {
+		t.Fatal("dispatch response leaked the value through the state snapshot")
+	}
+	if len(*calls) == 0 || !(*calls)[0].secret {
+		t.Fatalf("clipboard seam calls = %+v", *calls)
+	}
+}
+
+// TestGetValueAction: the edit form fetches exactly one value on demand.
+func TestGetValueAction(t *testing.T) {
+	s := newTestService(t)
+	id := mustCreateItem(t, s, "GitHub token", "ghp_thevalue", true)
+
+	res := dispatchJSON(t, s, "getValue", `{"id":"`+id+`"}`)
+	if res["ok"] != true || res["value"] != "ghp_thevalue" {
+		t.Fatalf("getValue = %v / %v", res["ok"], res["value"])
+	}
+	if _, has := res["state"]; has {
+		t.Fatal("getValue should not refresh state")
+	}
+
+	if res := dispatchJSON(t, s, "getValue", `{"id":"missing"}`); res["ok"] != false {
+		t.Fatalf("getValue for a missing item must fail, got %v", res)
 	}
 }

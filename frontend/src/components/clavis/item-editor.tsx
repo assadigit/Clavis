@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -73,9 +73,33 @@ function draftFromItem(item: Item): ItemDraft {
 export function ItemEditor(props: ItemEditorProps) {
   const { mode, state, call, readOnly, item, prefillName, forGroupId, groupContextId, onDone, onSelectEntry, deleteEntry, onCancelCreate } = props;
 
+  /* The state snapshot is redacted (values stripped), so the edit form
+     fetches exactly this item's value on mount — one "getValue" round-trip,
+     nothing else ever holds the value. */
+  const [loadedValue, setLoadedValue] = useState<string | null>(mode === "edit" ? null : "");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ItemDraft>(() =>
     item ? draftFromItem(item) : { name: prefillName ?? "", key: "", value: "", note: "", categoryId: null, tags: [], isSecret: undefined, pinned: false }
   );
+
+  useEffect(() => {
+    if (mode !== "edit" || !item) return;
+    let alive = true;
+    void call("getValue", { id: item.id }).then((res) => {
+      if (!alive) return;
+      if (res.ok && typeof res.value === "string") {
+        setLoadedValue(res.value);
+        setDraft((d) => ({ ...d, value: res.value as string }));
+      } else {
+        setLoadError("This item could not be loaded. Please reopen it.");
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // The manager remounts this editor (key includes updatedAt) whenever the
+    // item changes, so a per-item fetch effect is enough.
+  }, [mode, item, call]);
   const [revealed, setRevealed] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -96,7 +120,8 @@ export function ItemEditor(props: ItemEditorProps) {
 
   const dirty = useMemo(() => {
     if (!item) return true;
-    const o = draftFromItem(item);
+    if (loadedValue === null) return false; // still loading: never offer Save
+    const o = draftFromItem({ ...item, value: loadedValue });
     return (
       o.name !== draft.name ||
       o.key !== draft.key ||
@@ -107,7 +132,7 @@ export function ItemEditor(props: ItemEditorProps) {
       o.pinned !== draft.pinned ||
       o.tags.join("\u0000") !== draft.tags.join("\u0000")
     );
-  }, [item, draft]);
+  }, [item, draft, loadedValue]);
 
   const showKeyField = (mode === "edit" && usedIn.length >= 1) || advanced;
 
@@ -243,6 +268,20 @@ export function ItemEditor(props: ItemEditorProps) {
   }
 
   const editMasked = mode === "edit" && effectiveSecret && !revealed;
+
+  if (mode === "edit" && loadedValue === null) {
+    return (
+      <div
+        className="clavis-scroll flex flex-col items-center justify-center"
+        style={{ flex: 1, gap: "var(--space-2)", padding: "var(--space-5)", textAlign: "center" }}
+        role="status"
+      >
+        <p className={loadError ? "t-danger" : "t-muted"} style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+          {loadError ?? "Loading…"}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div

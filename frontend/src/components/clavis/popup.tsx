@@ -19,7 +19,7 @@ import { buildSearchEntries, compareEntries, compareRecent, searchEntries } from
 import type { SearchEntry } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
-import { groupById, groupMemberKeys, liveGroups, liveItems, maskValue, metaLine } from "./derive";
+import { groupById, groupMemberKeys, liveGroups, liveItems, maskFromLast4, metaLine } from "./derive";
 import { EntryTypeIcon, Ix } from "./icons";
 
 interface PopupRow {
@@ -70,7 +70,6 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
     return () => window.clearTimeout(t);
   }, [copied]);
 
-  const showLast4 = state.data.settings.showLast4;
   const noData = liveItems(state.data).length === 0 && liveGroups(state.data).length === 0;
 
   const entries = useMemo(() => buildSearchEntries(state.data), [state.data]);
@@ -115,10 +114,10 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
         name: e.name,
         meta: metaLine(e.categoryName, e.tags),
         isSecret: it?.isSecret ?? false,
-        preview: maskValue(it?.value ?? "", showLast4),
+        preview: maskFromLast4(it?.valueLast4),
       };
     });
-  }, [query, entries, itemMap, groupMap, showLast4]);
+  }, [query, entries, itemMap, groupMap]);
 
   /* Section labels for the default list: "Recent" over the recent block,
      "Pinned & frequent" over the fill. Headers are presentation-only —
@@ -156,10 +155,10 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
         name: e.name,
         meta: keyById.get(e.id) ?? it?.key ?? "",
         isSecret: it?.isSecret ?? false,
-        preview: maskValue(it?.value ?? "", showLast4),
+        preview: maskFromLast4(it?.valueLast4),
       };
     });
-  }, [drillGroup, query, entries, itemMap, state.data, showLast4]);
+  }, [drillGroup, query, entries, itemMap, state.data]);
 
   const rows = drillGroup ? memberRows : topRows;
   const headers = drillGroup ? NO_HEADERS : topHeaders;
