@@ -253,7 +253,11 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
           const row = rows[selIdx];
           if (row && row.kind === "group") {
             e.preventDefault();
+            // SPEC §3.3b: "open a group and list its members" — the query
+            // that found the group must not filter (and empty) the member
+            // list; it is cleared, typing then searches within the group.
             setDrillId(row.id);
+            setQuery("");
             setSel(0);
           }
         }
