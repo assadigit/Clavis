@@ -94,14 +94,23 @@ export function looksLikeDotenv(text: string): boolean {
  * Dedupe keys: duplicates get _2, _3… Empty keys become "KEY" (then _2…).
  */
 export function dedupeKeys(keys: string[]): string[] {
-  const used = new Map<string, number>();
+  const used = new Set<string>();
   const out: string[] = [];
   for (const raw of keys) {
-    let key = raw.trim() === "" ? "KEY" : raw;
-    const n = used.get(key) ?? 0;
-    used.set(key, n + 1);
-    if (n > 0) key = `${key}_${n + 1}`;
-    out.push(key);
+    const key = raw.trim() === "" ? "KEY" : raw;
+    if (!used.has(key)) {
+      used.add(key);
+      out.push(key);
+      continue;
+    }
+    for (let n = 2; ; n++) {
+      const candidate = `${key}_${n}`;
+      if (!used.has(candidate)) {
+        used.add(candidate);
+        out.push(candidate);
+        break;
+      }
+    }
   }
   return out;
 }

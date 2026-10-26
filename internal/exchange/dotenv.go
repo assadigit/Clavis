@@ -105,20 +105,29 @@ func splitLines(text string) []string {
 }
 
 // DedupeKeys dedupes keys: duplicates get _2, _3… Empty keys become "KEY".
+// The suffixed form probes forward until it is free, so a name like A_2
+// that already exists never collides with a later duplicate of A.
 func DedupeKeys(keys []string) []string {
-	used := map[string]int{}
+	used := map[string]bool{}
 	out := make([]string, len(keys))
 	for i, raw := range keys {
 		key := raw
 		if strings.TrimSpace(raw) == "" {
 			key = "KEY"
 		}
-		n := used[key]
-		used[key] = n + 1
-		if n > 0 {
-			key = key + "_" + itoa(n+1)
+		if !used[key] {
+			used[key] = true
+			out[i] = key
+			continue
 		}
-		out[i] = key
+		for n := 2; ; n++ {
+			candidate := key + "_" + itoa(n)
+			if !used[candidate] {
+				used[candidate] = true
+				out[i] = candidate
+				break
+			}
+		}
 	}
 	return out
 }

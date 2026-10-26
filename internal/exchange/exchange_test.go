@@ -297,3 +297,25 @@ func TestFarsiRoundTrip(t *testing.T) {
 		t.Errorf("farsi tag mismatch")
 	}
 }
+
+// TestDedupeKeysCollisionWithExistingSuffix: a key like A_2 that already
+// exists must not be produced again for a later duplicate of A — the old
+// algorithm emitted A_2 twice, producing a group block with duplicate env
+// vars (data loss on round-trip).
+func TestDedupeKeysCollisionWithExistingSuffix(t *testing.T) {
+	got := DedupeKeys([]string{"A", "A_2", "A"})
+	want := []string{"A", "A_2", "A_3"}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("DedupeKeys = %v, want %v", []string(got), want)
+		}
+	}
+
+	got = DedupeKeys([]string{"KEY", "", "KEY", "", "KEY"})
+	want = []string{"KEY", "KEY_2", "KEY_3", "KEY_4", "KEY_5"}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("DedupeKeys(empty mix) = %v, want %v", []string(got), want)
+		}
+	}
+}
