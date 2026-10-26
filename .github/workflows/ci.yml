@@ -36,6 +36,9 @@ jobs:
     name: Go core (fmt, vet, tests, release build, scans)
     runs-on: windows-latest
     steps:
+      # Keep LF line endings: the runner's default autocrlf would hand gofmt
+      # CRLF files and fail the gate spuriously.
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
