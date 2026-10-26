@@ -97,8 +97,13 @@ CI runs all of the above on every push (`.github/workflows/ci.yml`).
    (paths in the script are relative to it).
 5. Smoke-test both artifacts on a clean Windows VM: popup hotkey, copy (check
    Win+V does NOT contain the secret), manager edit round-trip, self-update.
-6. Tag `vX.Y.Z` and upload `Clavis-Setup-X.Y.Z.exe` + `Clavis-Portable-X.Y.Z.exe`
-   as release assets — the names are what the self-updater looks for.
+6. Tag `vX.Y.Z` and push the tag: `.github/workflows/release.yml` then
+   builds BOTH artifacts on a real windows-latest runner (this exact
+   sequence, plus NSIS + Microsoft's WebView2 bootstrapper) and publishes
+   them to the release for that tag. The workflow first guards that the
+   tag, `AppVersion`, the NSIS `VERSION` and `APP_VERSION` all agree.
+   Asset names — `Clavis-Setup-X.Y.Z.exe` + `Clavis-Portable-X.Y.Z.exe` —
+   are what the self-updater looks for; keep them exact.
 
 ## Engineering notes
 

@@ -1,0 +1,91 @@
+# Clavis release — tag-driven. Pushing a vX.Y.Z tag builds BOTH release
+# artifacts on a real windows-latest runner (the product platform) and
+# publishes them to the GitHub Release for that tag, with the exact names
+# the self-updater looks for (DECISIONS.md §34):
+#   Clavis-Portable-X.Y.Z.exe   portable edition (self-update swaps it)
+#   Clavis-Setup-X.Y.Z.exe      NSIS per-user installer
+#
+# The build follows docs/DEVELOPMENT.md "Release" step by step: full
+# frontend build, syso (icon/manifest/version) embedded, production build
+# (DevTools off), NSIS with Microsoft's WebView2 bootstrapper. The one step
+# this cannot do is the human smoke test on a clean Windows machine — run
+# that once before announcing a release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release + upload assets
+
+jobs:
+  release:
+    name: Build artifacts (windows) and publish
+    runs-on: windows-latest
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+
+      - name: "Guard: tag, AppVersion, NSIS VERSION, APP_VERSION agree"
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          appver=$(grep -oP 'const AppVersion = "\K[^"]+' app.go)
+          nsiver=$(grep -oP '!define VERSION "\K[^"]+' build/windows/installer/clavis.nsi)
+          tsver=$(grep -oP 'APP_VERSION = "\K[^"]+' frontend/src/lib/clavis/types.ts)
+          winver=$(grep -oP '"product_version": "\K[^.]+' build/winres/info.json)
+          echo "tag=$ver app.go=$appver nsi=$nsiver types.ts=$tsver winres=$winver"
+          if [ "$ver" != "$appver" ] || [ "$ver" != "$nsiver" ] || [ "$ver" != "$tsver" ] || [ "$ver" != "$winver" ]; then
+            echo "::error::version mismatch — bump all four places (DEVELOPMENT.md 'Release')"
+            exit 1
+          fi
+
+      - name: "Build frontend (embedded assets)"
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: "Embed icon/version/manifest (syso)"
+        run: go run ./tools/syso build/appicon.ico build/winres/app.manifest build/winres/info.json amd64 rsrc_windows_amd64.syso
+
+      - name: "Release build (-tags production, DevTools off)"
+        run: go build -tags production -ldflags "-s -w -H windowsgui" -o dist/Clavis.exe .
+
+      - name: "Portable artifact"
+        shell: bash
+        run: mv dist/Clavis.exe "dist/Clavis-Portable-${GITHUB_REF_NAME#v}.exe"
+
+      - name: "Install NSIS"
+        shell: pwsh
+        run: choco install --yes --no-progress nsis
+
+      - name: "Fetch Microsoft's WebView2 bootstrapper"
+        shell: pwsh
+        run: Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?LinkId=2124703" -OutFile "build/windows/webview2-bootstrapper.exe"
+
+      - name: "Installer (NSIS)"
+        shell: pwsh
+        run: |
+          makensis "build\windows\installer\clavis.nsi"
+          # OutFile lands next to the script; the guard step already proved
+          # the NSIS VERSION equals the tag version, so the produced name is
+          # exactly what the self-updater expects — keep it unchanged.
+          $setup = Get-ChildItem -Recurse -Filter "Clavis-Setup-*.exe" | Select-Object -First 1
+          if (-not $setup) { throw "makensis produced no Clavis-Setup-*.exe" }
+          Copy-Item $setup.FullName "dist\"
+
+      - name: "Publish the release with both assets"
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Clavis-Portable-*.exe
+            dist/Clavis-Setup-*.exe
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

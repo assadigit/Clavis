@@ -9,7 +9,7 @@ Unicode true
 ManifestDPIAware true
 
 !define APPNAME "Clavis"
-!define VERSION "1.1.4"
+!define VERSION "1.2.0"
 !define COMPANY "Clavis"
 !define DESCRIPTION "Clavis - your keys, one shortcut away."
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Clavis"
