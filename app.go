@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"clavis/internal/popupmath"
 	"clavis/internal/service"
 	"clavis/internal/store"
 	"clavis/internal/system"
@@ -270,7 +271,10 @@ func (c *Clavis) hidePopup() {
 }
 
 // positionPopup centers the panel horizontally and places it in the upper
-// third of the screen the mouse cursor is on (§3.3b).
+// third of the screen the mouse cursor is on (§3.3b). All coordinates are
+// converted explicitly: the screen pick compares the PHYSICAL cursor point
+// against PhysicalBounds, and the final origin is DIP — the unit
+// SetPosition expects.
 func (c *Clavis) positionPopup() {
 	if c.app == nil {
 		return
@@ -288,7 +292,12 @@ func (c *Clavis) positionPopup() {
 			break
 		}
 	}
-	wa := target.WorkArea // DIP
+	/* Wails beta.33 fills WorkArea in PHYSICAL pixels on Windows (identical
+	   to PhysicalWorkArea — DPI scaling is not applied there yet), while
+	   SetPosition/SetSize and the panel size reported by the webview are
+	   DIP. The old math mixed the two spaces, which only lined up at 100%
+	   scaling; popupmath.Origin converts the one physical input. */
+	wa := target.PhysicalWorkArea
 	c.popupMu.Lock()
 	pw, ph := c.popupSize[0], c.popupSize[1]
 	c.popupMu.Unlock()
@@ -298,18 +307,7 @@ func (c *Clavis) positionPopup() {
 	if ph <= 0 {
 		ph = 200
 	}
-	x := wa.X + (wa.Width-pw)/2
-	y := wa.Y + int(float64(wa.Height)*0.18)
-	// Keep the whole panel inside the work area.
-	if x < wa.X {
-		x = wa.X
-	}
-	if y+ph > wa.Y+wa.Height {
-		y = wa.Y + wa.Height - ph
-	}
-	if y < wa.Y {
-		y = wa.Y
-	}
+	x, y := popupmath.Origin(wa.X, wa.Y, wa.Width, wa.Height, float64(target.ScaleFactor), pw, ph)
 	c.popup.SetPosition(x, y)
 }
 
