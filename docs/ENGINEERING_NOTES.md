@@ -231,6 +231,26 @@ Evidence = file:line at the fork point. Status updated as fixes land.
 - `docs/DEVELOPMENT.md` documents build/test/release and was verified by
   cloning the repo fresh and running every command (that check caught two
   strict-mode test issues, fixed).
+- **Self-update end-to-end audit (session 4, owner asked "make sure the
+  installed edition can update itself")** — no code changes were needed;
+  the whole chain was re-verified with evidence:
+  UI (Settings › About card: check button, "Update to X" button, progress
+  bar, notes preview; tray "Check for updates…"; background auto-check
+  30 s after start, every 12 h, toast with Update-now) → bridge
+  (platform.ts checkUpdate/installUpdate/events) → Go (CheckUpdate cache
+  30 min; InstallUpdate: installed mode downloads Clavis-Setup-X.Y.Z.exe
+  size-verified to %TEMP%, writes .clavis-update.cmd next to the exe,
+  hand-off: wait-for-exit → silent `/S` NSIS install (taskkill inside the
+  installer too, InstallDirRegKey keeps the same dir) → relaunch →
+  cleanup; portable mode swaps the exe in place). Live network check with
+  the real updater package: v1.1.4 discovers v1.2.0 with the correct
+  pinned setup URL; v1.2.0 reports up-to-date; the atom fallback
+  reconstructs asset URLs (sizes 0 by design there — no size verify);
+  a tampered foreign download URL is rejected while the official asset in
+  the same response survives. The v1.1.4-era updater (pre-branch binary
+  the owner may still run) uses the same asset names and install logic,
+  so an existing install updates itself to v1.2.0 in place. Full suites
+  green (Go incl. updater fixtures, 41 vitest, gofmt, Windows vet+build).
 
 ## 8. Recommended next steps (priority order, for the owner)
 
