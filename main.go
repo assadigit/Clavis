@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"clavis/internal/service"
 	"clavis/internal/store"
 	"clavis/internal/updater"
 
@@ -58,7 +59,10 @@ func main() {
 		log.Fatal("Clavis could not open its data folder: ", err)
 		return
 	}
-	svc := &Clavis{store: st}
+	core := &service.Service{Store: st}
+	svc := &Clavis{core: core}
+	core.RegisterShortcut = svc.RegisterShortcut
+	core.SyncAutostart = svc.syncAutostart
 	settings := st.State().Data.Settings
 
 	hidden := hasHiddenFlag()

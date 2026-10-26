@@ -1,5 +1,7 @@
 /**
- * CLAVIS — the Wails service (SPEC §3, §5).
+ * CLAVIS — the Wails shell (SPEC §3, §5): windows, tray, hotkey,
+ * dialogs and self-update. The pure action dispatcher lives in
+ * internal/service and is delegated to (GetState/Dispatch).
  *
  * Exposes the store to the frontend through Call.ByName("main.Clavis.*"):
  *   GetState()                         → full snapshot (+ osTransparency)
@@ -18,7 +20,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"time"
 
 	"clavis/internal/clipboard"
+	"clavis/internal/service"
 	"clavis/internal/store"
 	"clavis/internal/system"
 	"clavis/internal/updater"
@@ -51,7 +53,7 @@ type stateEnvelope struct {
 // Clavis is the bound service. Runtime pieces are wired by main().
 type Clavis struct {
 	app     *application.App
-	store   *store.Store
+	core    *service.Service
 	popup   *application.WebviewWindow
 	manager *application.WebviewWindow
 	tray    *application.SystemTray
@@ -79,531 +81,17 @@ func (c *Clavis) SetRuntime(app *application.App, popup, manager *application.We
 	c.tray = tray
 }
 
-/* ------------------------- state ------------------------- */
+/* ------------------------- dispatcher (pure core) ------------------------- */
 
-// GetState returns the full snapshot for the frontend.
-func (c *Clavis) GetState() stateEnvelope {
-	return stateEnvelope{
-		State:          c.store.State(),
-		OSTransparency: system.TransparencyEnabled(),
-	}
+// GetState returns the full snapshot for the frontend (delegates to the
+// pure core so the whole action surface stays testable without Windows).
+func (c *Clavis) GetState() service.StateEnvelope {
+	return c.core.GetState()
 }
-
-func (c *Clavis) stateMap() map[string]any {
-	st := c.GetState()
-	b, err := json.Marshal(st)
-	if err != nil {
-		return map[string]any{}
-	}
-	var m map[string]any
-	json.Unmarshal(b, &m)
-	return m
-}
-
-/* ------------------------- dispatcher ------------------------- */
 
 // Dispatch is the single frontend entry point: action + JSON payload.
 func (c *Clavis) Dispatch(action, payloadJSON string) map[string]any {
-	var payload map[string]any
-	if strings.TrimSpace(payloadJSON) != "" {
-		if err := json.Unmarshal([]byte(payloadJSON), &payload); err != nil {
-			return fail("Invalid request body.", 400)
-		}
-	}
-	if payload == nil {
-		payload = map[string]any{}
-	}
-	return c.dispatch(action, payload)
-}
-
-func fail(msg string, status int) map[string]any {
-	return map[string]any{"ok": false, "error": msg, "status": status}
-}
-
-func failErr(err error) map[string]any {
-	msg := err.Error()
-	status := 400
-	if strings.Contains(msg, "newer version") {
-		status = 409
-	}
-	return fail(msg, status)
-}
-
-func (c *Clavis) done(extras map[string]any) map[string]any {
-	out := map[string]any{"ok": true}
-	for k, v := range extras {
-		out[k] = v
-	}
-	out["state"] = c.stateMap()
-	return out
-}
-
-func getStr(p map[string]any, key string) string {
-	if v, ok := p[key].(string); ok {
-		return v
-	}
-	return ""
-}
-
-func getStrPtr(p map[string]any, key string) *string {
-	v, ok := p[key]
-	if !ok || v == nil {
-		return nil
-	}
-	s, _ := v.(string)
-	if s == "" {
-		return nil // treat "" as "no category"
-	}
-	return &s
-}
-
-func getBool(p map[string]any, key string) *bool {
-	if v, ok := p[key].(bool); ok {
-		return &v
-	}
-	return nil
-}
-
-func getInt(p map[string]any, key string) *int {
-	if v, ok := p[key].(float64); ok {
-		i := int(v)
-		return &i
-	}
-	return nil
-}
-
-func getStrArr(p map[string]any, key string) []string {
-	arr, ok := p[key].([]any)
-	if !ok {
-		return nil
-	}
-	out := make([]string, 0, len(arr))
-	for _, x := range arr {
-		if s, ok := x.(string); ok {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-func subMap(p map[string]any, key string) map[string]any {
-	if m, ok := p[key].(map[string]any); ok {
-		return m
-	}
-	return map[string]any{}
-}
-
-func (c *Clavis) dispatch(action string, p map[string]any) map[string]any {
-	switch action {
-	case "createItem":
-		{
-			input := subMap(p, "input")
-			item, err := c.store.CreateItem(store.NewItem{
-				Name:       getStr(input, "name"),
-				Value:      getStr(input, "value"),
-				Key:        getStr(input, "key"),
-				Note:       getStr(input, "note"),
-				CategoryID: getStrPtr(input, "categoryId"),
-				Tags:       getStrArr(input, "tags"),
-				IsSecret:   getBool(input, "isSecret"),
-				Pinned:     deref(getBool(input, "pinned")),
-			})
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"id": item.ID})
-		}
-	case "updateItem":
-		{
-			patch := subMap(p, "patch")
-			err := c.store.UpdateItem(getStr(p, "id"), store.ItemPatch{
-				Name:       strPtrOf(getStr(patch, "name"), patch["name"] != nil),
-				Key:        strPtrOf(getStr(patch, "key"), patch["key"] != nil),
-				Value:      strPtrOf(getStr(patch, "value"), patch["value"] != nil),
-				Note:       strPtrOf(getStr(patch, "note"), patch["note"] != nil),
-				CategoryID: catPtrOf(patch),
-				Tags:       tagsPtrOf(patch),
-				IsSecret:   getBool(patch, "isSecret"),
-				Pinned:     getBool(patch, "pinned"),
-			})
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "splitItemForGroup":
-		{
-			patch := subMap(p, "patch")
-			copyItem, err := c.store.SplitItemForGroup(getStr(p, "id"), getStr(p, "groupId"), store.ItemPatch{
-				Name:       strPtrOf(getStr(patch, "name"), patch["name"] != nil),
-				Key:        strPtrOf(getStr(patch, "key"), patch["key"] != nil),
-				Value:      strPtrOf(getStr(patch, "value"), patch["value"] != nil),
-				Note:       strPtrOf(getStr(patch, "note"), patch["note"] != nil),
-				CategoryID: catPtrOf(patch),
-				Tags:       tagsPtrOf(patch),
-				IsSecret:   getBool(patch, "isSecret"),
-				Pinned:     getBool(patch, "pinned"),
-			})
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"id": copyItem.ID})
-		}
-	case "duplicateItem":
-		{
-			copyItem, err := c.store.DuplicateItem(getStr(p, "id"))
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"id": copyItem.ID})
-		}
-	case "createGroup":
-		{
-			input := subMap(p, "input")
-			group, err := c.store.CreateGroup(store.NewGroup{
-				Name:       getStr(input, "name"),
-				CategoryID: getStrPtr(input, "categoryId"),
-				Tags:       getStrArr(input, "tags"),
-				Pinned:     deref(getBool(input, "pinned")),
-				ItemIDs:    getStrArr(input, "itemIds"),
-			})
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"id": group.ID})
-		}
-	case "createGroupFromEnv":
-		{
-			input := subMap(p, "input")
-			group, err := c.store.CreateGroupFromEnv(store.NewGroup{
-				Name:       getStr(input, "name"),
-				CategoryID: getStrPtr(input, "categoryId"),
-				Tags:       getStrArr(input, "tags"),
-				Pinned:     deref(getBool(input, "pinned")),
-			}, getStr(input, "text"))
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"id": group.ID})
-		}
-	case "updateGroup":
-		{
-			patch := subMap(p, "patch")
-			err := c.store.UpdateGroup(getStr(p, "id"), store.GroupPatch{
-				Name:       strPtrOf(getStr(patch, "name"), patch["name"] != nil),
-				CategoryID: catPtrOf(patch),
-				Tags:       tagsPtrOf(patch),
-				Pinned:     getBool(patch, "pinned"),
-			})
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "addItemsToGroup":
-		{
-			itemIds := getStrArr(p, "itemIds")
-			if itemIds == nil {
-				itemIds = []string{}
-			}
-			if err := c.store.AddItemsToGroup(getStr(p, "groupId"), itemIds); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "removeItemFromGroup":
-		{
-			if err := c.store.RemoveItemFromGroup(getStr(p, "groupId"), getStr(p, "itemId")); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "reorderGroupItems":
-		{
-			itemIds := getStrArr(p, "itemIds")
-			if itemIds == nil {
-				itemIds = []string{}
-			}
-			if err := c.store.ReorderGroupItems(getStr(p, "groupId"), itemIds); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "deleteEntry":
-		{
-			token, err := c.store.DeleteEntry(store.EntryKind(getStr(p, "kind")), getStr(p, "id"))
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"undoToken": token})
-		}
-	case "undoDelete":
-		{
-			if err := c.store.UndoDelete(getStr(p, "undoToken")); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "restoreEntry":
-		{
-			if err := c.store.RestoreEntry(store.EntryKind(getStr(p, "kind")), getStr(p, "id")); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "purgeEntry":
-		{
-			if err := c.store.PurgeEntry(store.EntryKind(getStr(p, "kind")), getStr(p, "id")); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "emptyTrash":
-		{
-			if err := c.store.EmptyTrash(); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "createCategory":
-		{
-			cat, err := c.store.CreateCategory(getStr(p, "name"))
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"id": cat.ID})
-		}
-	case "renameCategory":
-		{
-			if err := c.store.RenameCategory(getStr(p, "id"), getStr(p, "name")); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "deleteCategory":
-		{
-			if err := c.store.DeleteCategory(getStr(p, "id")); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "updateSettings":
-		{
-			return c.updateSettings(subMap(p, "patch"))
-		}
-	case "copy":
-		{
-			result, err := c.store.Copy(store.EntryKind(getStr(p, "kind")), getStr(p, "id"))
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{
-				"text":           result.Text,
-				"lineCount":      result.LineCount,
-				"containsSecret": result.ContainsSecret,
-			})
-		}
-	case "importBackupPreview":
-		{
-			preview := c.store.ImportBackupPreview(getStr(p, "json"))
-			return map[string]any{"ok": true, "preview": map[string]any{
-				"valid":    preview.Valid,
-				"error":    preview.Error,
-				"incoming": map[string]any{"items": preview.Items, "groups": preview.Groups, "categories": preview.Cats},
-			}}
-		}
-	case "importBackup":
-		{
-			summary, err := c.store.ImportBackup(getStr(p, "mode"), getStr(p, "json"))
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"summary": summaryMap(summary)})
-		}
-	case "importFilesPreview":
-		{
-			preview := c.store.ImportFilesPreview(filesOf(p))
-			return map[string]any{"ok": true, "preview": map[string]any{
-				"conflicts":   preview.Conflicts,
-				"parsedCount": preview.ParsedCount,
-			}}
-		}
-	case "importFilesApply":
-		{
-			res := store.ImportResolution{Choice: "keepBoth"}
-			if r, ok := p["resolution"].(map[string]any); ok {
-				res.Choice = getStr(r, "choice")
-				res.ApplyAll, _ = r["applyAll"].(bool)
-				if pf, ok := r["perFile"].([]any); ok {
-					for _, x := range pf {
-						if m, ok := x.(map[string]any); ok {
-							res.PerFile = append(res.PerFile, store.PerFileResolution{
-								FileIndex: int(getFloat(m, "fileIndex")),
-								Choice:    getStr(m, "choice"),
-							})
-						}
-					}
-				}
-			}
-			summary, err := c.store.ImportFilesApply(filesOf(p), res)
-			if err != nil {
-				return failErr(err)
-			}
-			return c.done(map[string]any{"summary": summaryMap(summary)})
-		}
-	case "restoreBackup":
-		{
-			if err := c.store.RestoreBackup(getStr(p, "name")); err != nil {
-				return failErr(err)
-			}
-			return c.done(nil)
-		}
-	case "clearRecoveredNotice":
-		{
-			c.store.ClearRecoveredNotice()
-			return c.done(nil)
-		}
-	default:
-		return fail("Unknown action: "+action, 400)
-	}
-}
-
-func summaryMap(s store.ImportSummary) map[string]any {
-	return map[string]any{"added": s.Added, "updated": s.Updated, "skipped": s.Skipped}
-}
-
-func filesOf(p map[string]any) []store.ImportedFile {
-	arr, ok := p["files"].([]any)
-	if !ok {
-		return nil
-	}
-	out := make([]store.ImportedFile, 0, len(arr))
-	for _, x := range arr {
-		if m, ok := x.(map[string]any); ok {
-			out = append(out, store.ImportedFile{Name: getStr(m, "name"), Content: getStr(m, "content")})
-		}
-	}
-	return out
-}
-
-func getFloat(p map[string]any, key string) float64 {
-	if v, ok := p[key].(float64); ok {
-		return v
-	}
-	return 0
-}
-
-func deref[T any](p *T) T {
-	if p != nil {
-		return *p
-	}
-	var zero T
-	return zero
-}
-
-// strPtrOf returns a pointer only when the key was present (JSON null/absent
-// means "don't touch"; "" means "clear").
-func strPtrOf(v string, present bool) *string {
-	if !present {
-		return nil
-	}
-	return &v
-}
-
-// catPtrOf: absent/null → nil (keep); "" → treat as clear (nil below flag).
-func catPtrOf(patch map[string]any) *string {
-	v, ok := patch["categoryId"]
-	if !ok || v == nil {
-		return nil
-	}
-	s, _ := v.(string)
-	return &s // including "" → applyItemPatch clears
-}
-
-func tagsPtrOf(patch map[string]any) *[]string {
-	if _, ok := patch["tags"]; !ok {
-		return nil
-	}
-	tags := getStrArr(patch, "tags")
-	return &tags
-}
-
-// updateSettings applies the patch then the desktop side effects (hotkey
-// re-registration, autostart) with rollback on failure.
-func (c *Clavis) updateSettings(patch map[string]any) map[string]any {
-	if len(patch) == 0 {
-		return c.done(nil)
-	}
-	before := c.store.State().Data.Settings
-
-	glass := getInt(patch, "glassIntensity")
-	mgrBounds, mgrSet := managerBoundsOf(patch)
-	var err error
-	if mgrSet {
-		err = c.store.UpdateSettings(store.SettingsPatch{
-			Shortcut:         strPtrOf(getStr(patch, "shortcut"), patch["shortcut"] != nil),
-			StartWithWindows: getBool(patch, "startWithWindows"),
-			SolidMode:        getBool(patch, "solidMode"),
-			GlassIntensity:   glass,
-			ShowLast4:        getBool(patch, "showLast4"),
-			ManagerBounds:    mgrBounds,
-			ManagerBoundsSet: true,
-		})
-	} else {
-		err = c.store.UpdateSettings(store.SettingsPatch{
-			Shortcut:         strPtrOf(getStr(patch, "shortcut"), patch["shortcut"] != nil),
-			StartWithWindows: getBool(patch, "startWithWindows"),
-			SolidMode:        getBool(patch, "solidMode"),
-			GlassIntensity:   glass,
-			ShowLast4:        getBool(patch, "showLast4"),
-		})
-	}
-	if err != nil {
-		return failErr(err)
-	}
-	after := c.store.State().Data.Settings
-
-	// Shortcut changed → re-register the global hotkey (§3.3).
-	if after.Shortcut != before.Shortcut {
-		if err := c.RegisterShortcut(after.Shortcut); err != nil {
-			// Roll back so the setting never points at a dead combo.
-			old := before.Shortcut
-			_ = c.store.UpdateSettings(store.SettingsPatch{Shortcut: &old})
-			_ = c.tryRegisterCombo(old)
-			return fail(shortcutTakenMessage, 400)
-		}
-	}
-	// Start-with-Windows changed → sync the registry (§3.1).
-	if after.StartWithWindows != before.StartWithWindows {
-		if err := c.syncAutostart(after.StartWithWindows); err != nil {
-			// Roll back the toggle; the registry stays untouched.
-			old := before.StartWithWindows
-			_ = c.store.UpdateSettings(store.SettingsPatch{StartWithWindows: &old})
-			return fail("Clavis could not change the “Start with Windows” setting. ("+err.Error()+")", 400)
-		}
-	}
-	return c.done(nil)
-}
-
-func managerBoundsOf(patch map[string]any) (*store.ManagerBounds, bool) {
-	v, ok := patch["managerBounds"]
-	if !ok {
-		return nil, false
-	}
-	if v == nil {
-		return nil, true // clear
-	}
-	m, ok := v.(map[string]any)
-	if !ok {
-		return nil, false
-	}
-	b := &store.ManagerBounds{
-		X: int(getFloat(m, "x")),
-		Y: int(getFloat(m, "y")),
-		W: int(getFloat(m, "w")),
-		H: int(getFloat(m, "h")),
-	}
-	return b, true
+	return c.core.Dispatch(action, payloadJSON)
 }
 
 /* ------------------------- clipboard ------------------------- */
@@ -621,29 +109,29 @@ func (c *Clavis) ExportSave(what, id string) map[string]any {
 	var body, filename, filterName, pattern string
 	switch what {
 	case "backup":
-		b, err := c.store.ExportBackupString()
+		b, err := c.core.Store.ExportBackupString()
 		if err != nil {
-			return fail("Could not build the backup.", 400)
+			return service.Fail("Could not build the backup.", 400)
 		}
 		body = b
 		filename = "clavis-backup-" + time.Now().Format("20060102-1504") + ".json"
 		filterName, pattern = "Clavis backup", "*.json"
 	case "item-md", "group-md":
-		target, err := c.store.ExportEntryMarkdown(store.EntryKind(kindOf(what)), id)
+		target, err := c.core.Store.ExportEntryMarkdown(store.EntryKind(kindOf(what)), id)
 		if err != nil {
-			return failErr(err)
+			return service.FailErr(err)
 		}
 		body, filename = target.Body, target.Filename
 		filterName, pattern = "Markdown", "*.md"
 	case "item-txt", "group-txt":
-		target, err := c.store.ExportEntryText(store.EntryKind(kindOf(what)), id)
+		target, err := c.core.Store.ExportEntryText(store.EntryKind(kindOf(what)), id)
 		if err != nil {
-			return failErr(err)
+			return service.FailErr(err)
 		}
 		body, filename = target.Body, target.Filename
 		filterName, pattern = "Text", "*.txt"
 	default:
-		return fail("Unknown export type.", 400)
+		return service.Fail("Unknown export type.", 400)
 	}
 
 	dlg := c.app.Dialog.SaveFile().
@@ -658,7 +146,7 @@ func (c *Clavis) ExportSave(what, id string) map[string]any {
 		return map[string]any{"ok": false, "canceled": true}
 	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		return fail("Clavis could not write the file.", 400)
+		return service.Fail("Clavis could not write the file.", 400)
 	}
 	return map[string]any{"ok": true, "savedPath": path}
 }
@@ -672,12 +160,12 @@ func kindOf(what string) string {
 
 // ExportAllMarkdown writes one .md per entry into a picked folder (§5.8B).
 func (c *Clavis) ExportAllMarkdown() map[string]any {
-	files, err := c.store.ExportAllMarkdown()
+	files, err := c.core.Store.ExportAllMarkdown()
 	if err != nil {
-		return failErr(err)
+		return service.FailErr(err)
 	}
 	if len(files) == 0 {
-		return fail("There is nothing to export yet.", 400)
+		return service.Fail("There is nothing to export yet.", 400)
 	}
 	dlg := c.app.Dialog.OpenFile().
 		CanChooseDirectories(true).
@@ -697,7 +185,7 @@ func (c *Clavis) ExportAllMarkdown() map[string]any {
 		}
 	}
 	if written == 0 {
-		return fail("Clavis could not write the files.", 400)
+		return service.Fail("Clavis could not write the files.", 400)
 	}
 	return map[string]any{"ok": true, "count": written, "folder": folder}
 }
@@ -723,7 +211,7 @@ func (c *Clavis) PickImportFolder() map[string]any {
 	var files []ImportedFileDTO
 	entries, err := os.ReadDir(folder)
 	if err != nil {
-		return fail("Clavis could not read that folder.", 400)
+		return service.Fail("Clavis could not read that folder.", 400)
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -741,15 +229,15 @@ func (c *Clavis) PickImportFolder() map[string]any {
 		files = append(files, ImportedFileDTO{Name: name, Content: string(b)})
 	}
 	if len(files) == 0 {
-		return fail("No .md or .txt files were found in that folder.", 400)
+		return service.Fail("No .md or .txt files were found in that folder.", 400)
 	}
 	return map[string]any{"ok": true, "files": files}
 }
 
 // OpenDataFolder opens %APPDATA%\Clavis in Explorer (§5.9).
 func (c *Clavis) OpenDataFolder() map[string]any {
-	if err := system.OpenFolder(c.store.DataDir()); err != nil {
-		return fail("Clavis could not open the data folder.", 400)
+	if err := system.OpenFolder(c.core.Store.DataDir()); err != nil {
+		return service.Fail("Clavis could not open the data folder.", 400)
 	}
 	return map[string]any{"ok": true}
 }
@@ -809,7 +297,7 @@ func (c *Clavis) SaveManagerBounds() {
 }
 
 func (c *Clavis) saveManagerBounds() {
-	if c.manager == nil || c.store == nil {
+	if c.manager == nil || c.core == nil {
 		return
 	}
 	if c.manager.IsMaximised() {
@@ -821,7 +309,7 @@ func (c *Clavis) saveManagerBounds() {
 		return
 	}
 	bounds := &store.ManagerBounds{X: x, Y: y, W: w, H: h}
-	_ = c.store.UpdateSettings(store.SettingsPatch{ManagerBounds: bounds, ManagerBoundsSet: true})
+	_ = c.core.Store.UpdateSettings(store.SettingsPatch{ManagerBounds: bounds, ManagerBoundsSet: true})
 }
 
 /* ------------------------- hotkey ------------------------- */
@@ -1124,26 +612,26 @@ func (c *Clavis) AutoCheckIfDue() {
 // CheckUpdate during the download for progress events.
 func (c *Clavis) InstallUpdate() map[string]any {
 	if runtime.GOOS != "windows" {
-		return fail("Self-update only works in the packaged Windows app. Use the download buttons instead.", 400)
+		return service.Fail("Self-update only works in the packaged Windows app. Use the download buttons instead.", 400)
 	}
 
 	c.upMu.Lock()
 	if c.upBusy {
 		c.upMu.Unlock()
-		return fail("An update is already in progress.", 409)
+		return service.Fail("An update is already in progress.", 409)
 	}
 	st := c.upStatus
 	if st == nil {
 		fresh, err := c.checkUpdateLocked()
 		if err != nil {
 			c.upMu.Unlock()
-			return fail("Could not reach GitHub for the download.", 502)
+			return service.Fail("Could not reach GitHub for the download.", 502)
 		}
 		st = &fresh
 	}
 	if !st.Available {
 		c.upMu.Unlock()
-		return fail("You already have the latest version.", 400)
+		return service.Fail("You already have the latest version.", 400)
 	}
 	c.upBusy = true
 	c.upMu.Unlock()
@@ -1156,7 +644,7 @@ func (c *Clavis) InstallUpdate() map[string]any {
 
 	exe := exePath()
 	if exe == "" {
-		return fail("Could not locate the running Clavis.exe.", 500)
+		return service.Fail("Could not locate the running Clavis.exe.", 500)
 	}
 	mode := updateMode()
 	emit := func(stage string, pct float64) {
@@ -1176,13 +664,13 @@ func (c *Clavis) InstallUpdate() map[string]any {
 	if mode == updater.ModeInstalled {
 		url, size = st.Release.SetupURL, st.Release.SetupSize
 		if url == "" {
-			return fail("The release has no installer asset. Use the release page instead.", 400)
+			return service.Fail("The release has no installer asset. Use the release page instead.", 400)
 		}
 		dest = filepath.Join(os.TempDir(), fmt.Sprintf("Clavis-Setup-%s.exe", st.Latest))
 	} else {
 		url, size = st.Release.PortableURL, st.Release.PortableSize
 		if url == "" {
-			return fail("The release has no portable asset. Use the release page instead.", 400)
+			return service.Fail("The release has no portable asset. Use the release page instead.", 400)
 		}
 		dest = exe + ".new"
 	}
@@ -1196,7 +684,7 @@ func (c *Clavis) InstallUpdate() map[string]any {
 	}); err != nil {
 		os.Remove(dest)
 		emit("failed", 0)
-		return fail("The download did not complete: "+err.Error(), 502)
+		return service.Fail("The download did not complete: "+err.Error(), 502)
 	}
 	emit("downloaded", 100)
 
@@ -1209,13 +697,13 @@ func (c *Clavis) InstallUpdate() map[string]any {
 		if err := os.WriteFile(script, []byte(updater.InstallerScript(dest, target)), 0o755); err != nil {
 			os.Remove(dest)
 			emit("failed", 0)
-			return fail("Could not write the updater script: "+err.Error(), 500)
+			return service.Fail("Could not write the updater script: "+err.Error(), 500)
 		}
 	} else {
 		if err := os.WriteFile(script, []byte(updater.PortableScript(exe, exe+".new", updater.OldPath(exe))), 0o755); err != nil {
 			os.Remove(dest)
 			emit("failed", 0)
-			return fail("Could not write the updater script: "+err.Error(), 500)
+			return service.Fail("Could not write the updater script: "+err.Error(), 500)
 		}
 	}
 	emit("installing", 100)
@@ -1225,7 +713,7 @@ func (c *Clavis) InstallUpdate() map[string]any {
 		os.Remove(dest)
 		os.Remove(script)
 		emit("failed", 0)
-		return fail("Could not start the updater: "+err.Error(), 500)
+		return service.Fail("Could not start the updater: "+err.Error(), 500)
 	}
 
 	// Give the frontend a beat to receive the final event, then quit.
