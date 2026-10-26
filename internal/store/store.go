@@ -198,6 +198,15 @@ type Store struct {
 	recoveredNotice *string
 	undoRing        map[string]undoRecord
 	undoOrder       []string // FIFO of live undo tokens, oldest first
+
+	/* version is the snapshot generation counter: it bumps on every path
+	   that can change what State() returns (persisted writes via
+	   writeAtomicLocked, notice clears, reopens) and lets the service memoize
+	   its serialized state map without going stale. Pure reads never bump
+	   it. The backups listing is derived from the backups folder, which only
+	   Clavis itself writes — always inside a save — so it tracks the same
+	   generation. */
+	version uint64
 }
 
 var backupNameRe = regexp.MustCompile(`^clavis-data-(\d{8})-(\d{6})\.json$`)
@@ -308,6 +317,7 @@ func (s *Store) recoverFromBackupLocked(brokenText string) error {
 
 // writeAtomicLocked writes tmp, fsyncs, then renames over the real file.
 func (s *Store) writeAtomicLocked() error {
+	s.version++ // the in-memory snapshot changes on every write path
 	jsonBytes, err := marshalVault(s.data)
 	if err != nil {
 		return err
@@ -1480,10 +1490,20 @@ func membersToPairs(members []Member) []exchange.Member {
 	return pairs
 }
 
+// Version returns the snapshot generation (see the Store field doc):
+// callers can memoize State()-derived data and re-derive only when the
+// version moves.
+func (s *Store) Version() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.version
+}
+
 // ClearRecoveredNotice dismisses the recovery banner.
 func (s *Store) ClearRecoveredNotice() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.version++ // in-memory snapshot change without a disk write
 	s.recoveredNotice = nil
 }
 
@@ -1518,6 +1538,7 @@ func (s *Store) RestoreBackup(name string) error {
 func (s *Store) Reopen() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.version++ // the re-read can replace the whole snapshot
 	text, err := os.ReadFile(s.dataFile())
 	if err != nil {
 		return err

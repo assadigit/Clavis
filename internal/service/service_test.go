@@ -11,6 +11,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -391,4 +392,59 @@ func TestGetValueAction(t *testing.T) {
 	if res := dispatchJSON(t, s, "getValue", `{"id":"missing"}`); res["ok"] != false {
 		t.Fatalf("getValue for a missing item must fail, got %v", res)
 	}
+}
+
+// withTransparency swaps the osTransparency seam for the duration of f.
+func withTransparency(t *testing.T, v bool, f func()) {
+	t.Helper()
+	old := osTransparency
+	osTransparency = func() bool { return v }
+	defer func() { osTransparency = old }()
+	f()
+}
+
+// TestStateMapMemoizedUntilTheStoreChanges pins the stateMap fix: the full
+// snapshot is re-serialized only when the store version or the OS
+// transparency flag changes — not on every dispatched action — and the
+// memoized path stays redacted.
+func TestStateMapMemoizedUntilTheStoreChanges(t *testing.T) {
+	s := newTestService(t)
+	mustCreateItem(t, s, "GitHub token", "ghp_secretvalue", true)
+
+	m1 := s.stateMap()
+	m2 := s.stateMap()
+	if m1 == nil || len(m1) == 0 {
+		t.Fatal("stateMap returned an empty snapshot")
+	}
+	if reflect.ValueOf(m1).Pointer() != reflect.ValueOf(m2).Pointer() {
+		t.Fatal("stateMap must reuse the memoized snapshot while the store is unchanged")
+	}
+
+	// A mutation invalidates the memo; the new snapshot carries the change
+	// and still leaks no values.
+	mustCreateItem(t, s, "Pin", "123456789012", true)
+	m3 := s.stateMap()
+	if reflect.ValueOf(m3).Pointer() == reflect.ValueOf(m2).Pointer() {
+		t.Fatal("stateMap must re-serialize after a store change")
+	}
+	blob, err := json.Marshal(m3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(blob), `"name":"Pin"`) {
+		t.Fatal("the refreshed snapshot must include the new item")
+	}
+	for _, secret := range []string{"ghp_secretvalue", "123456789012"} {
+		if strings.Contains(string(blob), secret) {
+			t.Fatalf("memoized snapshot leaked value %q", secret)
+		}
+	}
+
+	// The OS transparency flag is part of the cache key.
+	withTransparency(t, false, func() {
+		m4 := s.stateMap()
+		if reflect.ValueOf(m4).Pointer() == reflect.ValueOf(m3).Pointer() {
+			t.Fatal("stateMap must re-serialize when the OS transparency flag changes")
+		}
+	})
 }

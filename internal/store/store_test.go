@@ -805,3 +805,39 @@ func TestUndoRingIsCapped(t *testing.T) {
 		t.Fatalf("restored item is missing: %v", err)
 	}
 }
+
+// TestVersionBumpsOnEveryStateChange pins the memoization invalidation
+// contract for service.stateMap: every path that can change a State()
+// snapshot must bump the store version — persisted writes, notice clears,
+// reopens — while pure reads never do.
+func TestVersionBumpsOnEveryStateChange(t *testing.T) {
+	f := newFixture(t)
+
+	v0 := f.s.Version()
+	mustItem(t, f.s, "A", "v") // create → save → bump
+	if f.s.Version() <= v0 {
+		t.Error("a persisted create must bump the version")
+	}
+
+	v1 := f.s.Version()
+	f.s.ClearRecoveredNotice() // in-memory snapshot change → bump
+	if f.s.Version() <= v1 {
+		t.Error("ClearRecoveredNotice must bump the version")
+	}
+
+	v2 := f.s.Version()
+	if err := f.s.Reopen(); err != nil { // re-read from disk → bump
+		t.Fatalf("Reopen: %v", err)
+	}
+	if f.s.Version() <= v2 {
+		t.Error("Reopen must bump the version")
+	}
+
+	v3 := f.s.Version()
+	_ = f.s.State()
+	_ = f.s.ListBackups()
+	_ = f.s.ReadOnly()
+	if f.s.Version() != v3 {
+		t.Error("pure reads must not bump the version")
+	}
+}

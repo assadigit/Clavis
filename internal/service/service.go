@@ -20,6 +20,7 @@ package service
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 	"unicode/utf16"
 
 	"clavis/internal/clipboard"
@@ -80,7 +81,7 @@ func last4PerRule(value string, show bool) string {
 }
 
 // redactState converts a store snapshot into the UI envelope (values out).
-func redactState(st store.State, osTransparency bool) StateEnvelope {
+func redactState(st store.State, transparencyOn bool) StateEnvelope {
 	items := make([]uiItem, len(st.Data.Items))
 	for i := range st.Data.Items {
 		it := st.Data.Items[i]
@@ -112,9 +113,13 @@ func redactState(st store.State, osTransparency bool) StateEnvelope {
 		RecoveredNotice: st.RecoveredNotice,
 		DataDir:         st.DataDir,
 		AppVersion:      st.AppVersion,
-		OSTransparency:  osTransparency,
+		OSTransparency:  transparencyOn,
 	}
 }
+
+// osTransparency is a test seam over system.TransparencyEnabled (the flag
+// is part of stateMap's cache key and must be flippable in tests).
+var osTransparency = system.TransparencyEnabled
 
 // Service is the pure dispatcher core. RegisterShortcut and SyncAutostart
 // are injected by the Windows shell (nil = no-op, like a missing runtime).
@@ -125,6 +130,17 @@ type Service struct {
 
 	// writeClipboard is a test seam over clipboard.WriteText (nil = real).
 	writeClipboard func(text string, secret bool) bool
+
+	/* stateMap memoization: the JSON snapshot used to be re-serialized on
+	   EVERY dispatched action (done() embeds it in each response). It is now
+	   keyed on the store's snapshot generation plus the OS transparency
+	   flag, so unchanged state is served from cache. cacheMu guards the
+	   three fields below; the cached map is shared read-only — Wails only
+	   serializes it. */
+	cacheMu   sync.Mutex
+	cacheKey  uint64 // store.Version() at cache time
+	cacheOS   bool   // transparency flag at cache time
+	cacheSnap map[string]any
 }
 
 // writeToClipboard puts text on the clipboard; secret payloads also set the
@@ -139,17 +155,27 @@ func (s *Service) writeToClipboard(text string, containsSecret bool) bool {
 
 // GetState returns the full snapshot for the frontend.
 func (s *Service) GetState() StateEnvelope {
-	return redactState(s.Store.State(), system.TransparencyEnabled())
+	return redactState(s.Store.State(), osTransparency())
 }
 
 func (s *Service) stateMap() map[string]any {
+	key := s.Store.Version()
+	osT := osTransparency()
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	if s.cacheSnap != nil && s.cacheKey == key && s.cacheOS == osT {
+		return s.cacheSnap
+	}
 	st := s.GetState()
 	b, err := json.Marshal(st)
 	if err != nil {
 		return map[string]any{}
 	}
 	var m map[string]any
-	json.Unmarshal(b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		return map[string]any{}
+	}
+	s.cacheKey, s.cacheOS, s.cacheSnap = key, osT, m
 	return m
 }
 
