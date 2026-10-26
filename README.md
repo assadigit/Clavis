@@ -52,8 +52,12 @@ Requires Go 1.26+ and Node/bun.
 ```
 cd frontend && bun install && bun run build
 cd .. && go test ./internal/...
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-s -w -H windowsgui" -o dist/Clavis.exe .
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags production -ldflags "-s -w -H windowsgui" -o dist/Clavis.exe .
 ```
+
+`-tags production` is required for release builds: without it Wails v3
+leaves WebView2 DevTools enabled in the shipped exe (fine for local
+debugging, not for a secrets app).
 
 The Go core (store, exchange, search) is pure and fully unit-tested on any
 platform; `go run ./tools/syso …` embeds the icon/version/manifest, and

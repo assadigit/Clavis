@@ -101,3 +101,13 @@ Short running entries. (Newest last.)
 - Verified desktop (:8080, Server bundle group): modal 720×868 with 7 members; add → stays open (7→8); move-up persists via Go store; remove → 7; Done closes; zero page errors; VLM verdict "polished, high-fidelity interface".
 - Version 1.1.4 in `app.go`, `build/winres/info.json` (1.1.4.0), `clavis.nsi`, both editions' `types.ts`.
 - Deliverables: `rsrc_windows_amd64.syso` (PE FileVersion/ProductVersion **1.1.4.0** struct-parsed), `Clavis.exe` 13,883,392 bytes PE32+ GUI, `Clavis-Setup-1.1.4.exe` 7,689,054 bytes (NSIS 47.7%), `Clavis-Portable-1.1.4.exe` 13,883,392 bytes.
+
+---
+## 2026-xx — hardening pass (engineering/hardening-pass)
+
+- Release builds now use `-tags production` (README updated): Wails v3
+  enables WebView2 DevTools unless this tag is set (`PutAreDevToolsEnabled`),
+  and previous shipped builds were built without it. Dev/e2e still uses
+  `-tags server`; plain `go build` (devtools on) stays available for local
+  debugging only.
+- See docs/ENGINEERING_NOTES.md for the full hardening log.
