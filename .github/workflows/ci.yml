@@ -1,0 +1,84 @@
+# Clavis CI — Windows is the product platform, so everything runs on
+# windows-latest: the Win32 clipboard test (internal/clipboard) executes for
+# real, and `go vet ./...` type-checks the Windows-only files and tests.
+#
+# Frontend: install → typecheck+build (tsc + vite) → vitest.
+# Go: gofmt gate → vet → tests (incl. the clipboard e2e) → release-tag
+#     build → govulncheck → npm audit (via a generated lockfile in a temp
+#     copy, so the committed bun.lock is never touched).
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (build + tests)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: "Typecheck + build"
+        run: bun run build
+      - name: "Tests (vitest)"
+        run: bun run test
+
+  go:
+    name: Go core (fmt, vet, tests, release build, scans)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # The frontend is embedded into the exe; build it before go build.
+      - uses: oven-sh/setup-bun@v2
+      - name: "Build frontend (embedded assets)"
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build:fast
+
+      - name: "gofmt gate"
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: "go vet (host is windows — covers the Win32 files and tests)"
+        run: go vet ./...
+
+      - name: "go test (incl. the real Win32 clipboard e2e)"
+        run: go test ./...
+
+      - name: "Release build (-tags production, DevTools off)"
+        run: go build -tags production -ldflags "-s -w -H windowsgui" -o dist/Clavis.exe .
+
+      - name: govulncheck
+        shell: bash
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: "npm audit (dependencies)"
+        shell: bash
+        working-directory: frontend
+        run: |
+          mkdir -p ../audit-tmp
+          cp package.json ../audit-tmp/
+          cd ../audit-tmp
+          npm install --package-lock-only --ignore-scripts --silent
+          npm audit
