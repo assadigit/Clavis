@@ -61,7 +61,9 @@ jobs:
 
       - name: "Portable artifact"
         shell: bash
-        run: mv dist/Clavis.exe "dist/Clavis-Portable-${GITHUB_REF_NAME#v}.exe"
+        # COPY, not mv: the NSIS step below packages dist/Clavis.exe into the
+        # installer; the publish globs only match the suffixed names.
+        run: cp dist/Clavis.exe "dist/Clavis-Portable-${GITHUB_REF_NAME#v}.exe"
 
       - name: "Install NSIS"
         shell: pwsh

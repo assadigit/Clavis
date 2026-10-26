@@ -212,6 +212,15 @@ Evidence = file:line at the fork point. Status updated as fixes land.
   outside the repo — the step now runs with cwd = `build\windows\installer`
   (the one directory the script's paths were written for).
   DEVELOPMENT.md step 4 corrected to match.
+- Third tag push (run 40271670585): with makensis finally running, it
+  failed on `File: "..\..\..\dist\Clavis.exe" -> no files found` — the
+  "Portable artifact" step had RENAMED (mv) the exe to
+  Clavis-Portable-1.2.0.exe, so nothing remained for the installer to
+  package. Changed to cp: both artifacts ship the same binary, and the
+  publish globs match only the suffixed names. Lesson recorded for the
+  workflow design: the artifact steps form a pipeline over dist/, and
+  every consumer's input contract (here: NSIS expects dist/Clavis.exe)
+  must survive the earlier steps.
 - `docs/DEVELOPMENT.md` documents build/test/release and was verified by
   cloning the repo fresh and running every command (that check caught two
   strict-mode test issues, fixed).
