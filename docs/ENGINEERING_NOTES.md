@@ -104,9 +104,10 @@ Evidence = file:line at the fork point. Status updated as fixes land.
 ### Open / accepted (owner decision required — do NOT change unilaterally)
 8. **[KNOWN DESIGN] Vault + backups are plaintext JSON in `%APPDATA%\Clavis`.**
    SPEC §6: owner's explicit v1 choice; `Encryption{enabled:false}` is the
-   hook. Changing the on-disk format is on the ASK-FIRST list. Recommendation
-   recorded in §8: Windows DPAPI (CryptProtectData) per-user encryption would
-   raise the bar with zero new UX; needs owner sign-off + migration test.
+   hook. **OWNER DECISION (session 3): not needed now — keep plaintext.**
+   Plan kept for a future revisit in §4.8: Windows DPAPI (CryptProtectData)
+   per-user encryption with zero new UX; would need owner sign-off +
+   migration test. See also §10.6.
 9. **[OPEN] Self-update has no signature/checksum verification beyond size +
    HTTPS.** A compromise of the GitHub account/repo still yields arbitrary
    code via self-update. Real fix = code signing (ASK FIRST: signing
@@ -151,7 +152,8 @@ Evidence = file:line at the fork point. Status updated as fixes land.
    members (SPEC §3.3b says "open a group and list its members"). Fixed:
    the query clears on drill (8e96047), red-first component test.
 4. Clipboard/`copy` order: use-count is bumped even if the clipboard write
-   fails. Accepted (counts intent, no data risk); noted as debt.
+   fails. Accepted (counts intent, no data risk) **at the time**; FIXED in
+   session 3 (43d724a, see §10.1).
 
 ## 7. Structure changes (Phase 3) — behavior-preserving, tests first
 
@@ -165,10 +167,8 @@ Evidence = file:line at the fork point. Status updated as fixes land.
   file move only, verified by build+vet+tests).
 - TypeScript: zero `any` already; masked previews moved behind one helper
   (`maskFromLast4`, backend-computed rule); the popup's keyboard flow is
-  component-tested. The big UI files (settings-view 796, ui-bits 794) are
-  left as-is: component libraries/views with one reason to change, and
-  splitting them without visual regression tests would be risk without
-  benefit. Debt-listed if a need appears.
+  component-tested. The big UI files (settings-view 796, ui-bits 794) were
+  left as-is at the time; split move-only in session 3 (45fa919, §10.5).
 
 ## 7b. Tests & automation (Phase 4)
 
@@ -204,7 +204,8 @@ Evidence = file:line at the fork point. Status updated as fixes land.
 
 ## 8. Recommended next steps (priority order, for the owner)
 
-1. Decide on at-rest encryption (DPAPI) — ASK FIRST item; plan is in §4.8.
+1. ~~Decide on at-rest encryption (DPAPI)~~ — decided in session 3: not
+   needed now (§10.6).
 2. Code-sign releases (ASK FIRST item) so self-update can verify signatures.
 3. Add CSP after verifying on Windows (§4.10).
 4. Clipboard auto-clear behind a setting (spec change; see hazard note §4.12).
@@ -214,9 +215,64 @@ Evidence = file:line at the fork point. Status updated as fixes land.
 ## 9. Debt list (short)
 
 - `sortStrings` is insertion sort — fine at n≈40, don't bother.
-- `stateMap()` marshals state through JSON on every dispatch — acceptable
-  while vaults are small; revisit if the popup ever stutters.
-- `positionPopup` mixes physical cursor px with DIP work-area math — works on
-  100% DPI; untestable here, flagged for on-Windows QA.
-- popup stays blank if the first `fetchState` fails (no retry UI) — cosmetic.
-- `main.go:236` `var _ = strings.TrimSpace` — vestigial import keeper.
+- ~~`stateMap()` marshals state through JSON on every dispatch~~ — fixed in
+  session 3 (52f934b, §10.4).
+- ~~`positionPopup` mixes physical cursor px with DIP work-area math~~ —
+  fixed in session 3 (e626016, §10.3).
+- ~~popup stays blank if the first `fetchState` fails~~ — fixed in session 3
+  (2c42ce0, §10.2).
+- ~~`main.go` `var _ = strings.TrimSpace`~~ — removed in session 3 (2a385fa).
+
+## 10. Debt-pass resolutions (session 3 — owner-directed, branch engineering/hardening-pass)
+
+The owner reviewed the final report's debt list and directed: fix all of
+it, decide encryption at rest (answer: not needed now), then merge and
+release. Disposition of each item:
+
+1. **Used counter bumped even when the clipboard write fails** (§6.4) —
+   FIXED in 43d724a. `Store.Copy` now only prepares the payload; the
+   dispatcher calls the new `Store.MarkUsed` after a successful write
+   (best-effort: a stats-save failure never fails a payload already on the
+   clipboard; no-op for missing/deleted entries and read-only stores).
+   Red-first: service test pins "failed write → useCount stays 0" for
+   items and groups, success bumps exactly once.
+2. **Popup blank forever if the first data load fails** — FIXED in 2c42ce0.
+   Worse than cosmetic, actually: the fetch ran once at mount, so the
+   promised "retry on next show" never happened — a first failure bricked
+   the popup until an app restart. `PopupRoot` (extracted from the entry
+   so this is jsdom-testable) now paints a retry panel (Try again + Esc),
+   retries silently on every later show while data is missing, and guards
+   double loads with an in-flight ref. 3 vitest cases.
+3. **Popup positioning mixed physical and DIP coordinates** — FIXED in
+   e626016, and the root cause is now pinned with evidence: Wails
+   beta.33's Windows screen service fills `Screen.WorkArea` and
+   `Screen.PhysicalWorkArea` IDENTICALLY from GetMonitorInfo's RcWork
+   (physical pixels — DPI not applied there yet), while
+   `WebviewWindow.SetPosition/SetSize` convert DIP→physical. The old math
+   fed physical work-area numbers into a DIP-expecting SetPosition with a
+   DIP panel size — wrong at every scale above 100%. New pure package
+   `internal/popupmath` (physical area + scale + DIP panel in, DIP origin
+   out) with table tests: 100%, 150%, 125% secondary monitor at a negative
+   origin, clamps, zero-scale guard.
+4. **`stateMap()` re-serialized the whole state on every action** — FIXED
+   in 52f934b. The store now carries a snapshot-generation counter
+   (`Version()`): bumped on every path that can change what `State()`
+   returns (writes via `writeAtomicLocked`, notice clears, `Reopen`),
+   never by reads. The service memoizes on (version, OS transparency
+   flag) — the flag is a test seam so the invalidation is pinned. Cached
+   snapshots stay redacted (test-asserted). Race-detector clean.
+5. **Two ~800-line UI files left alone** — SPLIT in 45fa919, move-only
+   and verified: `ui-bits.tsx` is a barrel over `ui/` modules (10
+   importers unchanged), `settings-view.tsx` keeps the view while the
+   update card and import-choice buttons moved to `settings/`. The
+   sorted-line-set diff against HEAD shows identical code lines; only
+   import plumbing differs. That verification replaces the visual
+   regression suite the earlier "risk without benefit" call wanted.
+6. **Encryption at rest — OWNER DECISION (this session): NOT NEEDED NOW.**
+   Plaintext vault + backups in %APPDATA%\Clavis stays the documented v1
+   behavior (SPEC §6, §4.8 hook unchanged). Revisit triggers: a shared
+   machine threat model, or requests to sync/roam the vault.
+7. Vestige: `var _ = strings.TrimSpace` import keeper removed (2a385fa).
+
+All commits: gofmt clean, host `go test ./internal/...` green,
+`GOOS=windows` build+vet clean, frontend build + 41 vitest green.
