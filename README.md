@@ -66,15 +66,23 @@ platform; `go run ./tools/syso …` embeds the icon/version/manifest, and
 ## Structure
 
 ```
-main.go, app.go        windows, tray, hotkey, dispatcher service
+main.go                app bootstrap: windows, tray, hotkey, single instance
+app.go                 Windows shell: window controls, hotkey, autostart
+app_exports.go         export/import dialogs (bodies built by the store)
+app_update.go          self-update shell (check, download, hand-off)
+internal/service/      the pure dispatcher (GetState/Dispatch), no Wails types
 internal/store         data model, atomic writes, backups, trash, undo
 internal/exchange      dotenv, Markdown/TXT import+export
 internal/search        the documented search/ranking algorithm
 internal/clipboard     Windows clipboard with privacy formats
 internal/system        registry transparency, cursor, explorer
+internal/updater       self-update from GitHub releases
 frontend/              React + TypeScript + Vite (popup + manager entries)
 build/                 icons, manifest, version info, NSIS script
 SPEC.md, design-tokens.css   the product spec and the single source of style
 ```
+
+See `docs/DEVELOPMENT.md` for build/test/release and
+`docs/ENGINEERING_NOTES.md` for the engineering log.
 
 Wails **v3.0.0-beta.33** (pinned in `go.mod`), React 19, TypeScript 5.
