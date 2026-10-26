@@ -77,8 +77,8 @@ func main() {
 		}
 		w.WriteByte(byte(dim))
 		w.WriteByte(byte(dim))
-		w.WriteByte(0) // colors
-		w.WriteByte(0) // reserved
+		w.WriteByte(0)                                   // colors
+		w.WriteByte(0)                                   // reserved
 		binary.Write(w, binary.LittleEndian, uint16(1))  // planes
 		binary.Write(w, binary.LittleEndian, uint16(32)) // bpp
 		binary.Write(w, binary.LittleEndian, uint32(len(e.data)))
