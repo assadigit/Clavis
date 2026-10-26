@@ -187,6 +187,17 @@ Evidence = file:line at the fork point. Status updated as fixes land.
   build+tests; gofmt gate, `go vet ./...` (Windows host covers the Win32
   files), `go test ./...` (real clipboard e2e), release build with
   `-tags production`, govulncheck, npm audit (63b6a76).
+- CI is GREEN end-to-end on windows-latest (run 40255730969): the clipboard
+  e2e passed for real — round-trips (ASCII/Farsi/emoji/newlines/CRLF/empty/
+  100 KB), the three privacy formats present with the documented values
+  after a secret write, absent after a plain write; vet clean; release
+  build OK; govulncheck and npm audit clean.
+- Two CI-only defects were found and fixed on the way (this is why the
+  workflow runs on Windows at all): the runner's autocrlf handed gofmt CRLF
+  files (fixed with `git config core.autocrlf false` before checkout), and
+  the clipboard test's WideCharToMultiByte sizing call passed 7 arguments
+  to the 8-parameter API — the callee read an uninitialized stack slot and
+  corrupted the frame (fixed; every Call now passes the full argument list).
 - `docs/DEVELOPMENT.md` documents build/test/release and was verified by
   cloning the repo fresh and running every command (that check caught two
   strict-mode test issues, fixed).
