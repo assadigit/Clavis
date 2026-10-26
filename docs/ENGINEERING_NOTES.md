@@ -221,6 +221,13 @@ Evidence = file:line at the fork point. Status updated as fixes land.
   workflow design: the artifact steps form a pipeline over dist/, and
   every consumer's input contract (here: NSIS expects dist/Clavis.exe)
   must survive the earlier steps.
+- **v1.2.0 PUBLISHED** (fourth tag push, run 40272162942, all green):
+  release https://github.com/assadigit/Clavis/releases/tag/v1.2.0 with
+  Clavis-Setup-1.2.0.exe (7.10 MB) + Clavis-Portable-1.2.0.exe (12.68 MB);
+  `/releases/latest` returns v1.2.0 with both assets at the pinned
+  repo download URLs — the self-update chain verified at the API level.
+  Remaining manual step before announcing: the owner's smoke test on a
+  clean Windows machine (DEVELOPMENT.md 'Release' step 5).
 - `docs/DEVELOPMENT.md` documents build/test/release and was verified by
   cloning the repo fresh and running every command (that check caught two
   strict-mode test issues, fixed).
