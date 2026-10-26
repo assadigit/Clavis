@@ -77,7 +77,10 @@ internal/search        the documented search/ranking algorithm
 internal/clipboard     Windows clipboard with privacy formats
 internal/system        registry transparency, cursor, explorer
 internal/updater       self-update from GitHub releases
+internal/popupmath     popup placement math (physical → DIP, any scale)
 frontend/              React + TypeScript + Vite (popup + manager entries)
+                       components/clavis/: ui-bits.tsx re-exports the ui/ kit;
+                       settings/ + popup-root + popup/manager trees
 build/                 icons, manifest, version info, NSIS script
 SPEC.md, design-tokens.css   the product spec and the single source of style
 ```
