@@ -277,3 +277,49 @@ func TestCleanupOld(t *testing.T) {
 		t.Fatal("CleanupOld must never touch the live exe")
 	}
 }
+
+// --- URL pinning: release metadata is untrusted input (SC-2) ---
+
+// A tampered API response must not steer the updater's download or the
+// release-page button at another host.
+func TestFetchLatestRejectsForeignURLs(t *testing.T) {
+	foreign := `{
+  "tag_name": "v9.9.9",
+  "html_url": "https://evil.example/phish",
+  "body": "notes",
+  "assets": [
+    {"name": "Clavis-Setup-9.9.9.exe", "size": 123, "browser_download_url": "https://evil.example/Clavis-Setup-9.9.9.exe"},
+    {"name": "Clavis-Portable-9.9.9.exe", "size": 123, "browser_download_url": "http://github.com.evil.example/x.exe"}
+  ]
+}`
+	rel, err := FetchLatest(fixtureGetter(200, foreign, 500, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel.SetupURL != "" || rel.PortableURL != "" {
+		t.Fatalf("foreign asset URLs must be rejected: %+v", rel)
+	}
+	if rel.URL != "https://github.com/assadigit/Clavis/releases/latest" {
+		t.Fatalf("foreign release URL must fall back to canonical, got %q", rel.URL)
+	}
+}
+
+// Same rule for the atom fallback's <link>.
+func TestFetchLatestAtomRejectsForeignLink(t *testing.T) {
+	feed := `<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+  <title>x</title>
+  <id>tag:github.com,2008:repository/999999999/v1.0.3</id>
+  <link rel="alternate" type="text/html" href="https://evil.example/release"/>
+</entry></feed>`
+	rel, err := FetchLatest(fixtureGetter(403, "", 200, feed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel.URL != "https://github.com/assadigit/Clavis/releases/tag/v1.0.3" {
+		t.Fatalf("atom link must fall back to the canonical tag URL, got %q", rel.URL)
+	}
+	if !strings.HasPrefix(rel.SetupURL, "https://github.com/assadigit/Clavis/releases/download/") {
+		t.Fatalf("asset URLs must stay on the official path, got %q", rel.SetupURL)
+	}
+}

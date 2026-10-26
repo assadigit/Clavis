@@ -70,7 +70,19 @@ func IsNewer(current, latest string) bool {
 const (
 	apiURL  = "https://api.github.com/repos/assadigit/Clavis/releases/latest"
 	atomURL = "https://github.com/assadigit/Clavis/releases.atom"
+	// latestPageURL is the canonical release page (fallback for foreign links).
+	latestPageURL = "https://github.com/assadigit/Clavis/releases/latest"
+	// officialBase is the only host/path the updater treats as "ours".
+	officialBase = "https://github.com/assadigit/Clavis/"
 )
+
+// officialURL reports whether url is inside the Clavis repo on github.com.
+// Release metadata is untrusted input (SC-2): a tampered API/atom response
+// must not be able to steer the updater's download or the release-page
+// button at another host.
+func officialURL(url string) bool {
+	return strings.HasPrefix(url, officialBase)
+}
 
 // Release is everything the UI needs about the latest GitHub release.
 type Release struct {
@@ -161,12 +173,15 @@ func fetchFromAPI(get Getter) (Release, error) {
 	rel := Release{
 		Tag:   parsed.TagName,
 		Notes: strings.TrimSpace(parsed.Body),
-		URL:   parsed.HTMLURL,
+		URL:   latestPageURL,
 	}
-	if rel.URL == "" {
-		rel.URL = "https://github.com/assadigit/Clavis/releases/latest"
+	if officialURL(parsed.HTMLURL) {
+		rel.URL = parsed.HTMLURL
 	}
 	for _, a := range parsed.Assets {
+		if !officialURL(a.BrowserDownloadURL) {
+			continue // foreign URL in a tampered response: treat as absent
+		}
 		switch {
 		case strings.HasPrefix(a.Name, "Clavis-Setup-"):
 			rel.SetupURL, rel.SetupSize = a.BrowserDownloadURL, a.Size
@@ -209,7 +224,7 @@ func fetchFromAtom(get Getter) (Release, error) {
 		notesPlain = unescapeXML(t[1])
 	}
 	link := "https://github.com/assadigit/Clavis/releases/tag/" + tag[1]
-	if l := atomLinkRe.FindStringSubmatch(entry[1]); l != nil {
+	if l := atomLinkRe.FindStringSubmatch(entry[1]); l != nil && officialURL(l[1]) {
 		link = l[1]
 	}
 	base := "https://github.com/assadigit/Clavis/releases/download/" + tag[1]
