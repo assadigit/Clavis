@@ -17,7 +17,7 @@ describe("parseShortcut", () => {
   });
 
   it("lowercases and tolerates spaces", () => {
-    expect(parseShortcut(" ctrl + K ").key).toBe("k");
+    expect(parseShortcut(" ctrl + K ")?.key).toBe("k");
   });
 
   it("null for nothing", () => {

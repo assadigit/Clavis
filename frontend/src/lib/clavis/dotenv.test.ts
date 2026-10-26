@@ -10,7 +10,6 @@ import {
   looksLikeDotenv,
   needsDotenvQuoting,
   parseDotenvLine,
-  parseDotenvValue,
 } from "./dotenv";
 
 describe("quoting", () => {

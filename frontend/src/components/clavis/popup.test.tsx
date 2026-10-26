@@ -9,7 +9,7 @@
  * The Wails runtime is mocked — these tests run in plain jsdom.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Popup } from "./popup";
 import type { ClavisState } from "@/lib/clavis/types";
