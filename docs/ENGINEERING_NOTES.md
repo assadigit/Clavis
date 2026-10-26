@@ -203,6 +203,15 @@ Evidence = file:line at the fork point. Status updated as fixes land.
   to "1" — all four version spots were correct; the guard was not. Fixed
   to `[^"]+` + `cut -d. -f1-3` (winres is four-part by Windows convention),
   tag deleted and re-pushed on the fixed commit.
+- NSIS step incident (second v1.2.0 tag push, run 40271086546, job
+  121403844355): two stacked defects, neither reachable from Linux —
+  (a) choco's NSIS package deploys makensis to `C:\Program Files (x86)\NSIS`
+  WITHOUT adding it to PATH (step now uses the full path with a fallback);
+  (b) the script's `File` paths are relative to makensis's WORKING
+  directory, so invoking from the repo root pointed `..\..\..\dist\Clavis.exe`
+  outside the repo — the step now runs with cwd = `build\windows\installer`
+  (the one directory the script's paths were written for).
+  DEVELOPMENT.md step 4 corrected to match.
 - `docs/DEVELOPMENT.md` documents build/test/release and was verified by
   cloning the repo fresh and running every command (that check caught two
   strict-mode test issues, fixed).

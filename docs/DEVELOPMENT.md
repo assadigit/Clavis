@@ -92,9 +92,12 @@ CI runs all of the above on every push (`.github/workflows/ci.yml`).
      build/winres/info.json amd64 rsrc_windows_amd64.syso
    ```
 4. Installer (Windows host with NSIS): fetch Microsoft's WebView2 bootstrapper
-   into `build/windows/webview2-bootstrapper.exe`, then run
-   `makensis build/windows/installer/clavis.nsi` from the repo root
-   (paths in the script are relative to it).
+   into `build/windows/webview2-bootstrapper.exe`, then run makensis FROM
+   `build/windows/installer` (`cd build/windows/installer && makensis
+   clavis.nsi`) — NSIS resolves the script's relative paths against the
+   working directory, so that cwd is the one the script is written for.
+   Note choco's NSIS deploys to `C:\Program Files (x86)\NSIS` without
+   adding itself to PATH.
 5. Smoke-test both artifacts on a clean Windows VM: popup hotkey, copy (check
    Win+V does NOT contain the secret), manager edit round-trip, self-update.
 6. Tag `vX.Y.Z` and push the tag: `.github/workflows/release.yml` then

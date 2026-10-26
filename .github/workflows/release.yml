@@ -73,14 +73,22 @@ jobs:
 
       - name: "Installer (NSIS)"
         shell: pwsh
+        # Run FROM the installer directory: NSIS resolves the script's
+        # relative paths (..\..\..\dist\Clavis.exe, ..\webview2-bootstrapper)
+        # against makensis's working directory, so this cwd makes them
+        # correct; choco's NSIS deploys to Program Files (x86) WITHOUT
+        # adding itself to PATH, hence the full path with a fallback.
+        working-directory: build\windows\installer
         run: |
-          makensis "build\windows\installer\clavis.nsi"
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) { $makensis = "makensis" }
+          & $makensis "clavis.nsi"
           # OutFile lands next to the script; the guard step already proved
           # the NSIS VERSION equals the tag version, so the produced name is
           # exactly what the self-updater expects — keep it unchanged.
-          $setup = Get-ChildItem -Recurse -Filter "Clavis-Setup-*.exe" | Select-Object -First 1
+          $setup = Get-ChildItem -Filter "Clavis-Setup-*.exe" | Select-Object -First 1
           if (-not $setup) { throw "makensis produced no Clavis-Setup-*.exe" }
-          Copy-Item $setup.FullName "dist\"
+          Copy-Item $setup.FullName "..\..\..\dist\"
 
       - name: "Publish the release with both assets"
         uses: softprops/action-gh-release@v2
