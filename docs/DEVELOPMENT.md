@@ -56,18 +56,23 @@ mode gives a plain browser page against the real Go backend (see BUILD_LOG.md).
 ## Test
 
 ```bash
-# Go core (any OS; on Windows this ALSO runs internal/clipboard's real
-# Win32 clipboard e2e — the privacy-format guarantee is tested for real)
+# Go core.
+# On Windows: the whole module — this ALSO runs internal/clipboard's real
+# Win32 clipboard e2e (the privacy-format guarantee, tested for real).
 go test ./...
+# On Linux/macOS: package main needs the Wails Linux backend (GTK), so run
+# the pure core instead:
+go test ./internal/...
 
 # Frontend (vitest + jsdom: search/dotenv/derive/hotkey logic, popup flow)
 cd frontend && bun run test
 
 # Static checks
-gofmt -l .                                   # must print nothing
-go vet ./...                                 # on Windows hosts
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...   # cross from Linux/macOS
-govulncheck ./...                            # after: go install golang.org/x/vuln/cmd/govulncheck@latest
+gofmt -l .                                            # must print nothing
+go vet ./...                                          # on Windows hosts
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...  # cross from Linux/macOS
+govulncheck ./...   # after: go install golang.org/x/vuln/cmd/govulncheck@latest
+                    # (on Linux/macOS, prefix with GOOS=windows GOARCH=amd64 CGO_ENABLED=0)
 cd frontend && bunx npm install --package-lock-only --ignore-scripts && bunx npm audit
 ```
 
