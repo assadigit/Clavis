@@ -7,6 +7,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -701,5 +702,59 @@ func TestDuplicateItem(t *testing.T) {
 	}
 	if dup.Name != "Orig (copy)" || dup.ID == a.ID {
 		t.Errorf("duplicate mismatch")
+	}
+}
+
+// TestUndoRingIsCapped: every delete kept a full item snapshot (value
+// included) in RAM for the whole app lifetime. The ring is capped at 50
+// newest records; undo still works for the newest and reports "Nothing to
+// undo" for evicted tokens.
+func TestUndoRingIsCapped(t *testing.T) {
+	dir := t.TempDir()
+	st, err := NewWithClock(dir, "test", func() time.Time {
+		return time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var firstToken string
+	for i := 0; i < maxUndoRecords+10; i++ {
+		item, err := st.CreateItem(NewItem{Name: fmt.Sprintf("item %d", i), Value: fmt.Sprintf("value %d", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, err := st.DeleteEntry(KindItem, item.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			firstToken = token
+		}
+	}
+
+	st.mu.Lock()
+	ringSize := len(st.undoRing)
+	st.mu.Unlock()
+	if ringSize > maxUndoRecords {
+		t.Fatalf("undo ring holds %d records, want at most %d", ringSize, maxUndoRecords)
+	}
+
+	// The oldest token was evicted — undoing it must fail cleanly.
+	if err := st.UndoDelete(firstToken); err == nil {
+		t.Fatal("evicted undo token must not restore")
+	}
+	// A fresh delete (the newest) must still undo perfectly.
+	items := st.State().Data.Items
+	newest := items[len(items)-1]
+	tok, err := st.DeleteEntry(KindItem, newest.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UndoDelete(tok); err != nil {
+		t.Fatalf("undo of the newest delete failed: %v", err)
+	}
+	if _, err := st.ItemValue(newest.ID); err != nil {
+		t.Fatalf("restored item is missing: %v", err)
 	}
 }

@@ -180,6 +180,11 @@ const (
 	kindPreRestore   backupKind = "pre-restore"
 )
 
+// maxUndoRecords caps the undo ring: every soft delete keeps a full item
+// snapshot (value included) in RAM, so the ring must not grow forever.
+// The UI only ever offers undo for the most recent delete.
+const maxUndoRecords = 50
+
 // Store is the single-writer data store.
 type Store struct {
 	mu              sync.Mutex
@@ -192,6 +197,7 @@ type Store struct {
 	readOnlyReason  *string
 	recoveredNotice *string
 	undoRing        map[string]undoRecord
+	undoOrder       []string // FIFO of live undo tokens, oldest first
 }
 
 var backupNameRe = regexp.MustCompile(`^clavis-data-(\d{8})-(\d{6})\.json$`)
@@ -1082,6 +1088,7 @@ func (s *Store) DeleteEntry(kind EntryKind, id string) (string, error) {
 		s.undoRing[token] = undoRecord{Kind: kind, Item: &snapshot, Memberships: memberships}
 		item.DeletedAt = &now
 		item.UpdatedAt = now
+		s.trackUndo(token)
 	} else {
 		group := s.findGroup(id)
 		if group == nil {
@@ -1093,8 +1100,31 @@ func (s *Store) DeleteEntry(kind EntryKind, id string) (string, error) {
 		s.undoRing[token] = undoRecord{Kind: kind, Group: &snapshot}
 		group.DeletedAt = &now
 		group.UpdatedAt = now
+		s.trackUndo(token)
 	}
 	return token, s.saveLocked(kindDaily)
+}
+
+// trackUndo appends a token to the FIFO and evicts the oldest records
+// beyond the cap (no-op for already-undone tokens).
+func (s *Store) trackUndo(token string) {
+	s.undoOrder = append(s.undoOrder, token)
+	if len(s.undoOrder) <= maxUndoRecords {
+		return
+	}
+	drop := s.undoOrder[0]
+	s.undoOrder = append(s.undoOrder[:0], s.undoOrder[1:]...)
+	delete(s.undoRing, drop)
+}
+
+// forgetUndo removes a consumed token from the FIFO.
+func (s *Store) forgetUndo(token string) {
+	for i, t := range s.undoOrder {
+		if t == token {
+			s.undoOrder = append(s.undoOrder[:i], s.undoOrder[i+1:]...)
+			return
+		}
+	}
 }
 
 // UndoDelete restores the entry exactly, including group memberships.
@@ -1109,6 +1139,7 @@ func (s *Store) UndoDelete(token string) error {
 		return errors.New("Nothing to undo")
 	}
 	delete(s.undoRing, token)
+	s.forgetUndo(token)
 	if rec.Kind == KindItem {
 		saved := *rec.Item
 		saved.DeletedAt = nil
