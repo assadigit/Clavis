@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { ChevronLeft, Key, Maximize2, Menu as MenuIcon, Minimize2, Minus, Plus, Lock, X } from "lucide-react";
 import { platform } from "@/desktop/platform";
 import type { Creating, ListFilter, Selection } from "./app-types";
-import { liveGroups, liveItems } from "./derive";
 import { EntryList } from "./entry-list";
 import { GroupEditor } from "./group-editor";
 import { Ix } from "./icons";
@@ -20,7 +19,7 @@ import { SettingsView } from "./settings-view";
 import { Sidebar } from "./sidebar";
 import { TrashView } from "./trash-view";
 import { Btn } from "./ui-bits";
-import { copyToClipboard } from "@/lib/clavis/client";
+import { liveGroups, liveItems } from "./derive";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState } from "@/lib/clavis/types";
 
@@ -69,25 +68,25 @@ export function Manager(props: ManagerProps) {
     setCreating({ kind });
   }
 
-  /* Instant copy from a list row: value for items, KEY=value block for groups.
-     Returns true only when the clipboard write succeeded (row shows ✓). */
+  /* Instant copy from a list row: the backend writes the clipboard (value
+     for items, KEY=value block for groups) and applies the privacy formats
+     for secret payloads. Returns true only when the write succeeded. */
   const copyEntry = useCallback(
     async (kind: "item" | "group", id: string): Promise<boolean> => {
       const res = await call("copy", { kind, id });
-      if (res.ok && typeof res.text === "string") {
-        const ok = await copyToClipboard(res.text, res.containsSecret === true);
-        if (ok) {
-          const name =
-            kind === "item"
-              ? data.items.find((i) => i.id === id)?.name
-              : data.groups.find((g) => g.id === id)?.name;
-          toast.success(
-            res.lineCount != null
-              ? `Copied ${res.lineCount} lines${name ? ` — ${name}` : ""}.`
-              : `Copied ${name ?? "entry"}.`
-          );
-          return true;
-        }
+      if (res.ok && res.copied) {
+        const name =
+          kind === "item"
+            ? data.items.find((i) => i.id === id)?.name
+            : data.groups.find((g) => g.id === id)?.name;
+        toast.success(
+          res.lineCount != null
+            ? `Copied ${res.lineCount} lines${name ? ` — ${name}` : ""}.`
+            : `Copied ${name ?? "entry"}.`
+        );
+        return true;
+      }
+      if (res.ok) {
         toast.error("Could not copy to the clipboard. Try again.");
       }
       return false;

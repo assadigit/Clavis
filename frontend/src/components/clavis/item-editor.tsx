@@ -20,7 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
-import { copyToClipboard, downloadExport } from "@/lib/clavis/client";
+import { downloadExport } from "@/lib/clavis/client";
 import { autoKey } from "@/lib/clavis/dotenv";
 import type { ClavisState, Group, Item } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
@@ -218,10 +218,11 @@ export function ItemEditor(props: ItemEditorProps) {
 
   async function copyItem() {
     if (!item) return;
+    /* Backend-side copy: the value never enters the webview, and the §5.2
+       privacy formats are applied when the item is a secret. */
     const res = await call("copy", { kind: "item", id: item.id });
-    if (res.ok && typeof res.text === "string") {
-      const ok = await copyToClipboard(res.text, res.containsSecret === true);
-      if (ok) {
+    if (res.ok) {
+      if (res.copied) {
         toast.success("Copied.");
         if (res.containsSecret) {
           toast("Copied. (Windows edition also excludes it from clipboard history.)");

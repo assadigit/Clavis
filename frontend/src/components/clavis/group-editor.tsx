@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, ChevronRight, ClipboardPaste, Copy, FileText, Layers, Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
-import { copyToClipboard, downloadExport } from "@/lib/clavis/client";
+import { downloadExport } from "@/lib/clavis/client";
 import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
 import type { ClavisState, Group } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
@@ -131,10 +131,13 @@ export function GroupEditor(props: GroupEditorProps) {
 
   async function copyGroup() {
     if (!group) return;
+    /* Backend-side copy: the KEY=value block never enters the webview, and
+       the §5.2 privacy formats are applied whenever any member is a secret
+       (this was previously missed here — group copies could land in the
+       Win+V clipboard history). */
     const res = await call("copy", { kind: "group", id: group.id });
-    if (res.ok && typeof res.text === "string") {
-      const ok = await copyToClipboard(res.text);
-      if (ok) {
+    if (res.ok) {
+      if (res.copied) {
         toast.success(res.lineCount != null ? `Copied ${res.lineCount} lines.` : "Copied.");
         if (res.containsSecret) {
           toast("Copied. (Windows edition also excludes it from clipboard history.)");

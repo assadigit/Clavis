@@ -2,9 +2,10 @@
  * CLAVIS — desktop transport (Wails runtime).
  *
  * Same exported API as the web client so the UI components work unchanged:
- * fetchState, apiCall, copyToClipboard, downloadExport. All calls go
- * through Call.ByName to the Go service (package main, struct Clavis).
- * Item values travel only in copy/export payloads; they are never logged.
+ * fetchState, apiCall, downloadExport. All calls go through Call.ByName to
+ * the Go service (package main, struct Clavis). Item values never cross to
+ * the UI: copying is executed by the backend, which also applies the
+ * Windows clipboard-privacy formats; nothing here is logged.
  */
 import { Call } from "@wailsio/runtime";
 import type { ClavisState } from "@/lib/clavis/types";
@@ -28,9 +29,12 @@ export interface ApiResult {
   state?: ClavisState;
   id?: string;
   undoToken?: string;
-  text?: string;
+  /** "copy": did the value reach the clipboard (written by the backend)? */
+  copied?: boolean;
   lineCount?: number;
   containsSecret?: boolean;
+  /** "getValue": the value of one item (edit form). */
+  value?: string;
   summary?: { added: number; updated: number; skipped: number };
   preview?: BackupPreview | FilesPreview;
 }
@@ -65,18 +69,6 @@ export async function apiCall(
     return { ...res, status: res.ok ? 200 : res.status ?? 400 };
   } catch (err) {
     return { ok: false, status: 0, error: String((err as Error)?.message ?? err) };
-  }
-}
-
-/**
- * Clipboard write through Go: secret payloads also set the Windows privacy
- * formats (kept out of Win+V history and cloud sync). Never logs the text.
- */
-export async function copyToClipboard(text: string, containsSecret = false): Promise<boolean> {
-  try {
-    return (await Call.ByName("main.Clavis.WriteClipboard", text, containsSecret)) as boolean;
-  } catch {
-    return false;
   }
 }
 

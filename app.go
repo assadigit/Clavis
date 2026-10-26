@@ -29,7 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"clavis/internal/clipboard"
 	"clavis/internal/service"
 	"clavis/internal/store"
 	"clavis/internal/system"
@@ -92,14 +91,6 @@ func (c *Clavis) GetState() service.StateEnvelope {
 // Dispatch is the single frontend entry point: action + JSON payload.
 func (c *Clavis) Dispatch(action, payloadJSON string) map[string]any {
 	return c.core.Dispatch(action, payloadJSON)
-}
-
-/* ------------------------- clipboard ------------------------- */
-
-// WriteClipboard puts text on the Windows clipboard; secret payloads also
-// set the privacy formats (§5.2).
-func (c *Clavis) WriteClipboard(text string, containsSecret bool) bool {
-	return clipboard.WriteText(text, containsSecret)
 }
 
 /* ------------------------- exports ------------------------- */

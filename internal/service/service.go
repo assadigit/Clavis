@@ -9,7 +9,9 @@
  *
  * Exposed surface (mirrors the reference API one-to-one):
  *   GetState()                    → full snapshot (+ osTransparency)
- *   Dispatch(action, payloadJSON) → the action dispatcher
+ *   Dispatch(action, payloadJSON) → the action dispatcher. The "copy"
+ *                                 action writes the clipboard itself, with
+ *                                 the store's privacy verdict (SPEC §5.2).
  *
  * SECURITY: item values are never logged; dialogs carry file names only.
  */
@@ -19,6 +21,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"clavis/internal/clipboard"
 	"clavis/internal/store"
 	"clavis/internal/system"
 )
@@ -38,6 +41,19 @@ type Service struct {
 	Store            *store.Store
 	RegisterShortcut func(combo string) error
 	SyncAutostart    func(enabled bool) error
+
+	// writeClipboard is a test seam over clipboard.WriteText (nil = real).
+	writeClipboard func(text string, secret bool) bool
+}
+
+// writeToClipboard puts text on the clipboard; secret payloads also set the
+// Windows privacy formats that keep them out of clipboard history and cloud
+// sync (§5.2).
+func (s *Service) writeToClipboard(text string, containsSecret bool) bool {
+	if s.writeClipboard != nil {
+		return s.writeClipboard(text, containsSecret)
+	}
+	return clipboard.WriteText(text, containsSecret)
 }
 
 // GetState returns the full snapshot for the frontend.
@@ -356,8 +372,13 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			if err != nil {
 				return FailErr(err)
 			}
+			// Write the clipboard HERE, with the store's privacy verdict, so a
+			// secret payload always carries the §5.2 exclusion formats no
+			// matter which window asked — and the value itself never crosses
+			// to the webview. The response carries metadata only.
+			copied := s.writeToClipboard(result.Text, result.ContainsSecret)
 			return s.done(map[string]any{
-				"text":           result.Text,
+				"copied":         copied,
 				"lineCount":      result.LineCount,
 				"containsSecret": result.ContainsSecret,
 			})

@@ -15,7 +15,6 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AppWindow, Check, ChevronLeft, ClipboardCopy, Layers, Search } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
-import { copyToClipboard } from "@/lib/clavis/client";
 import { buildSearchEntries, compareEntries, compareRecent, searchEntries } from "@/lib/clavis/search";
 import type { SearchEntry } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
@@ -178,10 +177,12 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
   async function doCopy(kind: "item" | "group", id: string, rowKey: string) {
     if (busy || copied) return;
     setBusy(true);
+    /* The backend writes the clipboard (with the §5.2 privacy formats when
+       the payload contains a secret) and returns metadata only — the value
+       never enters the webview. */
     const res = await call("copy", { kind, id });
-    if (res.ok && typeof res.text === "string") {
-      const ok = await copyToClipboard(res.text, res.containsSecret === true);
-      if (ok) {
+    if (res.ok) {
+      if (res.copied) {
         const label =
           kind === "group" && res.lineCount != null ? `Copied ${res.lineCount} lines` : "Copied";
         setCopied({ rowKey, label });
