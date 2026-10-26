@@ -459,6 +459,17 @@ func (c *Clavis) positionPopup() {
 	c.popup.SetPosition(x, y)
 }
 
+// refreshTrayTooltip syncs the tray tooltip with the current shortcut
+// setting (§3.2). It used to be set once at startup, so changing the
+// shortcut left the tray advertising the old combo forever.
+func (c *Clavis) refreshTrayTooltip() {
+	if c.tray == nil || c.core == nil {
+		return
+	}
+	shortcut := c.core.Store.State().Data.Settings.Shortcut
+	c.tray.SetTooltip("Clavis — press " + shortcut + " for quick search")
+}
+
 /* ------------------------- autostart ------------------------- */
 
 func (c *Clavis) syncAutostart(enabled bool) error {

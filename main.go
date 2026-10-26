@@ -162,6 +162,16 @@ func main() {
 
 	svc.SetRuntime(app, popup, manager, tray)
 
+	// Shortcut changes re-register the hotkey through the core hook; on
+	// success the tray tooltip must follow the new combo (§3.2).
+	core.RegisterShortcut = func(combo string) error {
+		if err := svc.RegisterShortcut(combo); err != nil {
+			return err
+		}
+		svc.refreshTrayTooltip()
+		return nil
+	}
+
 	// Self-update housekeeping (DECISIONS.md §34): clear any leftover swap
 	// file from a previous portable update, then run the background check.
 	if exe, err := os.Executable(); err == nil {
