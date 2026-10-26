@@ -38,7 +38,9 @@ jobs:
           appver=$(grep -oP 'const AppVersion = "\K[^"]+' app.go)
           nsiver=$(grep -oP '!define VERSION "\K[^"]+' build/windows/installer/clavis.nsi)
           tsver=$(grep -oP 'APP_VERSION = "\K[^"]+' frontend/src/lib/clavis/types.ts)
-          winver=$(grep -oP '"product_version": "\K[^.]+' build/winres/info.json)
+          # winres uses the four-part Windows convention (X.Y.Z.0); compare
+          # its first three components against the three-part tag version.
+          winver=$(grep -oP '"product_version": "\K[^"]+' build/winres/info.json | cut -d. -f1-3)
           echo "tag=$ver app.go=$appver nsi=$nsiver types.ts=$tsver winres=$winver"
           if [ "$ver" != "$appver" ] || [ "$ver" != "$nsiver" ] || [ "$ver" != "$tsver" ] || [ "$ver" != "$winver" ]; then
             echo "::error::version mismatch — bump all four places (DEVELOPMENT.md 'Release')"

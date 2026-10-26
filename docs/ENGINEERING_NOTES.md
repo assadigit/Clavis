@@ -198,6 +198,11 @@ Evidence = file:line at the fork point. Status updated as fixes land.
   the clipboard test's WideCharToMultiByte sizing call passed 7 arguments
   to the 8-parameter API — the callee read an uninitialized stack slot and
   corrupted the frame (fixed; every Call now passes the full argument list).
+- Release-guard incident (first v1.2.0 tag push, run 40270862675): the
+  guard's own regex `[^.]+` truncated winres `product_version` "1.2.0.0"
+  to "1" — all four version spots were correct; the guard was not. Fixed
+  to `[^"]+` + `cut -d. -f1-3` (winres is four-part by Windows convention),
+  tag deleted and re-pushed on the fixed commit.
 - `docs/DEVELOPMENT.md` documents build/test/release and was verified by
   cloning the repo fresh and running every command (that check caught two
   strict-mode test issues, fixed).
