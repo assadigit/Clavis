@@ -1409,22 +1409,17 @@ func (s *Store) groupMembersLocked(groupID string) ([]Member, error) {
 	return out, nil
 }
 
-// Copy implements §5.2: item value exactly; group as KEY=value lines.
+// Copy prepares the §5.2 clipboard payload — item value exactly; group as
+// KEY=value lines. It does NOT record use: the counter moves only after the
+// caller's clipboard write succeeded (MarkUsed) — counting intent alone
+// inflated the "most used" ranking for copies that never landed.
 func (s *Store) Copy(kind EntryKind, id string) (CopyResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := NowISO(s.now())
 	if kind == KindItem {
 		item := s.findItem(id)
 		if item == nil || item.DeletedAt != nil {
 			return CopyResult{}, notFound("Item", id)
-		}
-		if !s.readOnly {
-			item.UseCount++
-			item.LastUsedAt = &now
-			if err := s.saveLocked(kindDaily); err != nil {
-				return CopyResult{}, err
-			}
 		}
 		return CopyResult{Text: item.Value, LineCount: 1, ContainsSecret: item.IsSecret}, nil
 	}
@@ -1444,14 +1439,37 @@ func (s *Store) Copy(kind EntryKind, id string) (CopyResult, error) {
 			break
 		}
 	}
-	if !s.readOnly {
+	return CopyResult{Text: block, LineCount: len(members), ContainsSecret: containsSecret}, nil
+}
+
+// MarkUsed records one successful use (useCount + lastUsedAt + daily save).
+// It runs AFTER the clipboard write, so it is best-effort by design: a
+// stats-save failure must never fail a payload the user already has on the
+// clipboard (the caller ignores the error). Missing or deleted entries (a
+// delete can race the write) and read-only stores are silent no-ops.
+func (s *Store) MarkUsed(kind EntryKind, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.readOnly {
+		return nil
+	}
+	now := NowISO(s.now())
+	if kind == KindItem {
+		item := s.findItem(id)
+		if item == nil || item.DeletedAt != nil {
+			return nil
+		}
+		item.UseCount++
+		item.LastUsedAt = &now
+	} else {
+		group := s.findGroup(id)
+		if group == nil || group.DeletedAt != nil {
+			return nil
+		}
 		group.UseCount++
 		group.LastUsedAt = &now
-		if err := s.saveLocked(kindDaily); err != nil {
-			return CopyResult{}, err
-		}
 	}
-	return CopyResult{Text: block, LineCount: len(members), ContainsSecret: containsSecret}, nil
+	return s.saveLocked(kindDaily)
 }
 
 func membersToPairs(members []Member) []exchange.Member {

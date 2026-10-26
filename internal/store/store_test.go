@@ -547,10 +547,21 @@ func TestCopyItemAndGroup(t *testing.T) {
 	if res.Text != "plain" || res.LineCount != 1 || !res.ContainsSecret {
 		t.Errorf("Copy item mismatch (lineCount=%d secret=%v)", res.LineCount, res.ContainsSecret)
 	}
+	/* Copy only prepares the payload — the counter moves on MarkUsed,
+	   after the caller's clipboard write succeeded (never on intent). */
 	st := f.s.State()
 	for _, it := range st.Data.Items {
+		if it.ID == a.ID && (it.UseCount != 0 || it.LastUsedAt != nil) {
+			t.Error("Copy alone must not increment useCount or set lastUsedAt")
+		}
+	}
+	if err := f.s.MarkUsed(KindItem, a.ID); err != nil {
+		t.Fatalf("MarkUsed item: %v", err)
+	}
+	st = f.s.State()
+	for _, it := range st.Data.Items {
 		if it.ID == a.ID && (it.UseCount != 1 || it.LastUsedAt == nil) {
-			t.Error("copy should increment useCount and set lastUsedAt")
+			t.Error("MarkUsed should increment useCount and set lastUsedAt")
 		}
 	}
 
@@ -564,6 +575,42 @@ func TestCopyItemAndGroup(t *testing.T) {
 	}
 	if res.LineCount != 2 {
 		t.Errorf("lineCount = %d, want 2", res.LineCount)
+	}
+	if err := f.s.MarkUsed(KindGroup, g.ID); err != nil {
+		t.Fatalf("MarkUsed group: %v", err)
+	}
+	st = f.s.State()
+	for _, gr := range st.Data.Groups {
+		if gr.ID == g.ID && (gr.UseCount != 1 || gr.LastUsedAt == nil) {
+			t.Error("MarkUsed group should increment useCount and set lastUsedAt")
+		}
+	}
+}
+
+// TestMarkUsedEdgeCases pins MarkUsed's best-effort contract: missing or
+// deleted entries (a delete can race the clipboard write) are silent no-ops.
+func TestMarkUsedEdgeCases(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "A", "v")
+
+	if err := f.s.MarkUsed(KindItem, "missing"); err != nil {
+		t.Fatalf("MarkUsed missing item must be a no-op, got %v", err)
+	}
+	if err := f.s.MarkUsed(KindGroup, "missing"); err != nil {
+		t.Fatalf("MarkUsed missing group must be a no-op, got %v", err)
+	}
+
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if err := f.s.MarkUsed(KindItem, a.ID); err != nil {
+		t.Fatalf("MarkUsed deleted item must be a no-op, got %v", err)
+	}
+	st := f.s.State()
+	for _, it := range st.Data.Items {
+		if it.ID == a.ID && it.UseCount != 0 {
+			t.Error("MarkUsed must not touch a deleted item's use stats")
+		}
 	}
 }
 

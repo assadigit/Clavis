@@ -446,7 +446,9 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 		}
 	case "copy":
 		{
-			result, err := s.Store.Copy(store.EntryKind(getStr(p, "kind")), getStr(p, "id"))
+			kind := store.EntryKind(getStr(p, "kind"))
+			id := getStr(p, "id")
+			result, err := s.Store.Copy(kind, id)
 			if err != nil {
 				return FailErr(err)
 			}
@@ -455,6 +457,13 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			// matter which window asked — and the value itself never crosses
 			// to the webview. The response carries metadata only.
 			copied := s.writeToClipboard(result.Text, result.ContainsSecret)
+			// The used counter tracks successful copies only: a failed
+			// clipboard write must not bump useCount/lastUsedAt. MarkUsed is
+			// deliberately best-effort AFTER a successful write — a stats
+			// save failure must not fail a payload already on the clipboard.
+			if copied {
+				_ = s.Store.MarkUsed(kind, id)
+			}
 			return s.done(map[string]any{
 				"copied":         copied,
 				"lineCount":      result.LineCount,

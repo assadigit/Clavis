@@ -207,10 +207,90 @@ func TestCopyActionClipboardFailureIsReported(t *testing.T) {
 	id := mustCreateItem(t, s, "Token", "value", true)
 	res := dispatchJSON(t, s, "copy", `{"kind":"item","id":"`+id+`"}`)
 	if res["ok"] != true {
-		t.Fatalf("copy should still be ok (the store update succeeded): %v", res)
+		t.Fatalf("copy should still be ok (entry found, payload prepared): %v", res)
 	}
 	if res["copied"] != false {
 		t.Fatalf("failed clipboard write must report copied=false, got %v", res["copied"])
+	}
+}
+
+// useCountOf reads an item's useCount out of a dispatch response's state map.
+func useCountOf(t *testing.T, res map[string]any, id string) float64 {
+	t.Helper()
+	st, _ := res["state"].(map[string]any)
+	data, _ := st["data"].(map[string]any)
+	items, _ := data["items"].([]any)
+	for _, x := range items {
+		it, _ := x.(map[string]any)
+		if it["id"] == id {
+			n, _ := it["useCount"].(float64)
+			return n
+		}
+	}
+	t.Fatalf("item %q not found in response state", id)
+	return 0
+}
+
+// groupUseCountOf reads a group's useCount out of a dispatch response.
+func groupUseCountOf(t *testing.T, res map[string]any, id string) float64 {
+	t.Helper()
+	st, _ := res["state"].(map[string]any)
+	data, _ := st["data"].(map[string]any)
+	groups, _ := data["groups"].([]any)
+	for _, x := range groups {
+		g, _ := x.(map[string]any)
+		if g["id"] == id {
+			n, _ := g["useCount"].(float64)
+			return n
+		}
+	}
+	t.Fatalf("group %q not found in response state", id)
+	return 0
+}
+
+// TestCopyActionMarksUsedOnlyOnClipboardSuccess pins the used-counter fix:
+// useCount/lastUsedAt track SUCCESSFUL copies, not intents — a failed
+// clipboard write must leave them untouched, a successful one bumps exactly
+// once, and the refreshed response state reflects it.
+func TestCopyActionMarksUsedOnlyOnClipboardSuccess(t *testing.T) {
+	s, _ := recordingService(t, true) // clipboard writes fail
+	id := mustCreateItem(t, s, "Token", "value", true)
+	gid := mustCreateGroup(t, s, "g", id)
+
+	res := dispatchJSON(t, s, "copy", `{"kind":"item","id":"`+id+`"}`)
+	if res["copied"] != false {
+		t.Fatalf("failed write must report copied=false, got %v", res["copied"])
+	}
+	if n := useCountOf(t, res, id); n != 0 {
+		t.Fatalf("failed clipboard write bumped useCount to %v, want 0", n)
+	}
+	for _, it := range s.Store.State().Data.Items {
+		if it.ID == id && (it.UseCount != 0 || it.LastUsedAt != nil) {
+			t.Fatal("failed clipboard write must not touch the store's use stats")
+		}
+	}
+
+	res = dispatchJSON(t, s, "copy", `{"kind":"group","id":"`+gid+`"}`)
+	if res["copied"] != false {
+		t.Fatalf("failed group write must report copied=false, got %v", res["copied"])
+	}
+	if n := groupUseCountOf(t, res, gid); n != 0 {
+		t.Fatalf("failed group write bumped useCount to %v, want 0", n)
+	}
+
+	ok, _ := recordingService(t, false) // clipboard writes succeed
+	oid := mustCreateItem(t, ok, "Token", "value", true)
+	res = dispatchJSON(t, ok, "copy", `{"kind":"item","id":"`+oid+`"}`)
+	if res["copied"] != true {
+		t.Fatalf("copy failed: %v", res["error"])
+	}
+	if n := useCountOf(t, res, oid); n != 1 {
+		t.Fatalf("successful copy useCount = %v, want 1", n)
+	}
+	for _, it := range ok.Store.State().Data.Items {
+		if it.ID == oid && (it.UseCount != 1 || it.LastUsedAt == nil) {
+			t.Fatal("successful copy must set useCount=1 and lastUsedAt")
+		}
 	}
 }
 
