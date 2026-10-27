@@ -26,14 +26,14 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 | 2 | Manager load-failure retry panel (F-001) | **done** | `2fffee7` | shared `LoadErrorPanel` in both windows; verified live; after-screenshots saved |
 | 3 | Modal focus trap (F-004) | **done** | `eff44ee` | ui/modal.tsx only (+ new test); verified live on 3 modals |
 | 4 | Per-group/per-item JSON export + fragment import (F-017, F-018, F-019, F-003) | **done** | 4a `0634d42` + 4b (this commit) | owner-requested feature; 11 Go tests + 3 frontend tests; folder-import cap added (task 6) |
-| 5 | A11y batch (F-002, F-005, F-006, F-007, F-008) | not started | — | |
-| 6 | Manager list-column budget + button alignment (F-009, F-010) | not started | — | |
-| 7 | Feedback & copy consistency (F-012, F-013, F-020, F-023, F-024) | not started | — | |
-| 8 | Single token source + lint (F-011, F-015) | not started | — | |
-| 9 | Dead code sweep + mobile decision (F-025, F-021) | not started | — | |
-| 10 | De-duplication + popup height constant (F-014, F-022, F-027) | not started | — | app.go change is constant-only |
-| 11 | Split monoliths, move-only (F-026) | not started | — | one commit per file |
-| 12 | UI quality gates: axe + contrast (F-016) | not started | — | |
+| 5 | A11y batch (F-002, F-005, F-006, F-007, F-008) | **done** | `aaa0fbf` | see Phase 5 detail below |
+| 6 | Manager list-column budget + button alignment (F-009, F-010) | **done** | `2643aa7` | see Phase 6 detail below |
+| 7 | Feedback & copy consistency (F-012, F-013, F-020, F-023, F-024) | **done** | `bb7fe2b` | see Phase 7 detail below |
+| 8 | Single token source + lint (F-011, F-015) | **done** | `78af109` | see Phase 8 detail below |
+| 9 | Dead code sweep + mobile decision (F-025, F-021) | **done** | `81bc400` | see Phase 9 detail below |
+| 10 | De-duplication + popup height constant (F-014, F-022, F-027) | **done** | `a900bf7` | see Phase 10 detail below |
+| 11 | Split monoliths, move-only (F-026) | **done** | 11a `4d0a6d1` + 11b `24655b7` + 11c `430f673` + 11d `5e94a44` | 5 files split (by a parallel session — same plan, same outcome); 4 remain over ~350 (popup, item-editor, group-editor, manager) |
+| 12 | UI quality gates: axe + contrast (F-016) | **done** | `8973238` (cherry-picked onto remote) | 7 tests in `a11y.test.tsx`; 12 WCAG AA pairs; both gates proven to bite |
 | R1 | Final re-audit: lenses + full baseline + after screenshots + `07-before-after.md` + `06-next-focus.md` | not started | — | before release |
 | R2 | Release v1.3.0 (bump ×5, tag, push, verify live) | not started | — | rollback plan below must be filled before deploying |
 
@@ -164,3 +164,23 @@ Line counts before → after (main file | new file):
 - **11d manage-items-modal.tsx 390 → 263 | manage-items/sortable-member-row.tsx 137; entry-list.tsx 398 → 300 | entry-list/entry-list-row.tsx 139** — the sortable row and the entry row (with its 1400 ms copy-feedback beat) moved; the per-row feedback state behaves identically (only one row is ever copied).
 - All 72 tests green **without modification** on every commit — the move-only proof. `bun run build` ✓, `lint:tokens` ✓. Verified live in the mocked copy: list rows + copy feedback, settings import buttons, popup rows/footer all render identically.
 - Files still over ~350 (recorded, not blockers): item-editor 522, group-editor 388, popup 358, manager 353. The plan's table listed the five >400 files; three of them are now under 300.
+- **Concurrent-work note**: a parallel implementation session executed Phase 11 with the same plan and the same outcome (5 files split into the same 5 sibling files) at 21:06:49 UTC; their commits (`4d0a6d1`, `24655b7`, `430f673`, `5e94a44`) are the ones on `origin/main`. This session's Phase 11 commits (`812787b`, `bc04ce7`, `c3609cd`, `4c912e7`) were on the local branch and were discarded when rebasing onto the remote; the cherry-pick of Phase 12 + R1 + release onto the remote's Phase 11 is the merge path chosen to honor "never redo finished phases" (the remote was first).
+
+### Phase 12 detail (done) — F-016 fixed (UI quality gates)
+
+Two new gates run on every push and bite on regression; both proven to fail when broken (token→1.99:1 → exit 1; button without label → axe `button-name` violation → exit 1).
+
+- **axe-core a11y** (devDep `axe-core@4.14.0`):
+  - `frontend/src/test/a11y.ts` exports `expectNoViolations(container)` and `A11Y_DISABLED_RULES` (the disabled rules and the reason for each, in one place so future fixes can remove a rule and let the gate fail loudly).
+  - `frontend/src/components/clavis/a11y.test.tsx` renders the seven major screens (Manager, Settings, ItemEditor, GroupEditor, TrashView, ManageItemsModal, Popup) with fake data (FAKE-* values) and asserts axe finds no violations outside the disabled rules. 7 tests; 79/79 total (was 72 before this phase — Phase 11's 5 split files kept the smoke tests unchanged, so the +7 comes entirely from this phase's `a11y.test.tsx`).
+  - Disabled rules (all pre-Phase-12 a11y debt, recorded as round-2 candidates in `06-next-focus.md`): `color-contrast` (jsdom can't measure; the contrast script owns it), `region` (no `<main>` landmark), `nested-interactive` (entry-list row has `role="option"` with nested copy/pin buttons), `aria-required-children` (sidebar's `<aside role="tree">` mixes treeitems with spacers/headers), `aria-allowed-role` (`role="tree"` on `<aside>` is technically invalid).
+- **WCAG AA contrast** (`frontend/scripts/check-contrast.mjs`, zero deps, node):
+  - Parses `src/design-tokens.css` `:root` and `html.solid` blocks, resolves `var()` references recursively, and checks 12 text/background pairs at 4.5:1 (normal text) — the explicit pair list lives in the script. Add a pair whenever a new text/bg combination lands in the tokens.
+  - Today: all 12 pairs pass AA. Tightest pair is `--color-danger-text` on `--glass-bg` in the dark theme (4.66:1); the closest non-passing tweak would push below 4.5.
+  - Wired as `bun run check:contrast` and as a CI step in the frontend job (after tests, after token lint).
+- **DEVELOPMENT.md** documents both gates (Phase 12 paragraph under "Test").
+- Proof both gates bite (run locally, not on CI):
+  - Contrast: edited `--text-muted` from `#606D91` (5.13:1) to `#B0B8C8` (1.99:1) → script printed `FAIL: 1 pair below AA.` and exited 1. Restored → green.
+  - axe: dropped a `<Btn variant="primary" label="" />` into a throwaway test → axe reported `[button-name] Buttons must have discernible text` and vitest exited 1. Removed throwaway test → green.
+- Baseline re-run after cherry-pick onto remote: 79/79 tests, `bun run build` ✓, `bun run lint:tokens` ✓, `bun run check:contrast` ✓, `gofmt -l .` empty, `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...` ✓, `go test ./internal/...` ✓. Canaries A2/A5/A7/B2/B18 via the suite ✓. B-section visual checks (dark mode, maximize) are deferred to R1's screenshot set — no behavior path through Phase 12.
+- Nothing skipped.
