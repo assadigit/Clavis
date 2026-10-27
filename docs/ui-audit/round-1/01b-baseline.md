@@ -106,3 +106,15 @@ Legend: ✅ works · ⚠️ works with problems (see 02-findings) · ❌ broken 
 5. Self-update chain end-to-end (needs Windows; previously verified live per BUILD_LOG/DECISIONS).
 6. High-DPI/multi-monitor popup placement for real (needs Windows; math is unit-tested).
 7. The resolve-conflicts import modal with real parsed data (needs the real Go parser to produce conflicts).
+
+---
+
+## Appendix — how to reproduce this evidence (for the implementation session)
+
+The 34 before-screenshots must pair with after-screenshots of the **same screens, same sizes, same fake data**. Reproduce the environment like this:
+
+1. **Real error states** (popup-loaderror, manager-loaderror): run the repo's own frontend with no backend — `cd frontend && bun install && bun run dev` (defaults to port 5173), open `/popup.html` and `/manager.html` in a browser. The Wails runtime rejects every call in a plain browser, which triggers the genuine error UI. Screenshot widths: popup 640, manager 1280.
+2. **Populated states** (everything else): make a *copy* of `frontend/` outside the repo, add a `mock-runtime.ts` that exports `Call.ByName` + `Events.On` and serves a fake `ClavisState` (the audit used 9 items + 3 groups with values like `FAKE-GITHUB-TOKEN-1234567890abcdef`, categories Work/Personal, 3 backups; fake values only — never real secrets), alias `"@wailsio/runtime"` to it in the copy's `vite.config.ts`, run `bun run dev` there. Drive states with browser automation (the audit used agent-browser: fill the search, press Enter/ArrowRight, screenshot). Special states were toggled by a `window.__clavisMock` helper (empty / rich / readOnly / recovered modes persisted in localStorage) and an "Open Clavis"-style theme class (`document.documentElement.classList.add('solid')`) for dark mode. The popup's 500 ms auto-hide after copy was frozen (`window.setTimeout` wrapper) to capture the "Copied" state.
+3. **Viewport sizes used**: popup 640×760 (production popup width; window auto-grows to content — a short viewport clips the footer), manager 1280×800 (default-ish), 800×520 (min), 768×520 and 375×640 (unreachable in production — documents the dead mobile layout). File names encode the width; keep them identical for the after set.
+4. **Popup detail**: the popup page auto-opens in a visible browser tab (`popup-root.tsx:88-89` uses document visibility), so no extra trigger is needed.
+5. **CI note**: the "go test (incl. the real Win32 clipboard e2e)" step has flaked on windows-latest before (run 40323427941 failed on commit 8edcecc while run 40323429795 passed on the same commit — clipboard contention on shared runners). A red clipboard e2e on an otherwise-green run is usually a flake: re-run the job before diagnosing.
