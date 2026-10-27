@@ -5,8 +5,8 @@
  */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ClipboardCopy, Key, Layers, Link2, MoreHorizontal, Pin, Plus, Search, Upload } from "lucide-react";
+import { useMemo, useRef } from "react";
+import { Key, Layers, MoreHorizontal, Plus, Search, Upload } from "lucide-react";
 import type { ListFilter, Selection } from "./app-types";
 import {
   categoryName,
@@ -19,6 +19,7 @@ import {
 } from "./derive";
 import { EntryTile, Ix } from "./icons";
 import { Btn, Menu, MenuItem, SearchField } from "./ui-bits";
+import { EntryListRow, type EntryRowData } from "./entry-list/entry-list-row";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
 
@@ -38,16 +39,7 @@ export interface EntryListProps {
   togglePin: (kind: "item" | "group", id: string, pinned: boolean) => void;
 }
 
-interface ListRow {
-  kind: "item" | "group";
-  id: string;
-  name: string;
-  meta: string;
-  isSecret: boolean;
-  pinned: boolean;
-  shared: number;
-  memberCount?: number;
-}
+type ListRow = EntryRowData;
 
 export function EntryList({
   state,
@@ -64,13 +56,6 @@ export function EntryList({
 }: EntryListProps) {
   const data = state.data;
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
-  /* Row-level copy feedback: which row copied, and when (for the check icon). */
-  const [copiedRow, setCopiedRow] = useState<string | null>(null);
-  useEffect(() => {
-    if (copiedRow === null) return;
-    const t = window.setTimeout(() => setCopiedRow(null), 1400);
-    return () => window.clearTimeout(t);
-  }, [copiedRow]);
 
   const entries = useMemo(() => buildSearchEntries(data), [data]);
 
@@ -153,103 +138,6 @@ export function EntryList({
     onSelect({ kind: row.kind, id: row.id });
     rowRefs.current[next]?.focus();
   }
-
-  const renderRow = (row: ListRow, i: number) => {
-    const selected = selection !== null && selection.kind === row.kind && selection.id === row.id;
-    const rowKey = `${row.kind}:${row.id}`;
-    const isCopied = copiedRow === rowKey;
-    return (
-      <div
-        key={rowKey}
-        ref={(el) => {
-          rowRefs.current[i] = el;
-        }}
-        id={`clavis-list-row-${i}`}
-        role="option"
-        aria-selected={selected}
-        tabIndex={-1}
-        data-selected={selected ? "true" : "false"}
-        className="glass-row clavis-focusable flex cursor-pointer items-center"
-        style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)", minHeight: "calc(var(--space-4) + var(--space-4))", borderRadius: 0 }}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => {
-          onSelect({ kind: row.kind, id: row.id });
-          rowRefs.current[i]?.focus();
-        }}
-      >
-        <EntryTile kind={row.kind} isSecret={row.isSecret} />
-        <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)" }}>
-          <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>
-            {row.name}
-          </span>
-          {row.meta !== "" ? (
-            <span className="truncate t-muted" style={{ fontSize: "var(--text-xs)" }}>
-              {row.meta}
-            </span>
-          ) : null}
-        </span>
-        {row.shared > 0 ? (
-          <span
-            className="flex items-center t-muted"
-            style={{ gap: "calc(var(--space-1) / 2)", fontSize: "var(--text-xs)", flexShrink: 0 }}
-            title={`Used in ${row.shared} groups`}
-          >
-            <Ix icon={Link2} size="sm" />
-            {row.shared}
-          </span>
-        ) : null}
-        {row.kind === "group" ? (
-          <span className="t-muted" style={{ fontSize: "var(--text-xs)", flexShrink: 0 }}>
-            {row.memberCount} items
-          </span>
-        ) : null}
-        {/* Instant copy — one click, no round-trip through the editor. */}
-        <button
-          type="button"
-          className="clavis-btn clavis-btn-ghost clavis-focusable clavis-row-action"
-          aria-label={isCopied ? `Copied ${row.name}` : `Copy ${row.name}${row.kind === "group" ? " (whole block)" : ""}`}
-          title={row.kind === "group" ? "Copy the whole KEY=value block" : "Copy to clipboard instantly"}
-          style={{
-            padding: "var(--space-1)",
-            color: isCopied ? "var(--color-success-text)" : undefined,
-            flexShrink: 0,
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isCopied) return;
-            void copyEntry(row.kind, row.id).then((ok) => {
-              if (ok) setCopiedRow(rowKey);
-            });
-          }}
-        >
-          <Ix icon={isCopied ? Check : ClipboardCopy} size="sm" />
-        </button>
-        {/* Pin toggle — always visible, accent when pinned (SPEC §5.1 ranking). */}
-        <button
-          type="button"
-          className="clavis-btn clavis-btn-ghost clavis-focusable clavis-row-action"
-          role="switch"
-          aria-checked={row.pinned}
-          aria-label={`${row.pinned ? "Unpin" : "Pin"} ${row.name}`}
-          title={row.pinned ? "Unpin — stop showing first" : "Pin — show first"}
-          disabled={readOnly}
-          style={{
-            padding: "var(--space-1)",
-            flexShrink: 0,
-            color: row.pinned ? "var(--color-accent-text)" : "var(--text-muted)",
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            togglePin(row.kind, row.id, !row.pinned);
-          }}
-        >
-          <Ix icon={Pin} size="sm" />
-        </button>
-      </div>
-    );
-  };
 
   return (
     <section
@@ -380,7 +268,21 @@ export function EntryList({
             }
           }}
         >
-          {results.map(renderRow)}
+          {results.map((row, i) => (
+            <EntryListRow
+              key={`${row.kind}:${row.id}`}
+              row={row}
+              index={i}
+              selected={selection !== null && selection.kind === row.kind && selection.id === row.id}
+              readOnly={readOnly}
+              registerRef={(el) => {
+                rowRefs.current[i] = el;
+              }}
+              onSelect={onSelect}
+              copyEntry={copyEntry}
+              togglePin={togglePin}
+            />
+          ))}
           {results.length === 0 ? (
             <div className="flex items-center" style={{ gap: "var(--space-2)", padding: "var(--space-3)" }}>
               <Ix icon={Search} size="sm" />
