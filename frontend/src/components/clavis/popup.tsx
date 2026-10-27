@@ -11,31 +11,17 @@
  */
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AppWindow, Check, ChevronLeft, ClipboardCopy, Layers, Search } from "lucide-react";
+import { AppWindow, ChevronLeft, Layers } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
-import { buildSearchEntries, compareEntries, compareRecent, searchEntries } from "@/lib/clavis/search";
-import type { SearchEntry } from "@/lib/clavis/search";
+import { buildSearchEntries, compareRecent } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
 import { messages } from "@/lib/clavis/messages";
 import type { Selection } from "./app-types";
-import { groupById, groupMemberKeys, liveGroups, liveItems, metaLine, rowPreview } from "./derive";
-import { EntryTypeIcon, Ix } from "./icons";
-
-interface PopupRow {
-  kind: "item" | "group";
-  id: string;
-  name: string;
-  meta: string;
-  isSecret: boolean;
-  preview: string;
-}
-
-const rowKeyOf = (row: PopupRow) => `${row.kind}:${row.id}`;
-
-/** How many rows the default (empty-query) list shows. */
-const RECENT_LIMIT = 10;
+import { groupById, liveGroups, liveItems } from "./derive";
+import { Ix } from "./icons";
+import { PopupRows, RECENT_LIMIT, rowKeyOf, useMemberRows, useTopRows, type CopiedState } from "./popup/rows";
 
 /** The drill-down view has no section headers. */
 const NO_HEADERS = new Map<number, string>();
@@ -60,7 +46,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
   const [sel, setSel] = useState(0);
   const [drillId, setDrillId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState<{ rowKey: string; label: string } | null>(null);
+  const [copied, setCopied] = useState<CopiedState>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   /* Copy feedback always clears itself, even if the hide is cancelled —
@@ -83,42 +69,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
     [state.data.groups]
   );
 
-  const topRows: PopupRow[] = useMemo(() => {
-    const results = searchEntries(query, entries);
-    let list: SearchEntry[];
-    if (query.trim() === "") {
-      /* §5.1: the 10 most recently used/copied entries (items AND groups),
-         then pinned/most-used fill so the palette is never sparse. */
-      const recent = results
-        .filter((e) => e.lastUsedAt > 0)
-        .sort(compareRecent)
-        .slice(0, RECENT_LIMIT);
-      const seen = new Set(recent.map((e) => `${e.kind}:${e.id}`));
-      const fill = results
-        .filter((e) => !seen.has(`${e.kind}:${e.id}`))
-        .sort(compareEntries)
-        .slice(0, Math.max(0, RECENT_LIMIT - recent.length));
-      list = [...recent, ...fill];
-    } else {
-      list = results;
-    }
-    return list.map((e) => {
-      if (e.kind === "group") {
-        const g = groupMap.get(e.id);
-        const count = g ? g.itemIds.filter((id) => itemMap.has(id)).length : 0;
-        return { kind: "group" as const, id: e.id, name: e.name, meta: metaLine(e.categoryName, e.tags), isSecret: false, preview: `${count} items` };
-      }
-      const it = itemMap.get(e.id);
-      return {
-        kind: "item" as const,
-        id: e.id,
-        name: e.name,
-        meta: metaLine(e.categoryName, e.tags),
-        isSecret: it?.isSecret ?? false,
-        preview: rowPreview({ isSecret: it?.isSecret ?? false, valueLast4: it?.valueLast4 }),
-      };
-    });
-  }, [query, entries, itemMap, groupMap]);
+  const topRows = useTopRows(query, entries, itemMap, groupMap);
 
   /* Section labels for the default list: "Recent" over the recent block,
      "Pinned & frequent" over the fill. Headers are presentation-only —
@@ -140,26 +91,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
 
   const drillGroup = drillId ? groupById(state.data, drillId) : null;
 
-  const memberRows: PopupRow[] = useMemo(() => {
-    if (!drillGroup) return [];
-    const memberEntries = entries.filter(
-      (e) => e.kind === "item" && drillGroup.itemIds.includes(e.id)
-    );
-    const results = searchEntries(query, memberEntries);
-    const keyed = groupMemberKeys(drillGroup, state.data);
-    const keyById = new Map(keyed.map((m) => [m.item.id, m.key]));
-    return results.map((e) => {
-      const it = itemMap.get(e.id);
-      return {
-        kind: "item" as const,
-        id: e.id,
-        name: e.name,
-        meta: keyById.get(e.id) ?? it?.key ?? "",
-        isSecret: it?.isSecret ?? false,
-        preview: rowPreview({ isSecret: it?.isSecret ?? false, valueLast4: it?.valueLast4 }),
-      };
-    });
-  }, [drillGroup, query, entries, itemMap, state.data]);
+  const memberRows = useMemberRows(drillGroup, query, entries, itemMap, state.data);
 
   const rows = drillGroup ? memberRows : topRows;
   const headers = drillGroup ? NO_HEADERS : topHeaders;
@@ -289,67 +221,6 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
 
   if (!open) return null;
 
-  const renderRow = (row: PopupRow, i: number) => {
-    const key = rowKeyOf(row);
-    const isCopied = copied?.rowKey === key;
-    if (isCopied) {
-      return (
-        <div
-          key={key}
-          role="option"
-          aria-selected="true"
-          data-selected="true"
-          className="glass-row flex items-center justify-center clavis-copied"
-          style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)" }}
-        >
-          <Ix icon={Check} size="md" />
-          <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>{copied?.label}</span>
-        </div>
-      );
-    }
-    return (
-      <div
-        key={key}
-        id={`clavis-pop-row-${i}`}
-        role="option"
-        aria-selected={i === selIdx}
-        data-selected={i === selIdx ? "true" : "false"}
-        className="glass-row flex cursor-pointer items-center"
-        style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)" }}
-        onMouseEnter={() => setSel(i)}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => activate(i)}
-      >
-        <EntryTypeIcon kind={row.kind} isSecret={row.isSecret} size="md" />
-        <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)" }}>
-          <span
-            className="truncate"
-            style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}
-          >
-            {row.name}
-          </span>
-          {row.meta !== "" ? (
-            <span className="truncate t-muted" style={{ fontSize: "var(--text-xs)" }}>
-              {row.meta}
-            </span>
-          ) : null}
-        </span>
-        <span
-          className="t-mono t-muted truncate"
-          dir="auto"
-          style={{ fontSize: "var(--text-xs)", maxWidth: "calc(var(--space-6) * 8)" }}
-        >
-          {row.preview}
-        </span>
-        <Ix
-          icon={ClipboardCopy}
-          size="sm"
-          style={{ color: i === selIdx ? "var(--color-accent-text)" : "var(--text-muted)" }}
-        />
-      </div>
-    );
-  };
-
   return (
     <div
       className={fill ? "clavis-desk-popup fixed inset-0" : "fixed inset-0 flex justify-center"}
@@ -431,58 +302,18 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 }}
               />
             </div>
-            <div
-              id="clavis-popup-list"
-              role="listbox"
-              aria-label="Results"
-              className="clavis-popup-rows clavis-scroll flex flex-col"
-              style={{ gap: "var(--space-1)", padding: "0 var(--space-2) var(--space-2)" }}
-            >
-              {rows.map((row, i) => (
-                <Fragment key={rowKeyOf(row)}>
-                  {headers.get(i) ? (
-                    <div className="clavis-pop-header" role="presentation">
-                      {headers.get(i)}
-                    </div>
-                  ) : null}
-                  {renderRow(row, i)}
-                </Fragment>
-              ))}
-              {rows.length === 0 ? (
-                noData ? (
-                  <button
-                    type="button"
-                    className="glass-row flex items-center"
-                    style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)", cursor: "pointer" }}
-                    onClick={() => onOpenManagerNewItem()}
-                  >
-                    <Ix icon={Search} size="md" style={{ color: "var(--color-accent-text)" }} />
-                    <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
-                      Nothing here yet. Press Ctrl+N to add your first item.
-                    </span>
-                  </button>
-                ) : drillGroup ? (
-                  <div className="flex items-center" style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)" }}>
-                    <Ix icon={Search} size="md" />
-                    <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
-                      Nothing found.
-                    </span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="glass-row flex items-center"
-                    style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)", cursor: "pointer" }}
-                    onClick={() => onOpenManagerNewItem(query.trim())}
-                  >
-                    <Ix icon={Search} size="md" style={{ color: "var(--color-accent-text)" }} />
-                    <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
-                      Nothing found. Press Enter to create “{query.trim()}”.
-                    </span>
-                  </button>
-                )
-              ) : null}
-            </div>
+            <PopupRows
+              rows={rows}
+              headers={headers}
+              selIdx={selIdx}
+              copied={copied}
+              noData={noData}
+              inGroup={drillGroup !== null}
+              query={query}
+              onHover={setSel}
+              onActivate={activate}
+              onCreateItem={onOpenManagerNewItem}
+            />
             <footer
               className="flex items-center"
               style={{
