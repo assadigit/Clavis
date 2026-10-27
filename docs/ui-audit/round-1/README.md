@@ -31,7 +31,8 @@ In January 2026 a full UI/UX audit of Clavis was performed: every screen was exa
 | `01b-baseline.md` | The "what works today" checklist — re-run after every upgrade phase |
 | `02-findings.md` | All 28 findings with evidence, severity, file:line, fix direction, and verification recipes |
 | `03-diagnosis.md` | The 8 root causes behind the findings + the must-not-break list |
-| `04-fix-plan.md` | The phased plan (12 phases + final re-audit + release) |
+| `04-fix-plan.md` | The phased plan (12 phases + final re-audit + release) — what, why, in what order |
+| `04b-implementation-plan.md` | The code-level companion to the plan — exact files, data shapes, signatures, and test matrices per phase |
 | `05-session2-prompt.md` | **The ready-to-paste prompt for the next session** |
 | `PROGRESS.md` | The upgrade tracker (all phases "not started"; rollback plan to be filled before release) |
 | `06-next-focus.md` | *Written at the end of the implementation session* — what round 2 should focus on |

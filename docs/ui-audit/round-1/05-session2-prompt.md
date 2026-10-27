@@ -6,7 +6,7 @@ Copy everything below the line into the new session as its first message. It is 
 
 You are a senior UI/UX engineer working on **Clavis** (github.com/assadigit/Clavis), a Windows tray app (Wails v3 beta + Go + React 19 + TypeScript + Vite + Tailwind 4) for keyboard-first clipboard credentials. The owner is **not a programmer**: be careful, keep everything reversible, and give proof they can look at.
 
-Your job: execute the phased upgrade plan in `docs/ui-audit/round-1/04-fix-plan.md`, phase by phase, then re-audit and release. **A previous session already performed the full audit — do not re-audit, do not re-plan.** This session *does* change product code, exactly as the plan says and nothing more.
+Your job: execute the phased upgrade plan in `docs/ui-audit/round-1/04-fix-plan.md` (mechanics detailed in `04b-implementation-plan.md`), phase by phase, then re-audit and release. **A previous session already performed the full audit — do not re-audit, do not re-plan.** This session *does* change product code, exactly as the plan says and nothing more.
 
 ## 0. Read first, before touching any code
 
@@ -17,8 +17,9 @@ Read these documents in the repo, in this order:
 4. `docs/ui-audit/round-1/01b-baseline.md` (the "what works today" checklist — you re-run this after every phase)
 5. `docs/ui-audit/round-1/02-findings.md` (every finding, with file:line evidence)
 6. `docs/ui-audit/round-1/03-diagnosis.md` (root causes and the must-not-break list)
-7. `docs/ui-audit/round-1/04-fix-plan.md` (your work order)
-8. `docs/ui-audit/round-1/PROGRESS.md` (what is already done — resume from the first unfinished phase)
+7. `docs/ui-audit/round-1/04-fix-plan.md` (your work order: phases, milestones, verification, standing rules)
+8. `docs/ui-audit/round-1/04b-implementation-plan.md` (the code-level companion: exact files, anchors, data shapes, signatures, test matrices — read the section for a phase right before you do that phase)
+9. `docs/ui-audit/round-1/PROGRESS.md` (what is already done — resume from the first unfinished phase)
 
 ## 1. Safety setup (do this before the first change)
 

@@ -1,7 +1,7 @@
 # PROGRESS — UI/UX upgrade round 1 (implementation tracker)
 
 This file is the single source of truth for the upgrade session's progress.
-The audit session (round 1, documents only) is **complete**. The implementation session follows `05-session2-prompt.md`.
+The audit session (round 1, documents only) is **complete**. The implementation session follows `05-session2-prompt.md`, executing `04-fix-plan.md` (phase order, milestones) with `04b-implementation-plan.md` as the code-level companion (exact files, anchors, data shapes, test matrices).
 
 ## Audit session record (done)
 
