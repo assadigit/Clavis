@@ -24,7 +24,7 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 |---|---|---|---|---|
 | 1 | Screen smoke tests (safety net) | **done** | `15cc4a7` | 6 new vitest files, 19 new tests; `bun run test` 60/60 in 12 files; build green; only `*.test.tsx` touched |
 | 2 | Manager load-failure retry panel (F-001) | **done** | (this commit) | shared `LoadErrorPanel` used by both windows; verified live in browser; after-screenshots saved |
-| 3 | Modal focus trap (F-004) | not started | — | |
+| 3 | Modal focus trap (F-004) | **done** | (this commit) | ui/modal.tsx only (＋ new test); verified live on 3 modals |
 | 4 | Per-group/per-item JSON export + fragment import (F-017, F-018, F-019, F-003) | not started | — | owner-requested feature; two commits allowed (4a Go, 4b UI) |
 | 5 | A11y batch (F-002, F-005, F-006, F-007, F-008) | not started | — | |
 | 6 | Manager list-column budget + button alignment (F-009, F-010) | not started | — | |
@@ -67,3 +67,12 @@ All 28 findings (F-001 … F-028): **open**. Track each one's final status (fixe
 ## Rollback plan
 
 (Fill this in **before** deploying — Phase R2 task 1. What is live, the exact undo steps, the restore tags.)
+
+### Phase 3 detail (done) — F-004 fixed
+
+- Only `ui/modal.tsx` changed (+ new `ui/modal-focus.test.tsx`): on open, focus lands inside the dialog (autoFocus children are respected — the manage-items search input keeps its focus); Tab/Shift+Tab cycle within the panel; any close path (Esc via the untouched esc-stack, scrim, X, Done, parent unmount) restores focus to the opener.
+- Implementation notes (mechanics within the plan's sketch): the opener is captured during the *render* that flips `open` true — an effect runs too late (autoFocus inputs grab focus during commit and the panel would capture itself as its own opener; found live in the browser, then fixed). The visibility filter probes once whether the host has layout (jsdom does not; `offsetParent` is null for everything there) so the trap works in both jsdom and the real browser.
+- Verified live (mocked backend, real browser): category modal (focus starts in the input, 4× Tab inside, Esc → focus back on "Add category"), manage-items modal (autoFocus search keeps focus, 5× Tab + Shift+Tab inside, Done → focus back on "Add item"), import-backup modal (triggered by uploading a fake-fragment JSON; 4× Tab inside, Esc → focus back on "Import backup").
+- Automated: `ui/modal-focus.test.tsx` 4 tests (initial focus, 5-Tab trap, Shift+Tab wrap, Esc restore). Full suite 66/66 in 13 files; `bun run build` ✓.
+- Baseline re-run: B8 ✓ (manage-items modal open/close/remove — smoke test + live), C4 ✓ (import-backup modal live, merge/replace/cancel buttons render), canaries A2/A5/A7 (popup tests) ✓, B2 (manager smoke) ✓, B18 unchanged ✓.
+- Nothing skipped; esc-stack (`ui/dismiss.ts`) untouched as required.
