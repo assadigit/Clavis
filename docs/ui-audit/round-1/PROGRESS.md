@@ -119,7 +119,21 @@ Final (recorded at Phase R1, after every Phase 1–12 + Phase 12 + R1 verificati
 
 ## Rollback plan
 
-(Fill this in **before** deploying — Phase R2 task 1. What is live, the exact undo steps, the restore tags.)
+**Filled in before deploying (Phase R2 task 1) — the plan is to ship v1.3.0 from this session's `main`.**
+
+- **What is live right now**: v1.2.0 (tag `v1.2.0`, commit `8edcecc` on `main`). Users on older versions self-update to it. The in-app self-updater downloads `Clavis-Setup-1.2.0.exe` + `Clavis-Portable-1.2.0.exe` from the v1.2.0 GitHub Release.
+- **What this session ships**: v1.3.0, from commit `<TBD>` (the `release: v1.3.0` commit). Tag `v1.3.0` (annotated, lightweight also accepted by the release workflow) → `.github/workflows/release.yml` builds `Clavis-Setup-1.3.0.exe` + `Clavis-Portable-1.3.0.exe` on `windows-latest` and publishes them to the GitHub Release for that tag. The version guard in `release.yml` checks that the tag, `AppVersion` (app.go), NSIS `VERSION`, `APP_VERSION` (types.ts) and winres `product_version` all agree to `1.3.0`.
+- **Restore tags** (already exist, local + remote, verified at session start):
+  - `pre-ui-audit-round-1` → commit `8edcecc` (the audit session's restore point — v1.2.0, before the audit).
+  - `pre-ui-upgrade-round-1` → commit `e0bf65b` (this upgrade session's restore point — before any product code change; the last commit on `main` that predates Phase 1).
+- **Exact undo steps (if anything fails)**:
+  1. **Diagnose** — read the failed release workflow's logs (`.github/workflows/release.yml` run on the v1.3.0 tag). The version guard, the build, and the asset upload each have their own step; the failure point tells you which to fix.
+  2. **Revert on `main`** — `git revert <release-sha> --no-edit` on `main`; this undoes the `release: v1.3.0` commit (the 5-place version bump). If the bug is in an earlier phase, also revert that phase's commit. Push `main`.
+  3. **Bump to v1.3.1** — even with the revert on `main`, the v1.3.0 GitHub Release already published. Clients that auto-updated to v1.3.0 will need a *forward* update to a fixed version. Bump the 5 places to `1.3.1` (app.go, NSIS, winres, types.ts, new tag `v1.3.1`). Commit `release: v1.3.1` and push the tag. The release workflow ships `Clavis-Setup-1.3.1.exe` + `Clavis-Portable-1.3.1.exe`; clients self-update forward to the fix.
+  4. **(Optional) Delete the bad release's assets** — the v1.3.0 GitHub Release URL stays (releases are append-only), but its assets can be removed via GitHub's UI to prevent further downloads. Never force-push tags.
+  5. **(Restore-to-audit-baseline fallback)** — if reverting is impractical, `git reset --hard pre-ui-upgrade-round-1` in a scratch branch to inspect the audit's pre-upgrade state; the release workflow only fires on tags pushed to `main`, so this scratch branch doesn't ship anything.
+- **Never force-push tags** — the v1.2.0, v1.3.0, v1.3.1 tags are append-only historical record; force-pushing a tag would break the self-update chain for clients that already saw the original tag.
+- **Verification the rollback worked** — the v1.3.1 GitHub Release exists with both assets; the v1.2.0 GitHub Release is untouched; the v1.3.0 GitHub Release either has its assets removed (option 4) or stays with a "known broken, use v1.3.1" note. `main`'s `HEAD` is at the v1.3.1 release commit; `gofmt -l .`, `go vet ./...`, `go test ./...`, `bun run build`, `bun run test` all green at the new HEAD.
 
 ### Phase 5 detail (done) — F-002, F-005, F-006, F-007, F-008 fixed
 

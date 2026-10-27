@@ -88,10 +88,13 @@ Two extra gates run on every push (frontend job):
 
 ## Release
 
-1. Bump the version in **three** places (keep them in sync):
+1. Bump the version in **five** places (keep them in sync — the
+   `.github/workflows/release.yml` version guard checks all five agree
+   before building):
    `AppVersion` in `app.go`, `VERSION` in `build/windows/installer/clavis.nsi`,
-   `file_version`/`product_version` in `build/winres/info.json`, plus
-   `APP_VERSION` in `frontend/src/lib/clavis/types.ts` (four places total).
+   `file_version`/`product_version` in `build/winres/info.json`,
+   `APP_VERSION` in `frontend/src/lib/clavis/types.ts`, and the new
+   `vX.Y.Z` git tag itself. (Four files plus the tag = five.)
 2. Build the portable exe exactly as in "Build" → `dist/Clavis.exe`.
 3. Embed icon/version/manifest (the next `go build` picks the .syso up
    automatically):
