@@ -14,6 +14,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Call } from "@wailsio/runtime";
 import { PopupRoot } from "./popup-root";
+import { LoadErrorPanel } from "./ui-bits";
 import type { ClavisState } from "@/lib/clavis/types";
 
 vi.mock("@wailsio/runtime", () => ({
@@ -107,5 +108,42 @@ describe("Popup first-load failure", () => {
     });
     // The retry failed too — the panel stays (no blank window).
     expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  });
+});
+
+describe("Manager load-failure variant (F-001, Phase 2)", () => {
+  it("the shared panel offers Try again and fires the retry callback", async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    render(
+      <LoadErrorPanel
+        title="Clavis could not load your data"
+        body="The data folder could not be read. Check that it still exists and that Clavis can open it — then try again."
+        onRetry={onRetry}
+      />,
+    );
+    expect(screen.getByText("Clavis could not load your data")).toBeTruthy();
+    const retry = screen.getByRole("button", { name: "Retry loading your data" });
+    expect(retry.textContent).toContain("Try again");
+    await user.click(retry);
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it("the panel itself binds no Esc handler — the caller owns Esc", async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    const onHide = vi.fn();
+    render(
+      <>
+        <LoadErrorPanel title="Clavis could not load your data" body="…" onRetry={onRetry} />
+        <span onKeyDown={onHide} tabIndex={0}>
+          focusable
+        </span>
+      </>,
+    );
+    await user.click(screen.getByRole("button", { name: "Retry loading your data" }));
+    await user.keyboard("{Escape}");
+    /* No window-level Esc handler inside LoadErrorPanel: nothing hides. */
+    expect(onHide).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@
 
 export { useDismiss } from "./ui/dismiss";
 export { Btn, type BtnVariant } from "./ui/buttons";
+export { LoadErrorPanel } from "./ui/load-error";
 export { Menu, MenuItem } from "./ui/menu";
 export { Modal } from "./ui/modal";
 export { Toggle, CheckBox } from "./ui/toggle";

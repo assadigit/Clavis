@@ -23,7 +23,7 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 | Phase | Goal | Status | Commit | Notes |
 |---|---|---|---|---|
 | 1 | Screen smoke tests (safety net) | **done** | `15cc4a7` | 6 new vitest files, 19 new tests; `bun run test` 60/60 in 12 files; build green; only `*.test.tsx` touched |
-| 2 | Manager load-failure retry panel (F-001) | not started | — | |
+| 2 | Manager load-failure retry panel (F-001) | **done** | (this commit) | shared `LoadErrorPanel` used by both windows; verified live in browser; after-screenshots saved |
 | 3 | Modal focus trap (F-004) | not started | — | |
 | 4 | Per-group/per-item JSON export + fragment import (F-017, F-018, F-019, F-003) | not started | — | owner-requested feature; two commits allowed (4a Go, 4b UI) |
 | 5 | A11y batch (F-002, F-005, F-006, F-007, F-008) | not started | — | |
@@ -43,6 +43,14 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 - Pins current behavior, including the two findings that later phases change deliberately: Save-button-hidden-until-dirty (F-020, updated in Phase 7) and the three identical "Restore" accessible names (F-005, updated in Phase 5).
 - Baseline re-run after phase: `bun run build` ✓, `bun run test` 60/60 ✓ (canary coverage: A2/A5/A7 via the popup tests, B2 via the new manager smoke test; B18 dark mode has no rendering-path change in this phase and gets its visual check in R1 screenshots).
 - Nothing skipped.
+
+### Phase 2 detail (done) — F-001 fixed
+
+- New shared component `ui/load-error.tsx` (`LoadErrorPanel`), re-exported from `ui-bits.tsx`; body extracted move-only from `popup-root.tsx`'s `PopupLoadError` (identical panel pixels; popup keeps its own Esc-to-hide effect).
+- `manager-entry.tsx`: the error `FullMessage` dead end is replaced by `LoadErrorPanel` with a `reload` callback that re-runs `fetchState` (loading state "Loading your keys…" untouched; no Esc handler in the manager by design).
+- Tests: `popup-root.test.tsx` extended with the manager variant (2 new tests) — 62/62 green; `bun run build` ✓.
+- Verified live (frontend without backend, real browser): `/popup.html` and `/manager.html` both show the panel with "Try again"; clicking Retry re-attempts and the panel persists on re-failure; console clean apart from the expected Wails browser-environment warning. After-screenshots: `evidence/after/popup-loaderror-640.png`, `evidence/after/manager-loaderror-1280.png` (same names/sizes as the before set, fake data only — no data to leak on an error panel).
+- Baseline re-run: A10 ✓ (popup retry), B14 ✓ (manager now has retry — was the finding), canaries A2/A5/A7 (popup tests) and B2 (manager smoke) ✓, B18 unchanged rendering path ✓.
 
 ## Findings status
 

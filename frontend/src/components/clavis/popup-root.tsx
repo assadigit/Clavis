@@ -17,15 +17,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Toaster } from "sonner";
-import { AlertTriangle, RefreshCw } from "lucide-react";
 import { apiCall, fetchState } from "@/lib/clavis/client";
 import type { ApiResult } from "@/lib/clavis/client";
 import type { ClavisState } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { applyTheme } from "./glass";
 import { Popup } from "./popup";
-import { Btn } from "./ui-bits";
-import { Ix } from "./icons";
+import { LoadErrorPanel } from "./ui-bits";
 import { platform } from "@/desktop/platform";
 
 export function PopupRoot() {
@@ -213,7 +211,8 @@ export function PopupRoot() {
   );
 }
 
-/** The load-failure panel: same glass-panel look, retry + Esc to close. */
+/** The load-failure panel: the shared retry body (ui/load-error.tsx, Phase 2
+ *  of the UI upgrade) plus the popup's own Esc-to-hide behavior. */
 function PopupLoadError({ onRetry, onHide }: { onRetry: () => void; onHide: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -223,24 +222,10 @@ function PopupLoadError({ onRetry, onHide }: { onRetry: () => void; onHide: () =
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onHide]);
   return (
-    <div className="clavis-desk-popup fixed inset-0" role="alertdialog" aria-label="Clavis could not load your data">
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "18vh" }}>
-        <div className="clavis-pop-in relative">
-          <div
-            className="glass-panel relative flex flex-col items-center text-center"
-            style={{ gap: "var(--space-3)", padding: "var(--space-6)", width: "min(560px, calc(100vw - var(--space-6)))" }}
-          >
-            <Ix icon={AlertTriangle} size="md" style={{ color: "var(--color-danger-text)" }} />
-            <span style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>
-              Couldn&apos;t load your Clavis data
-            </span>
-            <span className="t-muted" style={{ fontSize: "var(--text-xs)", lineHeight: 1.5 }}>
-              The data folder could not be read. Check that it still exists and that Clavis can open it — then try again.
-            </span>
-            <Btn variant="primary" icon={RefreshCw} label="Try again" onClick={onRetry} ariaLabel="Retry loading your data" />
-          </div>
-        </div>
-      </div>
-    </div>
+    <LoadErrorPanel
+      title="Couldn&apos;t load your Clavis data"
+      body="The data folder could not be read. Check that it still exists and that Clavis can open it — then try again."
+      onRetry={onRetry}
+    />
   );
 }

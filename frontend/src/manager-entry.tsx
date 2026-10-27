@@ -18,6 +18,7 @@ import type { Creating, ListFilter, Selection } from "@/components/clavis/app-ty
 import { applyTheme } from "@/components/clavis/glass";
 import { Manager } from "@/components/clavis/manager";
 import { Ix } from "@/components/clavis/icons";
+import { LoadErrorPanel } from "@/components/clavis/ui-bits";
 import { platform } from "@/desktop/platform";
 
 import "@fontsource-variable/inter";
@@ -102,6 +103,32 @@ function ManagerRoot() {
   const [maximized, setMaximized] = useState(false);
 
   const stateRef = useRef<ClavisState | null>(null);
+  const aliveRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      aliveRef.current = false;
+    },
+    [],
+  );
+
+  /* ---- load (retryable — the error panel re-runs this, F-001 fix) ---- */
+  const reload = useCallback(() => {
+    fetchState()
+      .then((s) => {
+        if (!aliveRef.current) return;
+        setState(s);
+        setLoadError(null);
+      })
+      .catch((err: unknown) => {
+        if (aliveRef.current)
+          setLoadError(err instanceof Error ? err.message : "Could not load your Clavis data.");
+      });
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   /* ---- edge-to-edge when the native window is maximized ---- */
   useEffect(() => {
@@ -109,21 +136,6 @@ function ManagerRoot() {
     window.addEventListener("resize", onResize);
     onResize();
     return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  /* ---- load ---- */
-  useEffect(() => {
-    let alive = true;
-    fetchState()
-      .then((s) => {
-        if (alive) setState(s);
-      })
-      .catch((err: unknown) => {
-        if (alive) setLoadError(err instanceof Error ? err.message : "Could not load your Clavis data.");
-      });
-    return () => {
-      alive = false;
-    };
   }, []);
 
   useEffect(() => {
@@ -229,7 +241,14 @@ function ManagerRoot() {
   if (state === null) {
     body =
       loadError !== null ? (
-        <FullMessage title="Clavis could not load" text={loadError} />
+        /* F-001 fix (UI-audit round 1, Phase 2): the same retry panel the
+           popup has had all along — no more dead end. Esc intentionally does
+           nothing here; the manager window hides to tray as always. */
+        <LoadErrorPanel
+          title="Clavis could not load your data"
+          body="The data folder could not be read. Check that it still exists and that Clavis can open it — then try again."
+          onRetry={() => void reload()}
+        />
       ) : (
         <FullMessage title="Clavis" text="Loading your keys…" />
       );
