@@ -35,7 +35,7 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 | 11 | Split monoliths, move-only (F-026) | **done** | 11a `4d0a6d1` + 11b `24655b7` + 11c `430f673` + 11d `5e94a44` | 5 files split (by a parallel session — same plan, same outcome); 4 remain over ~350 (popup, item-editor, group-editor, manager) |
 | 12 | UI quality gates: axe + contrast (F-016) | **done** | `8973238` (cherry-picked onto remote) | 7 tests in `a11y.test.tsx`; 12 WCAG AA pairs; both gates proven to bite |
 | R1 | Final re-audit: lenses + full baseline + after screenshots + `07-before-after.md` + `06-next-focus.md` | **done** | (this cherry-pick) | 34 after-screenshots captured via agent-browser + mocked frontend; all 28 findings have final status; full baseline re-run on Linux-testable parts |
-| R2 | Release v1.3.0 (bump ×5, tag, push, verify live) | not started | — | rollback plan below must be filled before deploying |
+| R2 | Release v1.3.0 (bump ×5, tag, push, verify live) | **done** | `7af7d97` (release commit) + tag `v1.3.0` + GitHub Release id `426044221` | both assets uploaded; release notes set; workflow run #40593166882 completed success |
 
 ### Phase 1 detail (done)
 
@@ -230,6 +230,29 @@ Two new gates run on every push and bite on regression; both proven to fail when
   - Contrast: edited `--text-muted` from `#606D91` (5.13:1) to `#B0B8C8` (1.99:1) → script printed `FAIL: 1 pair below AA.` and exited 1. Restored → green.
   - axe: dropped a `<Btn variant="primary" label="" />` into a throwaway test → axe reported `[button-name] Buttons must have discernible text` and vitest exited 1. Removed throwaway test → green.
 - Baseline re-run after cherry-pick onto remote: 79/79 tests, `bun run build` ✓, `bun run lint:tokens` ✓, `bun run check:contrast` ✓, `gofmt -l .` empty, `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...` ✓, `go test ./internal/...` ✓. Canaries A2/A5/A7/B2/B18 via the suite ✓. B-section visual checks (dark mode, maximize) are deferred to R1's screenshot set — no behavior path through Phase 12.
+- Nothing skipped.
+
+### Phase R2 detail (done) — v1.3.0 released
+
+- **Rollback plan** filled in BEFORE deploying (see above): what's live = v1.2.0; undo = revert on main → bump 5 places to v1.3.1 → tag + push; restore tags `pre-ui-audit-round-1` (8edcecc) + `pre-ui-upgrade-round-1` (e0bf65b); never force-push tags.
+- **Version bump** in all 5 places (tag, app.go AppVersion, NSIS VERSION, winres file/product_version, types.ts APP_VERSION) → 1.3.0. Verified with `grep -n "1\\.3\\.0"` after the bump. The release.yml guard checks all 5.
+- **`docs/DEVELOPMENT.md` Release section** corrected: said "three places" but actually 4 files + tag = 5; now documents the actual 5 places and that the workflow's guard checks all 5.
+- **Pre-deploy check suite** all green at the v1.3.0 commit:
+  - `cd frontend && bun run build` ✓ (1719 modules transformed, 79/79 tests, 14 test files)
+  - `cd frontend && bun run test` → 79/79 ✓
+  - `cd frontend && bun run lint:tokens` → clean ✓
+  - `cd frontend && bun run check:contrast` → 12/12 pairs meet WCAG AA ✓
+  - `gofmt -l .` → empty ✓
+  - `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...` → clean ✓
+  - `go test ./internal/...` → all packages pass ✓
+- **Concurrent-work merge** (recorded honestly): the local clone's Phase 11 (commits `812787b`, `bc04ce7`, `c3609cd`, `4c912e7` at 21:21–21:33 UTC) collided with a parallel session's Phase 11 (commits `4d0a6d1`, `24655b7`, `430f673`, `5e94a44` at 21:06 UTC, pushed to `origin/main` first). Per the user's "never redo finished phases" rule, the local Phase 11 was discarded; the local Phase 12 + R1 + release were cherry-picked onto the remote's `abb77ee` (`docs: PROGRESS — phase 11 recorded`). PROGRESS.md's Phase 11 detail now records the remote's split, plus a "concurrent-work note" pointing to the local Phase 11 commits kept on the backup branch `backup-my-work` (in case the local split's specific files are ever needed for diff). All cherry-pick conflicts resolved (PROGRESS.md table + Phase 11/12 detail). Build + tests + lint + contrast + go checks all green after the cherry-picks.
+- **Deploy**: commit `7af7d97` pushed to `origin/main`; annotated tag `v1.3.0` (with the v1.3.0 release notes as the tag message body) created at `7af7d97` and pushed to `origin`. The tag-driven `.github/workflows/release.yml` triggered (Actions run #40593166882, head_sha `7af7d97`); the run completed with **conclusion: success**.
+- **Live verification** (via the GitHub API):
+  - Release URL: https://github.com/assadigit/Clavis/releases/tag/v1.3.0 (release id `426044221`).
+  - Assets (both uploaded): `Clavis-Portable-1.3.0.exe` (13,318,656 bytes) + `Clavis-Setup-1.3.0.exe` (7,454,730 bytes).
+  - Release body: 8,204 chars — the owner's 5-minute Windows smoke-test checklist at the top (hotkey popup, copy + Win+V exclusion, group JSON export → import round-trip, dark mode, window resize), then a plain-language summary of every Phase 1–12 change with the F-IDs and a link to `docs/ui-audit/round-1/07-before-after.md`, then the rollback instructions.
+- **What this session could NOT verify** (recorded honestly): the Windows-only behavior (hotkey, real Win+V exclusion, the popup's `ForceForeground`, the self-update chain, NSIS installer behavior on a clean VM). The release notes' smoke-test checklist is for the owner to run — it is the round-2 backlog's first item (per `06-next-focus.md`).
+- **Rollback not triggered** — the release workflow succeeded; v1.2.0 stays live (the v1.2.0 GitHub Release is untouched, since releases are append-only); v1.3.0 is the new self-update target for all clients running older versions.
 - Nothing skipped.
 
 ### Phase R1 detail (done) — final re-audit
