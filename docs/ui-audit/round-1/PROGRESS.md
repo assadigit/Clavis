@@ -119,3 +119,15 @@ Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-00
 - Verified live in the mocked copy + evidence: `popup-recent-640.png` (honest previews), `popup-copied-640.png` (frozen auto-hide; unified secret note), `manager-item-editor-1280.png` (disabled Saved).
 - Baseline re-run: A7 ✓ (copy feedback live), A12 ✓ (masking unchanged for secrets; honest for non-secrets), B5/B6 ✓ (editor tests), C8 ✓; canaries A2/A5/B2/B18 via the suite (72/72), `bun run build` ✓.
 - Nothing skipped.
+
+### Phase 8 detail (done) — F-011, F-015 fixed; U-01 lint live
+
+- Root `design-tokens.css` (the stale v1.0.0 "white + blue, dark glass" theme with old `--blue-*/--navy-*` names) is now a 3-line pointer to `frontend/src/design-tokens.css`; README.md and all five SPEC.md references point to the live file.
+- The two `#ffffff` literals in globals.css → `var(--text-on-primary)`; grep proves zero hex colors outside the token file.
+- Typography tokens added (`--leading-tight/normal/relaxed`, `--tracking-label/input`) and all eight hardcoded line-height/letter-spacing literals replaced (manager, inputs, menu hint, load-error, update-card, entry-list ×2, sidebar); SectionHeader is now an `h2` (Settings goes h1→h2→h3).
+- Also removed while here: the redundant `@media (prefers-reduced-motion) { .clavis-pop-in { animation-duration: 0ms } }` override in globals.css — the token file already zeroes `--motion-popup-in` in that context (the only ms literal outside tokens; zero behavior change).
+- New gate: `frontend/scripts/check-tokens.mjs` (node, zero deps) — fails on hex colors anywhere outside `src/design-tokens.css` and on px/ms literals outside a documented allowlist (hairline `1px solid` borders, the selected-row `inset 3px` bar, scrollbar widths, modal/popup width caps, the 170px grid floor). Wired as `bun run lint:tokens` and as a CI step in the frontend job (after tests). Proven to bite: injected `#123456` → exit 1 → removed. (One self-inflicted detour: removing the injected test color with sed ate the `} /* end @layer components */` line — the build caught it instantly, brace restored, build green. No product change was affected.)
+- Honesty note on the allowlist: hairline borders (22× `1px` in CSS + many inline) are allowlisted rather than tokenized — the plan's token list didn't include a border-width token, and swapping ~50 sites is churn best left to round 2 (recorded for 06-next-focus.md).
+- Verified: 72/72 tests, `bun run build` ✓, `lint:tokens` clean, hex grep clean, Settings headings [level=2] in the live a11y tree, dark mode + 1px row borders unchanged live (E6 sanity; the full E6 sweep lands with R1's screenshot set).
+- Baseline re-run: E6 ✓ (token swap is value-identical by construction), E2 ✓ (focus states untouched), canaries A2/A5/B2/B18 via the suite ✓.
+- Nothing skipped.

@@ -313,7 +313,7 @@ export function EntryList({
             <MenuItem
               icon={Key}
               label={
-                <span className="flex flex-col" style={{ lineHeight: 1.3 }}>
+                <span className="flex flex-col" style={{ lineHeight: "var(--leading-tight)" }}>
                   <span>New item</span>
                   <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
                     One key, prompt or note
@@ -325,7 +325,7 @@ export function EntryList({
             <MenuItem
               icon={Layers}
               label={
-                <span className="flex flex-col" style={{ lineHeight: 1.3 }}>
+                <span className="flex flex-col" style={{ lineHeight: "var(--leading-tight)" }}>
                   <span>New group</span>
                   <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
                     All credentials for a project (.env)

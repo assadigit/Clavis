@@ -34,7 +34,7 @@ export function LoadErrorPanel({
             <span style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>
               {title}
             </span>
-            <span className="t-muted" style={{ fontSize: "var(--text-xs)", lineHeight: 1.5 }}>
+            <span className="t-muted" style={{ fontSize: "var(--text-xs)", lineHeight: "var(--leading-normal)" }}>
               {body}
             </span>
             <Btn variant="primary" icon={RefreshCw} label={retryLabel ?? "Try again"} onClick={onRetry} ariaLabel="Retry loading your data" />

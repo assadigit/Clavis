@@ -31,6 +31,11 @@ jobs:
         run: bun run build
       - name: "Tests (vitest)"
         run: bun run test
+      # UI-audit round 1 Phase 8 (F-011 / U-01): hex colors and px/ms
+      # literals must not escape src/design-tokens.css (allowlisted
+      # exceptions live in scripts/check-tokens.mjs).
+      - name: "Token lint"
+        run: bun run lint:tokens
 
   go:
     name: Go core (fmt, vet, tests, release build, scans)

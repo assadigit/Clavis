@@ -48,7 +48,7 @@ export function TextArea({
         ...inputStyle,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-ui)",
         resize: "vertical",
-        lineHeight: 1.5,
+        lineHeight: "var(--leading-normal)",
         ...style,
       }}
     />
@@ -60,7 +60,7 @@ export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor
     <label
       htmlFor={htmlFor}
       className="t-muted"
-      style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)", letterSpacing: "0.02em" }}
+      style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)", letterSpacing: "var(--tracking-input)" }}
     >
       {children}
     </label>
@@ -80,7 +80,7 @@ export function SectionHeader({ icon, title }: { icon: LucideIcon; title: string
   return (
     <div className="flex items-center" style={{ gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
       <Ix icon={icon} size="md" style={{ color: "var(--color-accent-text)" }} />
-      <h3 style={{ margin: 0, fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>{title}</h3>
+      <h2 style={{ margin: 0, fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>{title}</h2>
     </div>
   );
 }

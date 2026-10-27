@@ -1,7 +1,7 @@
 # CLAVIS — Build Specification
 
 Version 1.0 of this spec. Read the whole file before writing any code.
-Companion file: `design-tokens.css` (all colors, glass, type, spacing, motion).
+Companion file: `frontend/src/design-tokens.css` (all colors, glass, type, spacing, motion).
 
 ---
 
@@ -11,7 +11,7 @@ Companion file: `design-tokens.css` (all colors, glass, type, spacing, motion).
 2. **Do not ask him questions.** If something is unclear, pick the safest option consistent with this spec, and write the decision into `DECISIONS.md` (one line each: what was unclear, what you chose, why).
 3. If a tool, library, or step fails, fix it yourself and continue. Only stop when the whole app builds, passes its tests, and both deliverables exist (section 9).
 4. Install any missing prerequisites yourself (Go, Node.js LTS, NSIS, WebView2 runtime, Wails CLI). Prefer `winget` on Windows.
-5. Never hard-code a color, font, radius, or spacing value in the UI. Everything comes from `design-tokens.css` variables.
+5. Never hard-code a color, font, radius, or spacing value in the UI. Everything comes from `frontend/src/design-tokens.css` variables.
 6. Never log, print, or write secret values to the console, to log files, or to error messages. Item values appear only in the UI (when revealed) and in the data file.
 7. Keep a running `BUILD_LOG.md` (short entries) so progress is traceable.
 8. Every place this spec says "must" is mandatory. "Should" means do it unless it proves impossible, then log it in `DECISIONS.md`.
@@ -38,7 +38,7 @@ Companion file: `design-tokens.css` (all colors, glass, type, spacing, motion).
 
 - **Target:** Windows 10 (version 1809 or newer) and Windows 11. Windows only. 64-bit.
 - **Framework: Wails v3** (Go backend + web frontend). Reason: v3 provides multiple windows and a system tray, which Clavis needs. As of this spec, v3 is in beta. **Pin the exact Wails v3 version** you use in `go.mod` and record it in `DECISIONS.md`. Read the official Wails v3 docs first (https://v3.wails.io and the status page) for the current API; do not rely on memory.
-- **Frontend:** React + TypeScript + Vite. No CSS framework: plain CSS using the variables in `design-tokens.css`. Fonts bundled via npm (`@fontsource-variable/inter` and `@fontsource/jetbrains-mono`), never loaded from the internet.
+- **Frontend:** React + TypeScript + Vite. No CSS framework: plain CSS using the variables in `frontend/src/design-tokens.css`. Fonts bundled via npm (`@fontsource-variable/inter` and `@fontsource/jetbrains-mono`), never loaded from the internet.
 - **Global hotkey:** Wails does not provide a system-wide hotkey. Use `golang.design/x/hotkey`, or Win32 `RegisterHotKey` through `golang.org/x/sys/windows` on a dedicated locked OS thread with a message loop. Verify it works while another app has focus.
 - **Fallback plan** (use only if Wails v3 proves unusable after real attempts): Wails v2 (stable) as a single window that switches between "popup mode" and "manager mode" by resizing/re-positioning, plus `fyne.io/systray` for the tray icon. Log the switch in `DECISIONS.md`. The user-visible behavior must stay identical.
 - **No network access at runtime.** The app must work fully offline and must never send data anywhere. No telemetry, no update checks, no analytics.
@@ -275,7 +275,7 @@ All of it lives in **Settings → Data** (and Export/Import also appear in the i
 
 ---
 
-## 7. Visual design (use `design-tokens.css`)
+## 7. Visual design (use `frontend/src/design-tokens.css`)
 
 **Style: dark glassmorphism, white + blue.** Glass cards float over an ambient dark-blue backdrop that the app draws itself (this works on Windows 10; do not use OS blur).
 
@@ -303,7 +303,7 @@ All of it lives in **Settings → Data** (and Export/Import also appear in the i
 - `internal/exchange/`: Markdown/TXT/JSON import and export, dotenv quoting. **Unit tests.**
 - `internal/clipboard/`: Windows clipboard with the exclusion formats.
 - `internal/system/`: autostart registry value, transparency detection, hotkey.
-- `frontend/`: React app with two entry views (`popup`, `manager`) sharing components and `design-tokens.css`.
+- `frontend/`: React app with two entry views (`popup`, `manager`) sharing components and `frontend/src/design-tokens.css`.
 - Frontend never reads or writes files directly; everything goes through Go-bound methods.
 
 ---

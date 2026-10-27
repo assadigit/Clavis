@@ -198,7 +198,7 @@ export function Manager(props: ManagerProps) {
         <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: "var(--space-3)", padding: "var(--space-5)", textAlign: "center" }}>
           <Ix icon={Key} size="lg" style={{ color: "var(--color-accent-text)" }} />
           <p style={{ margin: 0, fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>Welcome to Clavis</p>
-          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", maxWidth: "calc(var(--space-6) * 15)", lineHeight: 1.6 }}>
+          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", maxWidth: "calc(var(--space-6) * 15)", lineHeight: "var(--leading-relaxed)" }}>
             Your keys, prompts and notes will live here. Add your first item in the list, then press{" "}
             <span className="clavis-keycap">{data.settings.shortcut}</span>{" "}
             anytime to summon it.

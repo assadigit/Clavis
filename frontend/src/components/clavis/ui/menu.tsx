@@ -113,7 +113,7 @@ export function MenuItem({
         {hint ? (
           <span
             className="t-warning"
-            style={{ display: "block", whiteSpace: "normal", fontSize: "var(--text-xs)", maxWidth: "calc(var(--space-6) * 11)", lineHeight: 1.3 }}
+            style={{ display: "block", whiteSpace: "normal", fontSize: "var(--text-xs)", maxWidth: "calc(var(--space-6) * 11)", lineHeight: "var(--leading-tight)" }}
           >
             {hint}
           </span>

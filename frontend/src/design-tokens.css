@@ -94,6 +94,14 @@
   --text-xs: 12px;  --text-sm: 13px;  --text-md: 14px;  --text-lg: 16px;  --text-xl: 20px;
   --weight-regular: 400; --weight-medium: 500; --weight-semibold: 600;
 
+  /* Line heights (unitless multipliers) & letter tracking (em) — added in
+     UI-audit round 1 Phase 8 (F-015): one definition per rhythm. */
+  --leading-tight: 1.3;     /* two-line rows, menu hints */
+  --leading-normal: 1.5;   /* body text, field hints, notes */
+  --leading-relaxed: 1.6;  /* welcome/long copy */
+  --tracking-label: 0.05em;  /* uppercase section labels */
+  --tracking-input: 0.02em;  /* small field labels */
+
   /* ---- Spacing / shape (8px rhythm) ---- */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
   --radius-panel: 8px;    /* cards, dialogs, the window frame */

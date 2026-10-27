@@ -199,7 +199,7 @@ export function UpdateCard({ currentVersion }: { currentVersion: string }) {
       {info?.available ? (
         <div className="glass-row flex flex-col" style={{ gap: "var(--space-2)", padding: "var(--space-3)", marginTop: "var(--space-1)" }}>
           {info.notes ? (
-            <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-xs)", lineHeight: 1.5 }} dir="auto">
+            <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-xs)", lineHeight: "var(--leading-normal)" }} dir="auto">
               {plainNotes(info.notes)}
             </p>
           ) : null}

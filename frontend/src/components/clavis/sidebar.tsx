@@ -73,7 +73,7 @@ function NavRow({ icon, label, count, active, onClick }: NavRowProps) {
 function SectionTitle({ children, action }: { children: string; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between" style={{ padding: "0 var(--space-3)", minHeight: "var(--text-xl)" }}>
-      <span className="t-muted" style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+      <span className="t-muted" style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)", letterSpacing: "var(--tracking-label)", textTransform: "uppercase" }}>
         {children}
       </span>
       {action}

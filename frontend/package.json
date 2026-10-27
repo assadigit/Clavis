@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "build:fast": "vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint:tokens": "node scripts/check-tokens.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

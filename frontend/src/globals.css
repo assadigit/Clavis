@@ -205,7 +205,7 @@ html.solid .clavis-btn-glass:hover {
 }
 .clavis-btn-danger {
   background: var(--color-danger-fill);
-  color: #ffffff;
+  color: var(--text-on-primary);
 }
 .clavis-btn-danger:hover {
   background: var(--color-danger-text);
@@ -272,9 +272,8 @@ html.solid .clavis-keycap { background: var(--solid-surface-raised); }
 .clavis-pop-in {
   animation: clavis-pop-in var(--motion-popup-in) var(--ease);
 }
-@media (prefers-reduced-motion: reduce) {
-  .clavis-pop-in { animation-duration: 0ms; }
-}
+/* Reduced-motion lives in design-tokens.css: it zeroes --motion-popup-in,
+   so no literal 0ms override is needed here (UI-audit round 1 Phase 8). */
 
 /* ---- Custom scrollbar for long lists ---- */
 .clavis-scroll {
@@ -423,7 +422,7 @@ html.solid .clavis-keycap { background: var(--solid-surface-raised); }
 }
 .clavis-titlebar-btn:hover { background: var(--glass-bg-hover); color: var(--text); }
 .clavis-titlebar-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.clavis-titlebar-btn[data-close="true"]:hover { background: var(--color-danger-fill); color: #ffffff; }
+.clavis-titlebar-btn[data-close="true"]:hover { background: var(--color-danger-fill); color: var(--text-on-primary); }
 
 /* ---- Divided list rows (Bitwarden vault table hairlines) ---- */
 .clavis-divided > * + * {
@@ -530,5 +529,6 @@ html.solid .clavis-keycap { background: var(--solid-surface-raised); }
   border: none;
   box-shadow: none;
 }
+
 
 } /* end @layer components */
