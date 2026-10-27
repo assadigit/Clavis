@@ -103,10 +103,16 @@ describe("SettingsView smoke", () => {
     }
   });
 
-  it("lists every backup with a Restore button and the plaintext warning", () => {
+  it("lists every backup with a distinct Restore name and the plaintext warning", () => {
     setup();
-    const restores = screen.getAllByRole("button", { name: "Restore" });
+    /* F-005 fixed (Phase 5): each Restore button says which backup it
+        restores — three distinct accessible names, not three "Restore"s. */
+    const restores = screen.getAllByRole("button", { name: /^Restore backup from clavis-backup-/ });
     expect(restores.length).toBe(3);
+    expect(
+      screen.getByRole("button", { name: "Restore backup from clavis-backup-20250102-0900.json" })
+    ).toBeTruthy();
+    expect(screen.queryAllByRole("button", { name: "Restore" }).length).toBe(0);
     expect(
       screen.getByText(/Exported files contain your real secrets in plain text/)
     ).toBeTruthy();
@@ -116,10 +122,16 @@ describe("SettingsView smoke", () => {
     const { call } = setup();
     const { userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await user.click(screen.getAllByRole("button", { name: "Restore" })[0]);
+    await user.click(screen.getByRole("button", { name: "Restore backup from clavis-backup-20250101-0900.json" }));
     expect(call).toHaveBeenCalledWith("restoreBackup", {
       name: "clavis-backup-20250101-0900.json",
     });
+  });
+
+  it("the update status line is an announced live region (F-002)", () => {
+    setup();
+    const status = screen.getByRole("status");
+    expect((status.textContent ?? "").startsWith("Version")).toBeTruthy();
   });
 
   it("a fragment preview shows the partial-export sentence and only Merge", async () => {

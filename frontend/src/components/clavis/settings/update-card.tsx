@@ -130,7 +130,9 @@ export function UpdateCard({ currentVersion }: { currentVersion: string }) {
   return (
     <div className="flex flex-col" style={{ gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
       <div className="flex flex-wrap items-center justify-between" style={{ gap: "var(--space-2)", minHeight: "var(--space-5)" }}>
-        <span style={{ fontSize: "var(--text-sm)" }}>{status}</span>
+        {/* F-002 (UI-audit round 1): the async status lives in a polite live
+            region so screen-reader users hear the check/install result. */}
+        <span role="status" style={{ fontSize: "var(--text-sm)" }}>{status}</span>
         <span className="flex items-center" style={{ gap: "var(--space-2)" }}>
           {info?.available && info.installable && !installing ? (
             <Btn
@@ -167,6 +169,9 @@ export function UpdateCard({ currentVersion }: { currentVersion: string }) {
         <div
           role="progressbar"
           aria-label="Update progress"
+          aria-valuenow={Math.max(0, Math.min(100, Math.round(progress.pct)))}
+          aria-valuemin={0}
+          aria-valuemax={100}
           className="glass-input"
           style={{ height: "var(--space-2)", overflow: "hidden", position: "relative" }}
         >

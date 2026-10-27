@@ -229,6 +229,7 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
                     className="clavis-member-row clavis-focusable flex items-center"
                     style={{ gap: "var(--space-3)", padding: "var(--space-3)", cursor: "pointer", textAlign: "left" }}
                     aria-pressed={on}
+                    aria-label={c.name}
                     onClick={() => {
                       setPicked((p) => {
                         const n = new Set(p);
@@ -317,10 +318,16 @@ function SortableMemberRow({
   canMoveDown: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: itemId });
+  const rowLabel =
+    shared > 0
+      ? `${name}, used in ${shared} ${shared === 1 ? "group" : "groups"}, key ${valueKey}`
+      : `${name}, key ${valueKey}`;
   return (
     <div
       ref={setNodeRef}
       className="clavis-member-row clavis-focusable flex items-center"
+      role="group"
+      aria-label={rowLabel}
       data-dragging={isDragging ? "true" : undefined}
       style={{
         gap: "var(--space-2)",

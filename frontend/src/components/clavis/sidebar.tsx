@@ -50,6 +50,7 @@ function NavRow({ icon, label, count, active, onClick }: NavRowProps) {
     <button
       type="button"
       role="treeitem"
+      aria-level={1}
       aria-selected={active}
       data-selected={active ? "true" : "false"}
       onClick={onClick}

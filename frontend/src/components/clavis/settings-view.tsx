@@ -397,6 +397,7 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
                     label="Restore"
                     onClick={() => void restoreBackup(b.name)}
                     disabled={readOnly}
+                    ariaLabel={`Restore backup from ${b.name}`}
                     title={`Restore ${b.name}`}
                   />
                 </div>

@@ -87,3 +87,14 @@ Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-00
 ## Rollback plan
 
 (Fill this in **before** deploying — Phase R2 task 1. What is live, the exact undo steps, the restore tags.)
+
+### Phase 5 detail (done) — F-002, F-005, F-006, F-007, F-008 fixed
+
+- F-005: every backup Restore button now says which backup it restores — `ariaLabel="Restore backup from <name>"` (live a11y tree shows three distinct names; the Phase-1 smoke test was updated to pin the new names).
+- F-002: the update-card status line is a `role="status"` live region; the progressbar carries `aria-valuenow/min/max`. Verified live: the region reads "Version 1.2.0" and updates would be announced.
+- F-006: `.glass-input:focus` → `.glass-input:focus-visible` — the CSS asymmetry is gone. Honesty note: in Chromium/WebView2, text inputs **always** match `:focus-visible` (typing follows mouse focus, per spec), so the audit's verify recipe "click → no ring" does not and should not apply to text inputs; the fix is the consistency itself (one selector family for every control, verified: the ring renders identically for programmatic and keyboard focus).
+- F-007: explicit accessible names everywhere text used to concatenate — group-editor member rows ("GitHub token, used in 2 groups, key GITHUB_TOKEN"), manage-items sortable rows (role="group" + the same sentence), and candidate rows (name only; aria-pressed already carries selection). Verified live: clean sentences in the a11y tree.
+- F-008: sidebar treeitems carry `aria-level={1}` explicitly (live tree shows [level=1] from the attribute now, not DOM inference); `.clavis-sr-only` deleted (zero usages remained after choosing aria-labels over visually-hidden separators — grep-proven).
+- No styling changes. Tests updated/extended (3 assertion changes, all strengthening): 70/70 green in 13 files; `bun run build` ✓.
+- Baseline re-run: B8 ✓, C7 ✓ (three distinct Restores, live), C8 ✓ (status region live), canaries A2/A5/B2 via tests ✓, B18 unchanged ✓.
+- Nothing skipped.

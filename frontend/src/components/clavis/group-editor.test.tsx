@@ -118,6 +118,15 @@ describe("GroupEditor smoke", () => {
     expect(screen.getByText("FAKE GitHub token")).toBeTruthy();
     expect(screen.getByText("FAKE Grafana token")).toBeTruthy();
     expect(screen.getByText(/2 items · used 2× · updated/)).toBeTruthy();
+    /* F-007 fixed (Phase 5): member rows read as clean sentences. Both
+        members are in this one group; the second's key is autoKey'd from
+        its name ("FAKE Grafana token" → FAKE_GRAFANA_TOKEN). */
+    expect(
+      screen.getByRole("button", { name: "FAKE GitHub token, used in 1 group, key GITHUB_TOKEN" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "FAKE Grafana token, used in 1 group, key FAKE_GRAFANA_TOKEN" })
+    ).toBeTruthy();
   });
 
   it("Export Markdown in the More actions menu calls downloadExport", async () => {

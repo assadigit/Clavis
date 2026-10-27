@@ -236,6 +236,12 @@ export function GroupEditor(props: GroupEditorProps) {
               {members.map((m) => {
                 const sharedCount = shared.get(m.item.id) ?? 0;
                 const preview = maskFromLast4(m.item.valueLast4);
+                /* F-007 (UI-audit round 1): an explicit accessible name instead
+                   of concatenated name + count + key + mask. */
+                const rowLabel =
+                  sharedCount > 0
+                    ? `${m.item.name}, used in ${sharedCount} ${sharedCount === 1 ? "group" : "groups"}, key ${m.key}`
+                    : `${m.item.name}, key ${m.key}`;
                 return (
                   <button
                     key={m.item.id}
@@ -243,6 +249,7 @@ export function GroupEditor(props: GroupEditorProps) {
                     className="clavis-member-row clavis-focusable flex items-center"
                     onClick={() => onSelectEntry({ kind: "item", id: m.item.id, groupContextId: group.id })}
                     title={`Edit ${m.item.name}`}
+                    aria-label={rowLabel}
                     style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", cursor: "pointer", textAlign: "left" }}
                   >
                     <EntryTypeIcon kind="item" isSecret={m.item.isSecret} size="md" />
