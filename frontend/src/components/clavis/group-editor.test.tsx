@@ -127,4 +127,16 @@ describe("GroupEditor smoke", () => {
     await user.click(screen.getByRole("menuitem", { name: "Export Markdown" }));
     expect(downloadExport).toHaveBeenCalledWith("group-md", "fake-group-1");
   });
+
+  it("Export JSON (backup-safe) sits first and calls downloadExport with group-json (Phase 4)", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setup();
+    await user.click(screen.getByTitle("More actions"));
+    const items = screen.getAllByRole("menuitem");
+    expect(items[0].textContent).toContain("Export JSON (backup-safe)");
+    /* F-003: the plaintext warning is visible inside the menu. */
+    expect(items[0].textContent).toContain("Contains your real value in plain text.");
+    await user.click(items[0]);
+    expect(downloadExport).toHaveBeenCalledWith("group-json", "fake-group-1");
+  });
 });

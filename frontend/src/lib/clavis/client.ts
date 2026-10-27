@@ -14,6 +14,9 @@ export interface BackupPreview {
   valid: boolean;
   error?: string;
   incoming: { items: number; groups: number; categories: number };
+  /** UI-audit round 1 Phase 4: set when the file is a clavis-fragment
+   * (a partial export that merges). */
+  fragment?: { type: "item" | "group"; id?: string; name: string };
 }
 
 export interface FilesPreview {
@@ -77,7 +80,9 @@ export type ExportWhat =
   | "item-md"
   | "group-md"
   | "item-txt"
-  | "group-txt";
+  | "group-txt"
+  | "item-json"
+  | "group-json";
 
 /** Export through the Windows save dialog. */
 export async function downloadExport(what: ExportWhat, id?: string): Promise<void> {

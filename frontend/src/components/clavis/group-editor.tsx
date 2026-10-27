@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronRight, ClipboardPaste, Copy, FileText, Layers, Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronRight, ClipboardPaste, Copy, FileJson, FileText, Layers, Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { downloadExport } from "@/lib/clavis/client";
 import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
@@ -359,6 +359,15 @@ export function GroupEditor(props: GroupEditorProps) {
           <div className="flex flex-1 flex-wrap items-center justify-end" style={{ gap: "var(--space-2)" }}>
             <Btn variant="glass" icon={Copy} label="Copy group" onClick={() => void copyGroup()} title="Copy the NAME=value block" disabled={readOnly} />
             <Menu triggerIcon={MoreHorizontal} triggerTitle="More actions" align="end" triggerVariant="glass" disabled={readOnly}>
+              {/* UI-audit round 1 Phase 4 (F-017/F-003): lossless JSON export
+                  first, plaintext warning included (same sentence as
+                  Settings, singular — the menu is for this one entry). */}
+              <MenuItem
+                icon={FileJson}
+                label="Export JSON (backup-safe)"
+                hint="Contains your real value in plain text."
+                onClick={() => downloadExport("group-json", group.id)}
+              />
               <MenuItem icon={FileText} label="Export Markdown" onClick={() => downloadExport("group-md", group.id)} />
               <MenuItem icon={FileText} label="Export Text" onClick={() => downloadExport("group-txt", group.id)} />
               <div aria-hidden style={{ borderTop: "1px solid var(--glass-border)", margin: "var(--space-1) 0" }} />

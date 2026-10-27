@@ -118,6 +118,15 @@ type ImportedFileDTO struct {
 	Content string `json:"content"`
 }
 
+// Folder-import safety caps (UI-audit round 1 Phase 4, task 6): the folder
+// import reads every matching file into memory at once; without a bound a
+// giant folder could stall the app. Both limits are far above any sane
+// credentials folder (one .md is a few KB).
+const (
+	importFolderMaxFiles = 200
+	importFolderMaxBytes = 10 << 20 // 10 MB
+)
+
 // PickImportFolder picks a folder and reads its .md/.txt files (§5.8).
 func (c *Clavis) PickImportFolder() map[string]any {
 	dlg := c.app.Dialog.OpenFile().
@@ -131,6 +140,7 @@ func (c *Clavis) PickImportFolder() map[string]any {
 		return map[string]any{"ok": false, "canceled": true}
 	}
 	var files []ImportedFileDTO
+	var totalBytes int64
 	entries, err := os.ReadDir(folder)
 	if err != nil {
 		return service.Fail("Clavis could not read that folder.", 400)
@@ -144,9 +154,16 @@ func (c *Clavis) PickImportFolder() map[string]any {
 		if !strings.HasSuffix(lower, ".md") && !strings.HasSuffix(lower, ".txt") {
 			continue
 		}
+		if len(files) >= importFolderMaxFiles {
+			return service.Fail("That folder has more than 200 importable files. Import a smaller folder in batches, or use a full JSON backup.", 400)
+		}
 		b, err := os.ReadFile(filepath.Join(folder, name))
 		if err != nil {
 			continue
+		}
+		totalBytes += int64(len(b))
+		if totalBytes > importFolderMaxBytes {
+			return service.Fail("That folder's files add up to more than 10 MB. Import a smaller folder in batches, or use a full JSON backup.", 400)
 		}
 		files = append(files, ImportedFileDTO{Name: name, Content: string(b)})
 	}

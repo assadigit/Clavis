@@ -85,12 +85,16 @@ export function MenuItem({
   danger,
   disabled,
   onClick,
+  hint,
 }: {
   icon?: LucideIcon;
   label: ReactNode;
   danger?: boolean;
   disabled?: boolean;
   onClick?: () => void;
+  /** Optional one-line warning under the label (UI-audit round 1 Phase 4,
+   * F-003 — e.g. the plaintext warning on export items). */
+  hint?: string;
 }) {
   return (
     <button
@@ -104,7 +108,17 @@ export function MenuItem({
       {icon ? (
         <Ix icon={icon} size="sm" style={danger ? { color: "var(--color-danger-text)" } : undefined} />
       ) : null}
-      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
+      <span style={{ whiteSpace: "nowrap" }}>
+        <span style={{ display: "block" }}>{label}</span>
+        {hint ? (
+          <span
+            className="t-warning"
+            style={{ display: "block", whiteSpace: "normal", fontSize: "var(--text-xs)", maxWidth: "calc(var(--space-6) * 11)", lineHeight: 1.3 }}
+          >
+            {hint}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 }

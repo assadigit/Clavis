@@ -424,38 +424,68 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
         onClose={() => setBackupImport(null)}
         title="Import backup"
         footer={
-          <>
-            <Btn variant="ghost" label="Cancel" onClick={() => setBackupImport(null)} disabled={importBusy} />
-            <Btn
-              variant="glass"
-              label="Merge"
-              onClick={() => void applyBackupImport("merge")}
-              disabled={importBusy}
-              title="Add missing entries; keep the newer version of each"
-            />
-            <Btn
-              variant="danger"
-              label="Replace everything"
-              onClick={() => void applyBackupImport("replace")}
-              disabled={importBusy}
-            />
-          </>
+          backupImport?.preview.fragment ? (
+            /* UI-audit round 1 Phase 4: a partial export can only merge — it
+               is not a vault, so Replace-everything would be a lie. */
+            <>
+              <Btn variant="ghost" label="Cancel" onClick={() => setBackupImport(null)} disabled={importBusy} />
+              <Btn
+                variant="primary"
+                label="Merge"
+                onClick={() => void applyBackupImport("merge")}
+                disabled={importBusy}
+                title="Add missing entries; keep the newer version of each"
+              />
+            </>
+          ) : (
+            <>
+              <Btn variant="ghost" label="Cancel" onClick={() => setBackupImport(null)} disabled={importBusy} />
+              <Btn
+                variant="glass"
+                label="Merge"
+                onClick={() => void applyBackupImport("merge")}
+                disabled={importBusy}
+                title="Add missing entries; keep the newer version of each"
+              />
+              <Btn
+                variant="danger"
+                label="Replace everything"
+                onClick={() => void applyBackupImport("replace")}
+                disabled={importBusy}
+              />
+            </>
+          )
         }
       >
         {backupImport ? (
           <div className="flex flex-col" style={{ gap: "var(--space-3)" }}>
-            <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>
-              The backup contains{" "}
-              <strong>
-                {backupImport.preview.incoming.items} items, {backupImport.preview.incoming.groups} groups and{" "}
-                {backupImport.preview.incoming.categories} categories
-              </strong>
-              .
-            </p>
-            <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>
-              Replacing discards your current {state.data.items.filter((i) => !i.deletedAt).length} items and{" "}
-              {state.data.groups.filter((g) => !g.deletedAt).length} groups. Merging keeps both sides.
-            </p>
+            {backupImport.preview.fragment ? (
+              <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+                This is a partial export of the{" "}
+                {backupImport.preview.fragment.type === "group" ? "group" : "item"}{" "}
+                <strong dir="auto">“{backupImport.preview.fragment.name}”</strong> (
+                {backupImport.preview.incoming.items}{" "}
+                {backupImport.preview.incoming.items === 1 ? "item" : "items"},{" "}
+                {backupImport.preview.incoming.groups}{" "}
+                {backupImport.preview.incoming.groups === 1 ? "group" : "groups"}). Merging adds
+                anything you don't already have.
+              </p>
+            ) : (
+              <>
+                <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+                  The backup contains{" "}
+                  <strong>
+                    {backupImport.preview.incoming.items} items, {backupImport.preview.incoming.groups} groups and{" "}
+                    {backupImport.preview.incoming.categories} categories
+                  </strong>
+                  .
+                </p>
+                <p style={{ margin: 0, fontSize: "var(--text-sm)" }}>
+                  Replacing discards your current {state.data.items.filter((i) => !i.deletedAt).length} items and{" "}
+                  {state.data.groups.filter((g) => !g.deletedAt).length} groups. Merging keeps both sides.
+                </p>
+              </>
+            )}
             <p className="t-muted flex items-center" style={{ gap: "var(--space-2)", margin: 0, fontSize: "var(--text-xs)" }}>
               <Ix icon={Info} size="sm" />
               A backup of your current data is made first, either way.

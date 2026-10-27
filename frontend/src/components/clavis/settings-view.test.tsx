@@ -57,10 +57,20 @@ function state(): ClavisState {
   };
 }
 
-function setup() {
-  const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+function setup(callImpl?: (action: string) => Record<string, unknown> | Promise<Record<string, unknown>>) {
+  const call = vi.fn(async (action: string) => {
+    if (callImpl) return { ok: true, status: 200, ...(await callImpl(action)) };
+    return { ok: true, status: 200 };
+  }) as unknown as CallFn;
   render(<SettingsView state={state()} call={call} readOnly={false} />);
   return { call };
+}
+
+/** Upload JSON through the hidden Import-backup input (jsdom File). */
+async function uploadBackup(user: ReturnType<typeof import("@testing-library/user-event")["default"]["setup"]>, json: string) {
+  const input = document.querySelector('input[accept=".json,application/json"]') as HTMLInputElement;
+  const file = new File([json], "clavis-group-fake-20260128-1200.json", { type: "application/json" });
+  await user.upload(input, file);
 }
 
 beforeEach(() => {
@@ -110,5 +120,64 @@ describe("SettingsView smoke", () => {
     expect(call).toHaveBeenCalledWith("restoreBackup", {
       name: "clavis-backup-20250101-0900.json",
     });
+  });
+
+  it("a fragment preview shows the partial-export sentence and only Merge", async () => {
+    const userEvent = (await import("@testing-library/user-event")).default;
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const fragmentJSON = JSON.stringify({
+      kind: "clavis-fragment",
+      fragmentVersion: 1,
+      exportedAt: "2026-01-28T10:00:00.000Z",
+      sourceAppVersion: "1.2.0",
+      scope: { type: "group", id: "g9", name: "FAKE Deploy set" },
+      categories: [],
+      groups: [{ id: "g9", name: "FAKE Deploy set" }],
+      items: [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }],
+    });
+    setup(async (action) => {
+      if (action === "importBackupPreview") {
+        return {
+          preview: {
+            valid: true,
+            incoming: { items: 4, groups: 1, categories: 0 },
+            fragment: { type: "group", id: "g9", name: "FAKE Deploy set" },
+          },
+        };
+      }
+      return {};
+    });
+    await uploadBackup(user, fragmentJSON);
+    const dialog = await screen.findByRole("dialog");
+    const text = dialog.textContent ?? "";
+    expect(text).toContain("This is a partial export of the group");
+    expect(text).toContain("“FAKE Deploy set”");
+    expect(text).toContain("(4 items, 1 group)");
+    expect(text).toContain("Merging adds anything you don't already have.");
+    expect(screen.queryByRole("button", { name: "Replace everything" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Merge" })).toBeTruthy();
+  });
+
+  it("a full-backup preview keeps all three buttons", async () => {
+    const userEvent = (await import("@testing-library/user-event")).default;
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const fullJSON = JSON.stringify({
+      schemaVersion: 1,
+      appVersion: "1.2.0",
+      items: [{ id: "a" }, { id: "b" }],
+      groups: [{ id: "g9" }],
+      categories: [{ id: "c1" }],
+    });
+    setup(async (action) => {
+      if (action === "importBackupPreview") {
+        return { preview: { valid: true, incoming: { items: 2, groups: 1, categories: 1 } } };
+      }
+      return {};
+    });
+    await uploadBackup(user, fullJSON);
+    expect(await screen.findByText(/The backup contains/)).toBeTruthy();
+    for (const name of ["Cancel", "Merge", "Replace everything"]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
   });
 });

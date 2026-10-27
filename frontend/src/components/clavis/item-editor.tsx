@@ -14,6 +14,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  FileJson,
   FileText,
   Link2,
   MoreHorizontal,
@@ -491,6 +492,15 @@ export function ItemEditor(props: ItemEditorProps) {
             <Btn variant="glass" icon={Copy} label="Copy" onClick={() => void copyItem()} title="Copy value" disabled={readOnly} />
             <Btn variant="glass" icon={Copy} label="Duplicate" onClick={() => void duplicate()} title="Duplicate item" disabled={readOnly} />
             <Menu triggerIcon={MoreHorizontal} triggerTitle="More actions" align="end" triggerVariant="glass" disabled={readOnly}>
+              {/* UI-audit round 1 Phase 4 (F-017/F-003): the lossless JSON
+                  export sits above the lossy Markdown/TXT, with the plaintext
+                  warning Settings already shows. */}
+              <MenuItem
+                icon={FileJson}
+                label="Export JSON (backup-safe)"
+                hint="Contains your real value in plain text."
+                onClick={() => downloadExport("item-json", item.id)}
+              />
               <MenuItem icon={FileText} label="Export Markdown" onClick={() => downloadExport("item-md", item.id)} />
               <MenuItem icon={FileText} label="Export Text" onClick={() => downloadExport("item-txt", item.id)} />
               <div aria-hidden style={{ borderTop: "1px solid var(--glass-border)", margin: "var(--space-1) 0" }} />
