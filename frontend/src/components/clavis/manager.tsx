@@ -209,7 +209,9 @@ export function Manager(props: ManagerProps) {
         <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", maxWidth: "calc(var(--space-6) * 15)" }}>
           Pick an entry from the list to see it here.
         </p>
-        <div className="flex flex-wrap justify-center" style={{ gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+        {/* F-010 (UI-audit round 1 Phase 6): one row, one center line —
+            alignItems centers the two variants so their glyphs sit level. */}
+        <div className="flex flex-wrap justify-center" style={{ gap: "var(--space-2)", marginTop: "var(--space-2)", alignItems: "center" }}>
           <Btn variant="primary" icon={Plus} label="New item" onClick={() => startCreating("item")} disabled={readOnly} />
           <Btn variant="glass" icon={Key} label="New group" onClick={() => startCreating("group")} disabled={readOnly} />
         </div>

@@ -98,3 +98,12 @@ Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-00
 - No styling changes. Tests updated/extended (3 assertion changes, all strengthening): 70/70 green in 13 files; `bun run build` ✓.
 - Baseline re-run: B8 ✓, C7 ✓ (three distinct Restores, live), C8 ✓ (status region live), canaries A2/A5/B2 via tests ✓, B18 unchanged ✓.
 - Nothing skipped.
+
+### Phase 6 detail (done) — F-009, F-010 fixed
+
+- F-009: the entry-list column cap rises from `calc(var(--space-6) * 10)` (320px) to `calc(var(--space-6) * 13)` (416px) — the smaller of the plan's two options. The sidebar and the right-side row meta are untouched; the window min stays 800×520.
+- F-010: the nothing-selected "New item"/"New group" row gets `alignItems: "center"` so both variants share one center line.
+- Verified live in the mocked copy with a 32-character entry name (harder than the milestone's 26): unclipped at the 1000px default window width (name box = content = 257px, clipped=false) and at 1280px; **no horizontal scroll at 800px** (scrollWidth exactly 800 — the detail column owns overflow: hidden). Button centers at 1280px: 476.3 / 476.3 — aligned.
+- Evidence: `evidence/after/manager-all-1280.png`, `evidence/after/manager-800.png` (the same screens the before set pairs against; fake data only, incl. the FAKE 32-char test entry).
+- Baseline re-run: B2 ✓ (live at all three widths), B11 ✓ (tests), E4 ✓ (800/1000/1280 checked live), canaries A2/A5/A7/B2/B18 via the suite ✓ (70/70), `bun run build` ✓.
+- Nothing skipped.

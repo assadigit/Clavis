@@ -255,7 +255,18 @@ export function EntryList({
     <section
       aria-label={isTrash ? "Trash list" : "Entry list"}
       className="clavis-col flex min-w-0 flex-1 flex-col md:flex-none"
-      style={{ width: "min(100%, calc(var(--space-6) * 10))", padding: "var(--space-2)", gap: "var(--space-2)", overflow: "hidden", borderRight: "1px solid var(--glass-border)" }}
+      style={{
+        /* F-009 (UI-audit round 1 Phase 6): the list is the column users scan
+           most, so it gets a real budget — 320px made even 20-char names
+           truncate at the default 1000px window. 416px keeps a 26-char name
+           whole at 1000px and still no horizontal scroll at the 800px min
+           (the detail column owns overflow: hidden). */
+        width: "min(100%, calc(var(--space-6) * 13))",
+        padding: "var(--space-2)",
+        gap: "var(--space-2)",
+        overflow: "hidden",
+        borderRight: "1px solid var(--glass-border)",
+      }}
     >
       <header className="flex items-center" style={{ gap: "var(--space-2)" }}>
         <div className="relative min-w-0 flex-1">
