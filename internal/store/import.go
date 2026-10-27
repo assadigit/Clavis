@@ -165,8 +165,16 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
-// ImportBackupPreview validates a full-backup JSON and counts it (§5.8A).
+// ImportBackupPreview validates a full-backup or fragment JSON and counts it
+// (§5.8A; UI-audit round 1 Phase 4: fragments are detected first — a full
+// backup is never mistaken for one, and vice versa).
 func (s *Store) ImportBackupPreview(jsonText string) BackupPreview {
+	if frag, ok := parseFragment(jsonText); ok {
+		if frag.FragmentVersion > CurrentFragmentVersion {
+			return BackupPreview{Valid: false, Error: "This partial export was created by a newer version of Clavis. Please update the app."}
+		}
+		return BackupPreview{Valid: true, Items: len(frag.Items), Groups: len(frag.Groups), Cats: len(frag.Categories), Fragment: &frag.Scope}
+	}
 	parsed, ok := s.parseVault(jsonText)
 	if !ok {
 		return BackupPreview{Valid: false, Error: "Not a valid Clavis backup file."}
@@ -174,12 +182,21 @@ func (s *Store) ImportBackupPreview(jsonText string) BackupPreview {
 	return BackupPreview{Valid: true, Items: len(parsed.Items), Groups: len(parsed.Groups), Cats: len(parsed.Categories)}
 }
 
-// ImportBackup applies a full backup: Replace everything or Merge (§5.8A).
+// ImportBackup applies a full backup (Replace everything / Merge) or merges
+// a clavis-fragment (§5.8A; UI-audit round 1 Phase 4). Fragments always merge
+// — a fragment is not a vault, so the mode is ignored; the pre-import backup
+// is taken either way.
 func (s *Store) ImportBackup(mode, jsonText string) (ImportSummary, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.assertWritable(); err != nil {
 		return ImportSummary{}, err
+	}
+	if frag, ok := parseFragment(jsonText); ok {
+		if err := s.saveLocked(kindPreImport); err != nil {
+			return ImportSummary{}, err
+		}
+		return s.importFragmentLocked(frag)
 	}
 	parsed, ok := s.parseVault(jsonText)
 	if !ok {

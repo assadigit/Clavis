@@ -131,13 +131,16 @@ type FilesPreview struct {
 	ParsedCount int              `json:"parsedCount"`
 }
 
-// BackupPreview counts an incoming full backup (no values).
+// BackupPreview counts an incoming full backup (no values). Fragment is set
+// (UI-audit round 1 Phase 4) when the file is a clavis-fragment — a partial
+// export that merges; a full backup leaves it nil.
 type BackupPreview struct {
-	Valid  bool   `json:"valid"`
-	Error  string `json:"error,omitempty"`
-	Items  int    `json:"items"`
-	Groups int    `json:"groups"`
-	Cats   int    `json:"categories"`
+	Valid    bool           `json:"valid"`
+	Error    string         `json:"error,omitempty"`
+	Items    int            `json:"items"`
+	Groups   int            `json:"groups"`
+	Cats     int            `json:"categories"`
+	Fragment *FragmentScope `json:"fragment,omitempty"`
 }
 
 // ImportedFile is one file picked for import.

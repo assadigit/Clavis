@@ -509,11 +509,17 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 	case "importBackupPreview":
 		{
 			preview := s.Store.ImportBackupPreview(getStr(p, "json"))
-			return map[string]any{"ok": true, "preview": map[string]any{
+			previewMap := map[string]any{
 				"valid":    preview.Valid,
 				"error":    preview.Error,
 				"incoming": map[string]any{"items": preview.Items, "groups": preview.Groups, "categories": preview.Cats},
-			}}
+			}
+			// UI-audit round 1 Phase 4: fragments announce their scope so the
+			// import modal can explain the partial-export merge.
+			if preview.Fragment != nil {
+				previewMap["fragment"] = preview.Fragment
+			}
+			return map[string]any{"ok": true, "preview": previewMap}
 		}
 	case "importBackup":
 		{

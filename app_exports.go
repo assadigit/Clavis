@@ -38,6 +38,13 @@ func (c *Clavis) ExportSave(what, id string) map[string]any {
 		}
 		body, filename = target.Body, target.Filename
 		filterName, pattern = "Markdown", "*.md"
+	case "item-json", "group-json":
+		target, err := c.core.Store.ExportEntryFragment(store.EntryKind(kindOf(what)), id)
+		if err != nil {
+			return service.FailErr(err)
+		}
+		body, filename = target.Body, target.Filename
+		filterName, pattern = "Clavis partial backup", "*.json"
 	case "item-txt", "group-txt":
 		target, err := c.core.Store.ExportEntryText(store.EntryKind(kindOf(what)), id)
 		if err != nil {
