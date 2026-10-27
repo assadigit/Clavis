@@ -37,6 +37,7 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 | R1 | Final re-audit: lenses + full baseline + after screenshots + `07-before-after.md` + `06-next-focus.md` | **done** | (this cherry-pick) | 34 after-screenshots captured via agent-browser + mocked frontend; all 28 findings have final status; full baseline re-run on Linux-testable parts |
 | R2 | Release v1.3.0 (bump ×5, tag, push, verify live) | **done** | `7af7d97` (release commit) + tag `v1.3.0` + GitHub Release id `426044221` | both assets uploaded; release notes set; workflow run #40593166882 completed success |
 | v1.3.1 | Hardening: 3 WCAG AA contrast fixes + stronger a11y gates (separate session, after v1.3.0) | **done** | (this commit) + tag `v1.3.1` | see “v1.3.1 hardening” section below; 30/30 contrast pairs; axe gate down to 1 disabled rule |
+| v1.3.2 | Bugfix: cross-window data sync — deleted entries no longer linger in the popup's Recent/Pinned (user report) | **done** | (this commit) + tag `v1.3.2` | see “v1.3.2 cross-window sync” section below; not a UI-audit item — recorded in DECISIONS.md §40; 85/85 tests (6 new) |
 
 ### Phase 1 detail (done)
 
@@ -290,6 +291,16 @@ Side effects of the token swaps (all verified AA): light muted text on panels 5.
 - Go side untouched but re-verified: `gofmt -l .` empty ✓ · `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...` ✓ · `go test ./internal/...` all ok ✓.
 - Live a11y tree re-run (mocked frontend, real browser): the manager's sidebar is a plain `complementary "Clavis navigation"` landmark of buttons; the entry list is `list "Entries"` with `listitem` rows and nested copy/pin buttons; clicking a row sets `aria-current="true"` (2 nodes: the row + the active sidebar item); computed styles confirm the new tokens actually render — light muted `rgb(87,100,127)` on selected `rgb(219,229,246)`, dark muted `rgb(151,168,197)` on selected `rgb(42,58,82)`, dark danger fill `rgb(224,84,104)`; the popup still shows the full combobox/listbox/option pattern; console clean, no page errors.
 - Nothing skipped. Off-limits areas (secret-protection, clipboard, hotkey, real vault) untouched — the diff is 7 frontend files + this doc + the 4 version files.
+
+### v1.3.2 cross-window sync (done) — deleted entries lingered in the popup's Recent/Pinned
+
+A separate session (user report: “even after deleting some credentials, they were appearing in the recent and pinned section”) found the root cause: the Manager and the popup are **separate webviews with load-once snapshots** — each window only updated from its own actions' responses, so Manager-side deletes never reached the popup window (deleted entries stayed in “Recent” / “Pinned & frequent” until restart) and popup copies never refreshed the Manager's Recent view. This is a functional bugfix, not a UI-audit item — the full decision record is **DECISIONS.md §40**; this section tracks the release facts.
+
+- **Changed files**: `app.go` (emit `clavis:data-changed` when a dispatch moves the store generation; emit `clavis:manager-shown` in `ShowManager`), `frontend/src/desktop/platform.ts` (`onDataChanged` / `onManagerShown`), `frontend/src/components/clavis/popup-root.tsx` (re-fetch on every show + on data-changed + after a failed action), `frontend/src/manager-entry.tsx` (re-fetch on manager-shown / data-changed / visibility→visible; `ManagerRoot` exported, mount guarded for jsdom).
+- **Tests**: 6 new (3 in `popup-root.test.tsx`, 3 in new `manager-entry.test.tsx`) → **85/85**. Bite proof: restoring the old `popup-root.tsx` makes exactly the three popup regression tests fail with the reported symptom (deleted entry still visible after re-show).
+- **Gates at the release commit**: `bun run build` ✓ · `bun run test` 85/85 ✓ · `lint:tokens` ✓ · `check:contrast` 30/30 ✓ · `gofmt -l .` empty ✓ · windows/amd64 `go vet` ✓ · `go test ./internal/...` ✓.
+- **Live verification** (mocked frontend, real browser, per-fetch deep-copied snapshots so staleness is observable): popup hidden → entry deleted → popup shown → fetch count 2→3 and the deleted row gone, others intact; data-changed while the popup is open removes the row without hide/show; the Manager re-fetches on both `clavis:data-changed` and `clavis:manager-shown` (counts 1→2→3, rows update); console clean, no page errors.
+- **Undo path**: `git revert <v1.3.2-release-sha> --no-edit` on `main`, then bump the 5 version places to 1.3.3 and tag (the same forward-fix pattern as the rollback plan below; never force-push tags). The change is additive — reverting it cannot corrupt data; the worst case is the pre-v1.3.2 staleness returning.
 
 ### Phase R1 detail (done) — final re-audit
 

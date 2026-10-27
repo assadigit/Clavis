@@ -6,6 +6,15 @@
  * the central delete+undo toast, and cross-window requests from the popup
  * (Ctrl+N / Ctrl+E). The window itself is a transparent, frameless native
  * window; this entry draws the floating glass frame with the shadow pad.
+ *
+ * v1.3.2 — cross-window sync: the popup is a SEPARATE webview whose copies
+ * (useCount / lastUsedAt → the "Recent" view) never reached this window's
+ * load-once snapshot. The snapshot now re-fetches when the Manager is
+ * shown again (the clavis:manager-shown event + visibilitychange, which
+ * also covers taskbar/Alt-Tab restores that bypass ShowManager) and on
+ * every clavis:data-changed broadcast (any mutation, from either window).
+ * Selection, filters, query and open editors are local state and survive
+ * the re-fetch.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -103,6 +112,7 @@ function ManagerRoot() {
 
   const stateRef = useRef<ClavisState | null>(null);
   const aliveRef = useRef(true);
+  const loadingRef = useRef(false);
 
   useEffect(
     () => () => {
@@ -111,8 +121,12 @@ function ManagerRoot() {
     [],
   );
 
-  /* ---- load (retryable — the error panel re-runs this, F-001 fix) ---- */
+  /* ---- load (retryable — the error panel re-runs this, F-001 fix) ----
+     One in-flight request at a time: the reload is now also driven by
+     events (data-changed / manager-shown), which can arrive in bursts. */
   const reload = useCallback(() => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     fetchState()
       .then((s) => {
         if (!aliveRef.current) return;
@@ -122,11 +136,31 @@ function ManagerRoot() {
       .catch((err: unknown) => {
         if (aliveRef.current)
           setLoadError(err instanceof Error ? err.message : "Could not load your Clavis data.");
+      })
+      .finally(() => {
+        loadingRef.current = false;
       });
   }, []);
 
   useEffect(() => {
     reload();
+  }, [reload]);
+
+  /* ---- cross-window re-sync (v1.3.2) ----
+     Pull: when the Manager comes back (tray / popup button go through
+     ShowManager → the clavis:manager-shown event; taskbar and Alt-Tab
+     restores surface as visibilitychange). Push: every mutation from
+     either window broadcasts clavis:data-changed. */
+  useEffect(() => {
+    const offs = [platform.onManagerShown(reload), platform.onDataChanged(reload)];
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") reload();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      offs.forEach((off) => off());
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [reload]);
 
   /* ---- edge-to-edge when the native window is maximized (the shared
@@ -287,4 +321,11 @@ function ManagerRoot() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<ManagerRoot />);
+/* Exported for tests (jsdom has no #root div, so the mount below is a
+   no-op there; in the built app manager.html always provides it). */
+export { ManagerRoot };
+
+const mountPoint = document.getElementById("root");
+if (mountPoint) {
+  createRoot(mountPoint).render(<ManagerRoot />);
+}

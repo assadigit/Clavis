@@ -7,12 +7,18 @@
  * into the palette, and every later show retries silently while data is
  * still missing.
  *
+ * v1.3.2 cross-window sync regression tests: the Manager is a separate
+ * webview, and the popup snapshot used to be load-once — credentials
+ * deleted in the Manager kept appearing in the popup's "Recent" and
+ * "Pinned & frequent" sections until an app restart. The snapshot now
+ * re-fetches on every show and on the clavis:data-changed broadcast.
+ *
  * The Wails runtime is mocked — these tests run in plain jsdom.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Call } from "@wailsio/runtime";
+import { Call, Events } from "@wailsio/runtime";
 import { PopupRoot } from "./popup-root";
 import { LoadErrorPanel } from "./ui-bits";
 import type { ClavisState } from "@/lib/clavis/types";
@@ -108,6 +114,90 @@ describe("Popup first-load failure", () => {
     });
     // The retry failed too — the panel stays (no blank window).
     expect(await screen.findByRole("alertdialog")).toBeTruthy();
+  });
+});
+
+/* The latest callback registered for an event name (the Wails Events.On
+   mock records every registration). */
+function eventCallback(name: string): () => void {
+  const calls = vi.mocked(Events.On).mock.calls as unknown as [string, () => void][];
+  const last = calls.filter(([n]) => n === name).pop();
+  if (!last) throw new Error(`no ${name} listener registered`);
+  return last[1];
+}
+
+describe("Popup cross-window sync (v1.3.2)", () => {
+  it("an entry deleted in the Manager disappears when the popup is shown again", async () => {
+    /* The reported bug: delete credentials in the Manager, open the popup
+       with the hotkey — they still sat under "Recent" / "Pinned & frequent"
+       because the popup's snapshot was loaded once at window mount. */
+    const live = state();
+    const afterDelete = state();
+    afterDelete.data.items[0].deletedAt = "2025-01-03T00:00:00.000Z";
+    vi.mocked(Call.ByName)
+      .mockResolvedValueOnce(live as never) // initial (mount) load
+      .mockResolvedValue(afterDelete as never); // every fetch after the delete
+
+    render(<PopupRoot />);
+    // The used entry shows under "Recent" on the first open.
+    expect(await screen.findByText("GitHub token")).toBeTruthy();
+    expect(screen.getByText("Recent")).toBeTruthy();
+
+    // Popup hidden (the user deletes the entry in the Manager window)…
+    setVisibility("hidden");
+    await act(async () => {});
+    // …and shown again by the hotkey: the snapshot must re-fetch.
+    setVisibility("visible");
+    await act(async () => {});
+    await waitFor(() => {
+      expect(screen.queryByText("GitHub token")).toBeNull();
+    });
+  });
+
+  it("re-fetches on the clavis:data-changed broadcast (delete while the popup is open)", async () => {
+    const live = state();
+    const afterDelete = state();
+    afterDelete.data.items[0].deletedAt = "2025-01-03T00:00:00.000Z";
+    vi.mocked(Call.ByName)
+      .mockResolvedValueOnce(live as never)
+      .mockResolvedValue(afterDelete as never);
+
+    render(<PopupRoot />);
+    expect(await screen.findByText("GitHub token")).toBeTruthy();
+
+    // The Manager deletes the entry; Go broadcasts clavis:data-changed.
+    await act(async () => {
+      eventCallback("clavis:data-changed")();
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("GitHub token")).toBeNull();
+    });
+  });
+
+  it("a failed copy re-syncs the snapshot (fast Enter on a since-deleted row)", async () => {
+    const live = state();
+    vi.mocked(Call.ByName)
+      .mockResolvedValueOnce(live as never) // initial load
+      .mockResolvedValueOnce({ ok: false, status: 400, error: "Item not found." }) // the copy
+      .mockResolvedValue(state() as never); // the re-sync fetch
+
+    render(<PopupRoot />);
+    expect(await screen.findByText("GitHub token")).toBeTruthy();
+
+    // Enter on the selected row → copy fails (entry was deleted in the
+    // Manager a moment ago) → the wrapper must re-fetch, not keep the
+    // dead row for the next keystroke.
+    await act(async () => {
+      const input = screen.getByLabelText("Search Clavis");
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+      );
+    });
+    await waitFor(() => {
+      const calls = vi.mocked(Call.ByName).mock.calls;
+      // Initial GetState + the Dispatch + the re-sync GetState.
+      expect(calls.length).toBeGreaterThanOrEqual(3);
+    });
   });
 });
 

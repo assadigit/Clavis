@@ -85,7 +85,21 @@ func (c *Clavis) GetState() service.StateEnvelope {
 
 // Dispatch is the single frontend entry point: action + JSON payload.
 func (c *Clavis) Dispatch(action, payloadJSON string) map[string]any {
-	return c.core.Dispatch(action, payloadJSON)
+	before := c.core.Store.Version()
+	res := c.core.Dispatch(action, payloadJSON)
+	/* Cross-window sync (v1.3.2): the Manager and the popup are separate
+	   webviews, each with its own snapshot. A delete made in the Manager
+	   used to keep showing up in the popup's "Recent" / "Pinned & frequent"
+	   sections, and popup copies never refreshed the Manager's Recent view —
+	   each window only updated from its own actions. Any successful action
+	   that moved the store's snapshot generation now broadcasts
+	   clavis:data-changed so every window (hidden ones included — their
+	   webviews stay alive) can re-fetch. Read-only actions (getValue, …)
+	   don't move the version and emit nothing. */
+	if ok, _ := res["ok"].(bool); ok && c.core.Store.Version() != before && c.app != nil {
+		c.app.Event.Emit("clavis:data-changed")
+	}
+	return res
 }
 
 /* ------------------------- windows ------------------------- */
@@ -111,6 +125,12 @@ func (c *Clavis) ShowManager() {
 	if c.manager != nil {
 		c.manager.Show()
 		c.manager.Focus()
+	}
+	/* Mirrors clavis:popup-shown (v1.3.2): the Manager webview re-fetches
+	   its snapshot when it comes back, so changes made through the popup
+	   while it was hidden (copies → Recent/use counters) are visible. */
+	if c.app != nil {
+		c.app.Event.Emit("clavis:manager-shown")
 	}
 }
 

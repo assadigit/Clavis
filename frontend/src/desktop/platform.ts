@@ -97,6 +97,15 @@ export const platform = {
   onPopupHidden(cb: () => void): () => void {
     return Events.On("clavis:popup-hidden", cb);
   },
+  /* v1.3.2 cross-window sync: any dispatch that changed the vault is
+     broadcast to every window (the Manager and the popup keep separate
+     snapshots), and the Manager is told when it is shown again. */
+  onDataChanged(cb: () => void): () => void {
+    return Events.On("clavis:data-changed", cb);
+  },
+  onManagerShown(cb: () => void): () => void {
+    return Events.On("clavis:manager-shown", cb);
+  },
   onManagerNewItem(cb: (prefill: string) => void): () => void {
     return Events.On("clavis:manager-new-item", (e: { data: unknown }) => cb(String(e.data ?? "")));
   },

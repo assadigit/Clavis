@@ -12,6 +12,14 @@
  * app restart (the fetch ran exactly once at mount). Now it shows a small
  * retry panel instead, and every later show retries silently for as long
  * as there is no data.
+ *
+ * v1.3.2 — the snapshot is no longer load-once: the Manager is a SEPARATE
+ * webview, so deletes/edits/restores made there never reached this window
+ * and deleted entries kept appearing under "Recent" and "Pinned &
+ * frequent" until a restart. The snapshot now re-fetches on every show
+ * and on every clavis:data-changed broadcast (Go emits it after any
+ * dispatch that moved the store generation — including mutations this
+ * window made itself; the in-flight guard makes that cheap).
  */
 "use client";
 
@@ -63,11 +71,20 @@ export function PopupRoot() {
     load(); // eager: the data is ready before the first hotkey press
   }, [load]);
 
-  /* Still no data when the window comes back? Retry silently — the first
-     failure must not brick the popup until an app restart. */
+  /* Re-fetch on EVERY show (v1.3.2): the snapshot can be older than the
+     vault — the Manager window edits/deletes in parallel and its responses
+     never reach this webview. This is the pull half of the sync; the push
+     half is the data-changed listener below. A failed refresh keeps the
+     last good snapshot (the retry panel only appears when there is no
+     data at all). */
   useEffect(() => {
-    if (open && !state) load();
-  }, [open, state, load]);
+    if (open) load();
+  }, [open, load]);
+
+  /* Push half: Go broadcasts clavis:data-changed after any mutation, from
+     either window. Hidden windows keep live webviews, so this arrives even
+     while the popup is closed and the next open starts fresh. */
+  useEffect(() => platform.onDataChanged(load), [load]);
 
   useEffect(() => {
     if (state) {
@@ -153,12 +170,14 @@ export function PopupRoot() {
       if (res.state) setState(res.state);
       return res;
     }
-    if (res.status === 409) {
-      try {
-        setState(await fetchState());
-      } catch {
-        /* keep the old snapshot */
-      }
+    /* A failed action almost always means this snapshot is stale (the
+       entry was deleted or changed in the Manager window) — re-sync so
+       the dead row disappears instead of failing again on the next
+       keystroke. Best-effort: keep the old snapshot if the fetch fails. */
+    try {
+      setState(await fetchState());
+    } catch {
+      /* keep the old snapshot */
     }
     return res;
   }, []);
