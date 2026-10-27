@@ -36,6 +36,12 @@ jobs:
       # exceptions live in scripts/check-tokens.mjs).
       - name: "Token lint"
         run: bun run lint:tokens
+      # UI-audit round 1 Phase 12 (F-016): WCAG AA contrast gate. Parses
+      # src/design-tokens.css :root + html.solid and asserts every pair in
+      # scripts/check-contrast.mjs meets 4.5:1 (or 3:1 for large text).
+      # Owns the color-contrast rule's job (axe can't measure in jsdom).
+      - name: "Contrast check (WCAG AA)"
+        run: bun run check:contrast
 
   go:
     name: Go core (fmt, vet, tests, release build, scans)

@@ -78,6 +78,14 @@ cd frontend && bunx npm install --package-lock-only --ignore-scripts && bunx npm
 
 CI runs all of the above on every push (`.github/workflows/ci.yml`).
 
+### UI quality gates (UI-audit round 1, Phase 12)
+
+Two extra gates run on every push (frontend job):
+
+- **Token lint** — `cd frontend && bun run lint:tokens` (`scripts/check-tokens.mjs`): no hex colors or px/ms literals outside `src/design-tokens.css` (allowlisted exceptions live in the script). Catches token drift (Phase 8, F-011).
+- **WCAG AA contrast** — `cd frontend && bun run check:contrast` (`scripts/check-contrast.mjs`): parses `src/design-tokens.css` `:root` and `html.solid`, checks every text/background pair in the script's `PAIRS` list at 4.5:1 (normal text) or 3:1 (large text). Add a pair whenever a new text/bg combination lands in the tokens. Owns the axe `color-contrast` rule's job (jsdom can't measure real contrast).
+- **axe-core a11y** — `cd frontend && bun run test` runs `src/components/clavis/a11y.test.tsx`, which renders every major screen (Manager, Settings, ItemEditor, GroupEditor, TrashView, ManageItemsModal, Popup) with fake data and asserts axe finds no violations outside the documented disabled rules (color-contrast is owned by the contrast script; region / nested-interactive / aria-required-children / aria-allowed-role are pre-existing a11y debt disabled with comments and recorded as round-2 candidates in `docs/ui-audit/round-1/06-next-focus.md`). The gate catches any new violation introduced by future changes.
+
 ## Release
 
 1. Bump the version in **three** places (keep them in sync):
