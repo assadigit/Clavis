@@ -14,6 +14,14 @@
  * it in jsdom). The pair list lives here — add a pair whenever a new
  * text/background combination lands in the design tokens.
  *
+ * v1.3.1 hardening: the list grew from 12 to 15 pairs per theme (30 total),
+ * covering the selected-row surface (--glass-bg-selected), the app canvas
+ * (--backdrop-base) and the button hover states (danger → danger-text,
+ * primary → primary-strong). A pair that resolves to anything other than a
+ * hex literal now FAILS loudly: rgb()/rgba() tints (like --glass-bg-hover)
+ * composite over an unknown base, so the script cannot measure them — such
+ * a pair is a real coverage gap, never a silent pass.
+ *
  * Usage:
  *   node scripts/check-contrast.mjs
  *
@@ -56,14 +64,16 @@ function parseTokens(css) {
 /**
  * Resolve a CSS value (like `var(--gray-200)` or `#FFFFFF` or
  * `var(--color-primary)`) against a token map, recursively. Returns the
- * first hex/rgb literal it finds, or throws if it can't resolve.
+ * hex literal it resolves to, or throws if it can't. v1.3.1: only hex
+ * literals are accepted as final values — rgb()/rgba()/named colors fail
+ * loudly (see the header comment for why).
  */
 function resolveVar(value, tokens, seen = new Set()) {
   if (seen.has(value)) throw new Error(`circular reference: ${value}`);
   seen.add(value);
   const v = value.trim();
-  // Direct hex/rgb literal.
-  if (/^(#[0-9a-fA-F]{3,8}|rgb)/.test(v)) return v;
+  // Direct hex literal — the only final value the math below understands.
+  if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v;
   // var(--name, fallback?)
   const varMatch = v.match(/^var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,\s*([^)]+))?\)$/);
   if (varMatch) {
@@ -72,8 +82,9 @@ function resolveVar(value, tokens, seen = new Set()) {
     if (!next) throw new Error(`unresolved: ${name}`);
     return resolveVar(next, tokens, seen);
   }
-  // Fallback: maybe a bare color literal we don't recognize.
-  throw new Error(`cannot resolve value: ${value}`);
+  // Anything else (rgb()/rgba() tints, transparent, none, named colors)
+  // cannot be measured — fail loudly instead of passing silently.
+  throw new Error(`non-hex value: ${value}`);
 }
 
 /* ---- color math --------------------------------------------------------- */
@@ -115,11 +126,14 @@ function contrast(fg, bg) {
 /* ---- pair list & runner ------------------------------------------------- */
 
 /**
- * The pairs the app actually uses. Add a pair whenever a new
- * text/background combination lands in the design tokens. `large: true`
- * loosens the threshold from 4.5:1 to 3:1 (WCAG AA large-text definition:
- * ≥24px regular, or ≥18.66px bold). Clavis body text is at most --text-lg
- * (16px), so every pair is treated as normal text by default.
+ * The pairs the app actually uses — 15 per theme (30 total, v1.3.1).
+ * Surfaces: panels (--glass-bg), selected rows (--glass-bg-selected), the
+ * canvas (--backdrop-base), primary buttons normal + hover, danger buttons
+ * normal + hover. Add a pair whenever a new text/background combination
+ * lands in the design tokens. `large: true` loosens the threshold from
+ * 4.5:1 to 3:1 (WCAG AA large-text definition: ≥24px regular, or ≥18.66px
+ * bold). Clavis body text is at most --text-lg (16px), so every pair is
+ * treated as normal text by default.
  */
 const PAIRS = [
   // Light theme
@@ -129,6 +143,15 @@ const PAIRS = [
   { theme: "root",  fg: "--color-danger-text",     bg: "--glass-bg",          label: "danger text on panel (light)" },
   { theme: "root",  fg: "--color-warning-text",    bg: "--glass-bg",          label: "warning text on panel (light)" },
   { theme: "root",  fg: "--color-success-text",    bg: "--glass-bg",          label: "success text on panel (light)" },
+  { theme: "root",  fg: "--text",                  bg: "--glass-bg-selected", label: "text on selected row (light)" },
+  { theme: "root",  fg: "--text-muted",            bg: "--glass-bg-selected", label: "muted text on selected row (light)" },
+  { theme: "root",  fg: "--color-accent-text",     bg: "--glass-bg-selected", label: "accent text on selected row (light)" },
+  { theme: "root",  fg: "--text",                  bg: "--backdrop-base",     label: "text on canvas (light)" },
+  { theme: "root",  fg: "--text-muted",            bg: "--backdrop-base",     label: "muted text on canvas (light)" },
+  { theme: "root",  fg: "--color-accent-text",     bg: "--backdrop-base",     label: "accent text on canvas (light)" },
+  { theme: "root",  fg: "--text-on-primary",       bg: "--color-danger-fill",  label: "danger button text (light)" },
+  { theme: "root",  fg: "--text-on-primary",       bg: "--color-danger-text",  label: "danger button text, hover (light)" },
+  { theme: "root",  fg: "--text-on-primary",       bg: "--color-primary-strong", label: "button text on primary, hover (light)" },
   // Dark theme
   { theme: "solid", fg: "--text",                  bg: "--glass-bg",          label: "text on panel (dark)" },
   { theme: "solid", fg: "--text-muted",            bg: "--glass-bg",          label: "muted text on panel (dark)" },
@@ -136,6 +159,15 @@ const PAIRS = [
   { theme: "solid", fg: "--color-danger-text",    bg: "--glass-bg",          label: "danger text on panel (dark)" },
   { theme: "solid", fg: "--color-warning-text",   bg: "--glass-bg",          label: "warning text on panel (dark)" },
   { theme: "solid", fg: "--color-success-text",   bg: "--glass-bg",          label: "success text on panel (dark)" },
+  { theme: "solid", fg: "--text",                  bg: "--glass-bg-selected", label: "text on selected row (dark)" },
+  { theme: "solid", fg: "--text-muted",            bg: "--glass-bg-selected", label: "muted text on selected row (dark)" },
+  { theme: "solid", fg: "--color-accent-text",     bg: "--glass-bg-selected", label: "accent text on selected row (dark)" },
+  { theme: "solid", fg: "--text",                  bg: "--backdrop-base",     label: "text on canvas (dark)" },
+  { theme: "solid", fg: "--text-muted",            bg: "--backdrop-base",     label: "muted text on canvas (dark)" },
+  { theme: "solid", fg: "--color-accent-text",     bg: "--backdrop-base",     label: "accent text on canvas (dark)" },
+  { theme: "solid", fg: "--text-on-primary",       bg: "--color-danger-fill",  label: "danger button text (dark)" },
+  { theme: "solid", fg: "--text-on-primary",       bg: "--color-danger-text",  label: "danger button text, hover (dark)" },
+  { theme: "solid", fg: "--text-on-primary",       bg: "--color-primary-strong", label: "button text on primary, hover (dark)" },
 ];
 
 function main() {

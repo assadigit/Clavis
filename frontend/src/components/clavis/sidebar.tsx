@@ -46,9 +46,7 @@ function NavRow({ icon, label, count, active, onClick }: NavRowProps) {
   return (
     <button
       type="button"
-      role="treeitem"
-      aria-level={1}
-      aria-selected={active}
+      aria-current={active ? "true" : undefined}
       data-selected={active ? "true" : "false"}
       onClick={onClick}
       className="glass-row clavis-focusable flex w-full items-center"
@@ -127,7 +125,6 @@ export function Sidebar({ state, call, readOnly, filter, setFilter }: SidebarPro
 
   return (
     <aside
-      role="tree"
       aria-label="Clavis navigation"
       className="clavis-sidebar-col clavis-col clavis-scroll flex flex-col"
       style={{ width: "calc(var(--space-6) * 7)", flexShrink: 0, padding: "var(--space-3)", gap: "var(--space-1)", overflowY: "auto", borderRight: "1px solid var(--glass-border)" }}

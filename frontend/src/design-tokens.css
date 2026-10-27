@@ -45,7 +45,7 @@
 
   /* ---- Text ---- */
   --text: #1B2029;                          /* BW text-main — 15.6:1 on white */
-  --text-muted: #606D91;                    /* BW text-muted — 5.6:1 on white */
+  --text-muted: #57647F;                    /* BW text-muted, darkened for AA — 5.9:1 on white, 4.68:1 on selected rows (v1.3.1) */
   --text-on-primary: #FFFFFF;               /* on #175DDC = 4.7:1 */
   --text-on-accent: #FFFFFF;
 
@@ -133,12 +133,12 @@ html.solid {
   --color-neutral: #525B6A;
 
   --text: #F3F6F9;                               /* BW dark text-main */
-  --text-muted: #8898B5;                         /* BW dark text-muted */
+  --text-muted: #97A8C5;                         /* BW dark text-muted, lightened for AA — 6.2:1 on panels, 4.78:1 on selected rows (v1.3.1) */
   --text-on-primary: #121A27;                    /* dark text on the light-blue button */
   --text-on-accent: #121A27;
 
   --color-success-text: #6BF178;                 /* BW dark success-600 */
-  --color-danger-fill: #CB263A;
+  --color-danger-fill: #E05468;                   /* lightened for AA — dark on-primary text = 4.69:1 (v1.3.1) */
   --color-danger-text: #FF4E63;                  /* BW dark danger-600 */
   --color-warning-text: #FFBF00;
 

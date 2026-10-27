@@ -1,9 +1,15 @@
 /**
- * CLAVIS — a11y test (UI-audit round 1, Phase 12, F-016). Renders each
- * major screen with fake data and runs axe-core against the rendered
- * container. Color-contrast is disabled here (jsdom can't measure it;
- * `scripts/check-contrast.mjs` owns that). Fails on any other serious
- * violation. Fake data only — no real secrets. Wails runtime mocked.
+ * CLAVIS — a11y test (UI-audit round 1, Phase 12, F-016; tightened in
+ * v1.3.1). Renders each major screen with fake data and runs axe-core
+ * against the rendered container. Color-contrast is disabled here (jsdom
+ * can't measure it; `scripts/check-contrast.mjs` owns that). Fails on any
+ * other serious violation. Fake data only — no real secrets. Wails runtime
+ * mocked.
+ *
+ * v1.3.1: the standalone sub-screens (editors, trash) render inside
+ * `<aside aria-label="Details">` — the same landmark they live in inside
+ * the real Manager — so the `region` rule measures production context,
+ * not a bare test render.
  */
 import { describe, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render } from "@testing-library/react";
@@ -128,41 +134,49 @@ describe("a11y: every major screen passes axe (color-contrast disabled — owned
 
   it("ItemEditor (edit mode) passes axe", async () => {
     render(
-      <ItemEditor
-        mode="edit"
-        state={state()}
-        call={call}
-        readOnly={false}
-        item={state().data.items[0]}
-        onDone={vi.fn()}
-        onSelectEntry={vi.fn()}
-        deleteEntry={vi.fn()}
-        onCancelCreate={vi.fn()}
-      />,
+      <aside aria-label="Details">
+        <ItemEditor
+          mode="edit"
+          state={state()}
+          call={call}
+          readOnly={false}
+          item={state().data.items[0]}
+          onDone={vi.fn()}
+          onSelectEntry={vi.fn()}
+          deleteEntry={vi.fn()}
+          onCancelCreate={vi.fn()}
+        />
+      </aside>,
     );
     await expectNoViolations(document.body);
   });
 
   it("GroupEditor (edit mode) passes axe", async () => {
     render(
-      <GroupEditor
-        mode="edit"
-        state={state()}
-        call={call}
-        readOnly={false}
-        group={group()}
-        onDone={vi.fn()}
-        onSelectEntry={vi.fn()}
-        deleteEntry={vi.fn()}
-        onManageItems={vi.fn()}
-        onCancelCreate={vi.fn()}
-      />,
+      <aside aria-label="Details">
+        <GroupEditor
+          mode="edit"
+          state={state()}
+          call={call}
+          readOnly={false}
+          group={group()}
+          onDone={vi.fn()}
+          onSelectEntry={vi.fn()}
+          deleteEntry={vi.fn()}
+          onManageItems={vi.fn()}
+          onCancelCreate={vi.fn()}
+        />
+      </aside>,
     );
     await expectNoViolations(document.body);
   });
 
   it("TrashView passes axe", async () => {
-    render(<TrashView state={state({ withDeleted: true })} call={call} readOnly={false} />);
+    render(
+      <aside aria-label="Details">
+        <TrashView state={state({ withDeleted: true })} call={call} readOnly={false} />
+      </aside>,
+    );
     await expectNoViolations(document.body);
   });
 

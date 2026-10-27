@@ -55,8 +55,8 @@ export function EntryListRow({
     <div
       ref={registerRef}
       id={`clavis-list-row-${index}`}
-      role="option"
-      aria-selected={selected}
+      role="listitem"
+      aria-current={selected ? "true" : undefined}
       tabIndex={-1}
       data-selected={selected ? "true" : "false"}
       className="glass-row clavis-focusable flex cursor-pointer items-center"

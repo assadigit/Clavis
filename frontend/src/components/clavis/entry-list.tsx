@@ -253,7 +253,7 @@ export function EntryList({
         </div>
       ) : (
         <div
-          role="listbox"
+          role="list"
           aria-label="Entries"
           tabIndex={0}
           className="clavis-scroll clavis-focusable clavis-divided flex flex-col"

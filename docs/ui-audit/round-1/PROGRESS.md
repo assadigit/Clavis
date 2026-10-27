@@ -36,6 +36,7 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 | 12 | UI quality gates: axe + contrast (F-016) | **done** | `8973238` (cherry-picked onto remote) | 7 tests in `a11y.test.tsx`; 12 WCAG AA pairs; both gates proven to bite |
 | R1 | Final re-audit: lenses + full baseline + after screenshots + `07-before-after.md` + `06-next-focus.md` | **done** | (this cherry-pick) | 34 after-screenshots captured via agent-browser + mocked frontend; all 28 findings have final status; full baseline re-run on Linux-testable parts |
 | R2 | Release v1.3.0 (bump ×5, tag, push, verify live) | **done** | `7af7d97` (release commit) + tag `v1.3.0` + GitHub Release id `426044221` | both assets uploaded; release notes set; workflow run #40593166882 completed success |
+| v1.3.1 | Hardening: 3 WCAG AA contrast fixes + stronger a11y gates (separate session, after v1.3.0) | **done** | (this commit) + tag `v1.3.1` | see “v1.3.1 hardening” section below; 30/30 contrast pairs; axe gate down to 1 disabled rule |
 
 ### Phase 1 detail (done)
 
@@ -93,7 +94,7 @@ Final (recorded at Phase R1, after every Phase 1–12 + Phase 12 + R1 verificati
 | F-013 | P3 | **fixed** | 7 | non-secret items show no preview (or text preview) instead of lying dots; `derive.test.ts` pins both; after-screenshot `popup-recent-640.png` |
 | F-014 | P3 | **fixed** | 10 | `btnClasses(variant)` exported; Menu trigger uses it (grep: one definition) |
 | F-015 | P3 | **fixed** | 8 | typography tokens `--leading-*`/`--tracking-*` added; all eight literals replaced; SectionHeader is `h2` |
-| F-016 | P3 opp | **fixed** | 12 | contrast gate (`check-contrast.mjs`) + axe gate (`a11y.test.tsx`) — 12 pairs AA-pass; 5 pre-existing a11y violations disabled with comments + recorded for round 2 |
+| F-016 | P3 opp | **fixed** | 12 | contrast gate (`check-contrast.mjs`) + axe gate (`a11y.test.tsx`) — 12 pairs AA-pass; 5 pre-existing a11y violations disabled with comments + recorded for round 2. **Hardened in v1.3.1** (see the "v1.3.1 hardening" section): 30 pairs AA-pass; only `color-contrast` still disabled — the other 4 rules were fixed in markup and re-enabled |
 | F-017 | P1 feat | **fixed** | 4 | `clavis-fragment` JSON export + merge import (11 Go tests + 3 frontend tests); folder-import cap added |
 | F-018 | P2 | **mitigated** | 4 | the lossless JSON path now exists (Phase 4); the Markdown exporter itself still drops the Note field (round-2 candidate) |
 | F-019 | P2 | **mitigated** | 4 | same — JSON fragments preserve per-item metadata and shared references; Markdown round-trip still lossy (round-2 candidate) |
@@ -119,21 +120,22 @@ Final (recorded at Phase R1, after every Phase 1–12 + Phase 12 + R1 verificati
 
 ## Rollback plan
 
-**Filled in before deploying (Phase R2 task 1) — the plan is to ship v1.3.0 from this session's `main`.**
+**Rewritten before deploying v1.3.1 (the v1.3.0-era plan is superseded; releases are append-only so v1.3.0's plan stays historically accurate in git history).**
 
-- **What is live right now**: v1.2.0 (tag `v1.2.0`, commit `8edcecc` on `main`). Users on older versions self-update to it. The in-app self-updater downloads `Clavis-Setup-1.2.0.exe` + `Clavis-Portable-1.2.0.exe` from the v1.2.0 GitHub Release.
-- **What this session ships**: v1.3.0, from commit `<TBD>` (the `release: v1.3.0` commit). Tag `v1.3.0` (annotated, lightweight also accepted by the release workflow) → `.github/workflows/release.yml` builds `Clavis-Setup-1.3.0.exe` + `Clavis-Portable-1.3.0.exe` on `windows-latest` and publishes them to the GitHub Release for that tag. The version guard in `release.yml` checks that the tag, `AppVersion` (app.go), NSIS `VERSION`, `APP_VERSION` (types.ts) and winres `product_version` all agree to `1.3.0`.
-- **Restore tags** (already exist, local + remote, verified at session start):
+- **What is live right now**: v1.3.0 (tag `v1.3.0`, commit `7af7d97` on `main`, GitHub Release id `426044221`). Clients on older versions self-update to it. The in-app self-updater downloads `Clavis-Setup-1.3.0.exe` + `Clavis-Portable-1.3.0.exe` from the v1.3.0 GitHub Release.
+- **What this session ships**: v1.3.1 — the three WCAG AA contrast fixes + the a11y gate hardening described in the "v1.3.1 hardening" section above. Tag `v1.3.1` → `.github/workflows/release.yml` (tag-driven, `windows-latest`) builds `Clavis-Setup-1.3.1.exe` + `Clavis-Portable-1.3.1.exe` and publishes them to the GitHub Release for that tag. The workflow's version guard checks that the tag, `AppVersion` (app.go), NSIS `VERSION`, `APP_VERSION` (types.ts) and winres `product_version` all agree on 1.3.1.
+- **Restore tags** (already exist, local + remote — verify with `git tag -l` before using):
   - `pre-ui-audit-round-1` → commit `8edcecc` (the audit session's restore point — v1.2.0, before the audit).
-  - `pre-ui-upgrade-round-1` → commit `e0bf65b` (this upgrade session's restore point — before any product code change; the last commit on `main` that predates Phase 1).
+  - `pre-ui-upgrade-round-1` → commit `e0bf65b` (the upgrade session's restore point — before any round-1 product code change).
+  - `v1.3.0` → commit `7af7d97` (the release this hardening fixes; the state to return to if v1.3.1 ever has to be backed out).
 - **Exact undo steps (if anything fails)**:
-  1. **Diagnose** — read the failed release workflow's logs (`.github/workflows/release.yml` run on the v1.3.0 tag). The version guard, the build, and the asset upload each have their own step; the failure point tells you which to fix.
-  2. **Revert on `main`** — `git revert <release-sha> --no-edit` on `main`; this undoes the `release: v1.3.0` commit (the 5-place version bump). If the bug is in an earlier phase, also revert that phase's commit. Push `main`.
-  3. **Bump to v1.3.1** — even with the revert on `main`, the v1.3.0 GitHub Release already published. Clients that auto-updated to v1.3.0 will need a *forward* update to a fixed version. Bump the 5 places to `1.3.1` (app.go, NSIS, winres, types.ts, new tag `v1.3.1`). Commit `release: v1.3.1` and push the tag. The release workflow ships `Clavis-Setup-1.3.1.exe` + `Clavis-Portable-1.3.1.exe`; clients self-update forward to the fix.
-  4. **(Optional) Delete the bad release's assets** — the v1.3.0 GitHub Release URL stays (releases are append-only), but its assets can be removed via GitHub's UI to prevent further downloads. Never force-push tags.
-  5. **(Restore-to-audit-baseline fallback)** — if reverting is impractical, `git reset --hard pre-ui-upgrade-round-1` in a scratch branch to inspect the audit's pre-upgrade state; the release workflow only fires on tags pushed to `main`, so this scratch branch doesn't ship anything.
-- **Never force-push tags** — the v1.2.0, v1.3.0, v1.3.1 tags are append-only historical record; force-pushing a tag would break the self-update chain for clients that already saw the original tag.
-- **Verification the rollback worked** — the v1.3.1 GitHub Release exists with both assets; the v1.2.0 GitHub Release is untouched; the v1.3.0 GitHub Release either has its assets removed (option 4) or stays with a "known broken, use v1.3.1" note. `main`'s `HEAD` is at the v1.3.1 release commit; `gofmt -l .`, `go vet ./...`, `go test ./...`, `bun run build`, `bun run test` all green at the new HEAD.
+  1. **Diagnose** — read the failed release workflow's logs (the `release.yml` run on the v1.3.1 tag). The version guard, the frontend build, the Go build, NSIS, and the asset upload each have their own step; the failure point tells you which to fix. (If the *frontend tests or contrast gate* fail in CI, that is a genuine regression — the same gates ran green at the release commit locally: 79/79 tests, 30/30 pairs.)
+  2. **Revert on `main`** — `git revert <v1.3.1-release-sha> --no-edit` on `main`; this undoes the `release: v1.3.1` commit (the 5-place version bump + the hardening, which all landed in that one commit). Push `main`.
+  3. **Bump to v1.3.2** — even with the revert on `main`, the v1.3.1 GitHub Release may already be published. Clients that auto-updated to v1.3.1 need a *forward* update to a fixed version. Bump the 5 places to `1.3.2` (app.go, NSIS, winres, types.ts, new tag `v1.3.2`). Commit `release: v1.3.2` and push the tag. The release workflow ships `Clavis-Setup-1.3.2.exe` + `Clavis-Portable-1.3.2.exe`; clients self-update forward to the fix.
+  4. **(Optional) Delete the bad release's assets** — the v1.3.1 GitHub Release URL stays (releases are append-only), but its assets can be removed via GitHub's UI to prevent further downloads, and a "known broken, use v1.3.2" note added to the release body. Never force-push tags.
+  5. **(Restore-point fallback)** — if reverting is impractical, `git reset --hard v1.3.0` (or `pre-ui-upgrade-round-1`) in a *scratch branch* to inspect the older state; the release workflow only fires on tags, so a scratch branch ships nothing.
+- **Never force-push tags** — `v1.2.0`, `v1.3.0`, `v1.3.1` (and any later) are append-only historical record; force-pushing a tag would break the self-update chain for clients that already saw the original tag.
+- **Verification the rollback worked** — the v1.3.2 GitHub Release exists with both assets; the v1.3.0 GitHub Release is untouched; `main`'s `HEAD` is at the v1.3.2 release commit; `gofmt -l .`, `go vet ./...`, `go test ./internal/...`, `bun run build`, `bun run test`, `bun run lint:tokens`, `bun run check:contrast` all green at the new HEAD.
 
 ### Phase 5 detail (done) — F-002, F-005, F-006, F-007, F-008 fixed
 
@@ -254,6 +256,40 @@ Two new gates run on every push and bite on regression; both proven to fail when
 - **What this session could NOT verify** (recorded honestly): the Windows-only behavior (hotkey, real Win+V exclusion, the popup's `ForceForeground`, the self-update chain, NSIS installer behavior on a clean VM). The release notes' smoke-test checklist is for the owner to run — it is the round-2 backlog's first item (per `06-next-focus.md`).
 - **Rollback not triggered** — the release workflow succeeded; v1.2.0 stays live (the v1.2.0 GitHub Release is untouched, since releases are append-only); v1.3.0 is the new self-update target for all clients running older versions.
 - Nothing skipped.
+
+### v1.3.1 hardening (done) — three WCAG AA contrast fixes + stronger gates
+
+A separate session (2026-10-28, after v1.3.0 shipped) audited v1.3.0's tokens against the surfaces the 12-pair gate did not yet cover and found **three real WCAG AA failures that shipped in v1.3.0**. All three are state combinations — selected rows and dark-mode danger buttons — which is exactly why the Phase 12 gate (panels only) missed them. This section records what changed and why; everything is a token value, a role attribute, or a gate config — no logic, no layout, no Go code.
+
+**The three failures, before → after** (WCAG AA needs ≥ 4.5:1 for normal text):
+
+| Where | Pair | v1.3.0 | v1.3.1 | Verdict |
+|---|---|---|---|---|
+| Selected rows, light theme (entry list, sidebar, popup) | `--text-muted` on `--glass-bg-selected` | `#606D91` on `#DBE5F6` = **4.04:1 — FAIL** | `#57647F` = **4.68:1 — PASS** | the two-line rows' meta line (category · tags) on the selected row |
+| Selected rows, dark theme | `--text-muted` on `--glass-bg-selected` | `#8898B5` on `#2A3A52` = **3.95:1 — FAIL** | `#97A8C5` = **4.78:1 — PASS** | same surface, dark mode |
+| Danger buttons, dark theme (delete buttons, titlebar close hover) | `--text-on-primary` on `--color-danger-fill` | `#121A27` on `#CB263A` = **3.22:1 — FAIL** | fill lightened to `#E05468` = **4.69:1 — PASS** | “Delete” / “Empty trash” / “Delete forever” buttons in dark mode |
+
+Side effects of the token swaps (all verified AA): light muted text on panels 5.13→5.94:1 and on canvas 5.48:1; dark muted on panels 6.23:1 and on canvas 7.25:1; light danger button unchanged (`#CB263A` with white text = 5.42:1 — only the DARK fill changed). Visual diff: the two muted grays shift a few percent darker/lighter; the dark danger button goes from deep red to a lighter red — same hue family, same border/icon system.
+
+**Markup fixes** (screen-reader semantics; zero pixels move):
+- `sidebar.tsx`: the `<aside>` drops its invalid `role="tree"`; NavRow buttons drop `role="treeitem"`/`aria-level`/`aria-selected` and carry `aria-current={active ? "true" : undefined}` instead — the standard nav pattern. This removes the `aria-allowed-role` and `aria-required-children` violations Phase 12 had to disable.
+- `entry-list.tsx` + `entry-list/entry-list-row.tsx`: the list container goes `role="listbox"` → `role="list"` and rows `role="option"`/`aria-selected` → `role="listitem"`/`aria-current` — the same pattern the trash list already uses. Rows keep `tabIndex={-1}`, their ids and the arrow-key handler, so keyboard navigation is unchanged. This removes the `nested-interactive` violation (a listbox option must not contain the copy/pin buttons; a list item may).
+- The popup's combobox (`role="listbox"`/`role="option"` with `aria-selected`) is deliberately untouched — it is the correct ARIA pattern there and has no nested interactives.
+
+**Gate hardening:**
+- `scripts/check-contrast.mjs`: 12 → **15 pairs per theme (30 total)** — adding the selected-row surface (`--text`, `--text-muted`, `--color-accent-text` on `--glass-bg-selected`; the accent pair covers the popup's selected-row icon/text, the sidebar's active icon and a pinned pin on a selected row), the canvas (`--text`, `--text-muted`, `--color-accent-text` on `--backdrop-base`), and the button hover states (`--text-on-primary` on `--color-danger-fill`, on `--color-danger-text`, on `--color-primary-strong`). A pair that resolves to anything other than a hex literal now **fails loudly** — `rgb()/rgba()` tints (like `--glass-bg-hover`) composite over an unknown base, so they are a coverage gap, never a silent pass.
+- `src/test/a11y.ts`: only `color-contrast` stays disabled (jsdom cannot measure it; the contrast script owns it). The four rules Phase 12 disabled (`region`, `nested-interactive`, `aria-required-children`, `aria-allowed-role`) are live again — the markup fixes above make them pass. In `a11y.test.tsx`, the standalone sub-screens (both editors, trash) render inside `<aside aria-label="Details">`, the same landmark they live in inside the real Manager, so the `region` rule measures production context.
+
+**Honest notes:**
+- The prepared patch file (`clavis-phase12-aa-fixes.patch`, written against `abb77ee`) was **not present in this session's environment** — the changes were re-made on current `main` from the task's item-by-item spec (which the task itself instructed: “apply it as a GUIDE, not blindly”). The spec listed seven new pair kinds; the stated target was “15 pairs per theme / 30 total”, so two more per theme were added to reach it — `--color-accent-text` on `--glass-bg-selected` and `--text-muted` on `--backdrop-base` — both backed by real usage (see above) and both passing with headroom (4.55:1 / 5.48:1 light, 4.83:1 / 7.25:1 dark).
+- The dark-mode toggle in the live mock verification had to be forced via `classList` for the light-theme screenshot (the mock's `Dispatch` never round-trips settings state) — app toggle logic is untouched and covered by `settings-view.test.tsx`.
+
+**Verification (all at the release commit):**
+- `cd frontend && bun run build` ✓ · `bun run test` **79/79** in 14 files ✓ (the axe gate now runs with only `color-contrast` disabled) · `bun run lint:tokens` ✓ · `bun run check:contrast` **30/30 pairs** ✓.
+- Bite proofs re-run: the three v1.3.0 token values fail the new gate (4.04 / 3.95 / 3.22 — three FAIL rows, exit 1); a pair on the rgba hover tint fails loudly (`non-hex value: rgba(26, 65, 172, 0.08)`, exit 1); temporarily restoring `role="tree"` on the sidebar makes the Manager axe test fail with exactly the three re-enabled rules (`aria-allowed-role`, `aria-required-children`, `region`) — then green again after restore.
+- Go side untouched but re-verified: `gofmt -l .` empty ✓ · `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...` ✓ · `go test ./internal/...` all ok ✓.
+- Live a11y tree re-run (mocked frontend, real browser): the manager's sidebar is a plain `complementary "Clavis navigation"` landmark of buttons; the entry list is `list "Entries"` with `listitem` rows and nested copy/pin buttons; clicking a row sets `aria-current="true"` (2 nodes: the row + the active sidebar item); computed styles confirm the new tokens actually render — light muted `rgb(87,100,127)` on selected `rgb(219,229,246)`, dark muted `rgb(151,168,197)` on selected `rgb(42,58,82)`, dark danger fill `rgb(224,84,104)`; the popup still shows the full combobox/listbox/option pattern; console clean, no page errors.
+- Nothing skipped. Off-limits areas (secret-protection, clipboard, hotkey, real vault) untouched — the diff is 7 frontend files + this doc + the 4 version files.
 
 ### Phase R1 detail (done) — final re-audit
 
