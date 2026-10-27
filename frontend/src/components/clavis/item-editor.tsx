@@ -12,8 +12,6 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  Eye,
-  EyeOff,
   FileJson,
   FileText,
   Link2,
@@ -26,10 +24,11 @@ import { autoKey } from "@/lib/clavis/dotenv";
 import { messages } from "@/lib/clavis/messages";
 import type { ClavisState, Group, Item } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
-import { allTags, formatDateTime, groupsContaining, maskValue } from "./derive";
+import { allTags, formatDateTime, groupsContaining } from "./derive";
 import { EntryTile, Ix } from "./icons";
 import { SharedDeleteModal, SharedEditModal } from "./shared-modals";
-import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
+import { ValueField } from "./editors/value-field";
+import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
 interface ItemDraft {
   name: string;
@@ -102,7 +101,6 @@ export function ItemEditor(props: ItemEditorProps) {
     // The manager remounts this editor (key includes updatedAt) whenever the
     // item changes, so a per-item fetch effect is enough.
   }, [mode, item, call]);
-  const [revealed, setRevealed] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingSave, setPendingSave] = useState<{ patch: Record<string, unknown>; groups: Group[] } | null>(null);
@@ -269,8 +267,6 @@ export function ItemEditor(props: ItemEditorProps) {
     }
   }
 
-  const editMasked = mode === "edit" && effectiveSecret && !revealed;
-
   if (mode === "edit" && loadedValue === null) {
     return (
       <div
@@ -360,38 +356,14 @@ export function ItemEditor(props: ItemEditorProps) {
         </div>
       ) : null}
 
-      <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
-        <FieldLabel htmlFor="clavis-item-value">Value</FieldLabel>
-        {editMasked ? (
-          <div className="glass-input flex items-center justify-between" style={{ padding: "var(--space-2) var(--space-3)", gap: "var(--space-2)" }}>
-            <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-sm)" }}>
-              {maskValue(draft.value, showLast4)}
-            </span>
-            <Btn variant="glass" icon={Eye} label="Reveal" onClick={() => setRevealed(true)} ariaLabel="Reveal value" />
-          </div>
-        ) : (
-          <div className="flex flex-col" style={{ gap: "var(--space-1)", width: "100%" }}>
-            {mode === "edit" && effectiveSecret ? (
-              <div className="flex justify-end">
-                <Btn variant="ghost" icon={EyeOff} label="Hide" onClick={() => setRevealed(false)} ariaLabel="Hide value" />
-              </div>
-            ) : null}
-            <TextArea
-              id="clavis-item-value"
-              mono
-              dir="auto"
-              value={draft.value}
-              disabled={readOnly}
-              spellCheck={false}
-              aria-label="Value"
-              placeholder="The token, prompt or note…"
-              rows={6}
-              onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value }))}
-            />
-            <FieldHint>Enter saves · Ctrl+Enter adds a line</FieldHint>
-          </div>
-        )}
-      </div>
+      <ValueField
+        isEdit={mode === "edit"}
+        secret={effectiveSecret}
+        value={draft.value}
+        onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value }))}
+        disabled={readOnly}
+        showLast4={showLast4}
+      />
 
       <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
         <FieldLabel>Category</FieldLabel>
