@@ -26,12 +26,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, Check, GripVertical, Layers, Link2, Plus, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, GripVertical, Layers, Plus, X } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState, Group } from "@/lib/clavis/types";
 import { groupMemberKeys, rowPreview, sharedCountMap } from "./derive";
 import { EntryTypeIcon, Ix } from "./icons";
-import { Btn, FieldHint, FieldLabel, Modal } from "./ui-bits";
+import { Btn, FieldHint, FieldLabel, MemberRowBody, Modal, SearchField } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 
 export interface ManageItemsModalProps {
@@ -174,43 +174,20 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
           <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
             <FieldLabel>Add items</FieldLabel>
             <div className="flex items-center" style={{ gap: "var(--space-2)" }}>
-              <div className="relative min-w-0 flex-1">
-                <Ix
-                  icon={Search}
-                  size="sm"
-                  style={{
-                    position: "absolute",
-                    left: "var(--space-3)",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "var(--text-muted)",
-                    pointerEvents: "none",
-                  }}
-                />
-                <input
-                  className="glass-input"
-                  value={addQuery}
-                  onChange={(e) => setAddQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && picked.size > 0) {
-                      e.preventDefault();
-                      void applyPicked();
-                    }
-                  }}
-                  placeholder="Search items to add…"
-                  aria-label="Search items to add"
-                  spellCheck={false}
-                  autoFocus
-                  style={{
-                    width: "100%",
-                    padding: "var(--space-2) var(--space-3)",
-                    paddingLeft: "calc(var(--space-3) + var(--text-lg) + var(--space-1))",
-                    fontSize: "var(--text-sm)",
-                    fontFamily: "var(--font-ui)",
-                    color: "var(--text)",
-                  }}
-                />
-              </div>
+              {/* F-027 (UI-audit round 1 Phase 10): shared SearchField. */}
+              <SearchField
+                value={addQuery}
+                onChange={(e) => setAddQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && picked.size > 0) {
+                    e.preventDefault();
+                    void applyPicked();
+                  }
+                }}
+                placeholder="Search items to add…"
+                ariaLabel="Search items to add"
+                autoFocus
+              />
               <Btn
                 variant="primary"
                 label={picked.size > 0 ? `Add ${picked.size} item${picked.size === 1 ? "" : "s"}` : "Add items"}
@@ -362,28 +339,8 @@ function SortableMemberRow({
         </span>
       )}
       <EntryTypeIcon kind="item" isSecret={isSecret} size="md" />
-      <span className="flex min-w-0 flex-1 flex-col items-start" style={{ gap: "calc(var(--space-1) / 2)" }}>
-        <span className="flex w-full min-w-0 items-center" style={{ gap: "var(--space-2)", minWidth: 0 }}>
-          <span className="truncate" style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)", minWidth: 0 }}>
-            {name}
-          </span>
-          {shared > 0 ? (
-            <span
-              className="flex items-center t-muted"
-              style={{ gap: "calc(var(--space-1) / 2)", fontSize: "var(--text-xs)", flexShrink: 0 }}
-              title={`Used in ${shared} groups`}
-            >
-              <Ix icon={Link2} size="sm" />
-              {shared}
-            </span>
-          ) : null}
-        </span>
-        <span className="t-mono t-muted truncate w-full" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
-          {valueKey}
-          {preview ? <span aria-hidden>{" · "}</span> : null}
-          {preview}
-        </span>
-      </span>
+      {/* F-027: the shared two-line member body. */}
+      <MemberRowBody name={name} shared={shared} valueKey={valueKey} preview={preview} />
       <span
         className="flex items-center"
         style={{

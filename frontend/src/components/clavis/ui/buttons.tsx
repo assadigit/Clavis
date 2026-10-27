@@ -10,6 +10,18 @@ import { Ix } from "../icons";
 
 export type BtnVariant = "primary" | "glass" | "ghost" | "danger";
 
+/* The variant → class mapping, exported for the Menu trigger (F-014,
+   UI-audit round 1 Phase 10): one definition instead of two drifting ones. */
+export function btnClasses(variant: BtnVariant): string {
+  return variant === "primary"
+    ? "clavis-btn-primary"
+    : variant === "danger"
+      ? "clavis-btn-danger"
+      : variant === "ghost"
+        ? "clavis-btn-ghost"
+        : "clavis-btn-glass";
+}
+
 export function Btn({
   variant = "glass",
   icon,
@@ -35,14 +47,7 @@ export function Btn({
   className?: string;
   ariaLabel?: string;
 }) {
-  const v =
-    variant === "primary"
-      ? "clavis-btn-primary"
-      : variant === "danger"
-        ? "clavis-btn-danger"
-        : variant === "ghost"
-          ? "clavis-btn-ghost"
-          : "clavis-btn-glass";
+  const v = btnClasses(variant);
   return (
     <button
       type={type}

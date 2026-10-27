@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Key, Maximize2, Minimize2, Minus, Plus, Lock, X } from "lucide-react";
 import { platform } from "@/desktop/platform";
@@ -18,7 +18,7 @@ import { ManageItemsModal } from "./manage-items-modal";
 import { SettingsView } from "./settings-view";
 import { Sidebar } from "./sidebar";
 import { TrashView } from "./trash-view";
-import { Btn } from "./ui-bits";
+import { Btn, useMaximized } from "./ui-bits";
 import { liveGroups, liveItems } from "./derive";
 import type { CallFn } from "@/lib/clavis/client";
 import { messages } from "@/lib/clavis/messages";
@@ -42,14 +42,10 @@ export interface ManagerProps {
 
 export function Manager(props: ManagerProps) {
   const { state, call, readOnly, filter, setFilter, query, setQuery, selection, setSelection, creating, setCreating, onHide, deleteEntry } = props;
-  /* Real window: the maximize state is mirrored for the button glyph. */
-  const [maximized, setMaximized] = useState(false);
-  useEffect(() => {
-    const onResize = () => setMaximized(window.innerWidth >= window.screen.availWidth - 8);
-    window.addEventListener("resize", onResize);
-    onResize();
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  /* Real window: the maximize state is mirrored for the button glyph.
+     F-027 (UI-audit round 1 Phase 10): the shared hook replaces this
+     component's own resize listener. */
+  const maximized = useMaximized();
   /* The Manage items modal lives HERE (not inside the group editor) so it
      survives the editor remounts that every membership change triggers
      (the editor's key includes the group's updatedAt). */

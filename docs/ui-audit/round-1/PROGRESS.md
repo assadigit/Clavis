@@ -142,3 +142,15 @@ Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-00
 - Verified live at 800/1280 px: sidebar 224 + list 416 + detail renders, no horizontal scroll; welcome panel shows real keycaps; console clean.
 - Baseline re-run: B2 ✓ (live), B17 ✓ (title bar untouched), E4 ✓ (800/1000/1280 all render), canaries A2/A5/B2/B18 via the suite (72/72) ✓, `bun run build` ✓, `lint:tokens` ✓, `gofmt`/`go build` ✓.
 - Nothing skipped.
+
+### Phase 10 detail (done) — F-014, F-022, F-027 fixed
+
+- F-014: `btnClasses(variant)` exported from ui/buttons.tsx; the Menu trigger now uses it (one variant→class mapping instead of two).
+- F-022: the app.go popup-height fallback is `popupHeightDefault` (208) — one constant with main.go, replacing the drifted 200. Constants only; the neighboring window code is untouched.
+- F-027: three shared primitives landed in ui/ (re-exported via ui-bits):
+  - `useMaximized()` — one resize listener where manager-entry and Manager each kept their own;
+  - `SearchField` — the icon-positioned search input used by the entry list and the manage-items modal (their two copies deleted);
+  - `MemberRowBody` — the two-line member body (name + shared count over key · masked preview) used by the group editor (text-sm name) and the sortable rows (text-md). The manage-items *candidate* rows deliberately keep their own markup — no key line, no shared count, structurally different (documented in the component).
+- Grep proofs: `clavis-btn-primary` mapping defined once; `window.screen.availWidth` comparison defined once; the duplicated search-input style blocks and member-body JSX blocks exist only in the shared components.
+- Visual parity verified live at 1280px: member rows and both search fields render identically (screenshots taken); maximize styling unchanged (B17).
+- 72/72 tests, `bun run build` ✓, `lint:tokens` ✓, gofmt/go vet/go test ✓. Nothing skipped.

@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronRight, ClipboardPaste, Copy, FileJson, FileText, Layers, Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronRight, ClipboardPaste, Copy, FileJson, FileText, Layers, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { downloadExport } from "@/lib/clavis/client";
 import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
@@ -16,7 +16,7 @@ import type { ClavisState, Group } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupMemberKeys, rowPreview, sharedCountMap } from "./derive";
 import { EntryTile, EntryTypeIcon, Ix } from "./icons";
-import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
+import { Btn, CategorySelect, FieldHint, FieldLabel, MemberRowBody, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
 export interface GroupEditorProps {
   mode: "create" | "edit";
@@ -254,28 +254,9 @@ export function GroupEditor(props: GroupEditorProps) {
                     style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", cursor: "pointer", textAlign: "left" }}
                   >
                     <EntryTypeIcon kind="item" isSecret={m.item.isSecret} size="md" />
-                    <span className="flex min-w-0 flex-1 flex-col items-start" style={{ gap: "calc(var(--space-1) / 2)" }}>
-                      <span className="flex w-full min-w-0 items-center" style={{ gap: "var(--space-2)", minWidth: 0 }}>
-                        <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)", minWidth: 0 }}>
-                          {m.item.name}
-                        </span>
-                        {sharedCount > 0 ? (
-                          <span
-                            className="flex items-center t-muted"
-                            style={{ gap: "calc(var(--space-1) / 2)", fontSize: "var(--text-xs)", flexShrink: 0 }}
-                            title={`Used in ${sharedCount} groups`}
-                          >
-                            <Ix icon={Link2} size="sm" />
-                            {sharedCount}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="t-mono t-muted truncate w-full" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
-                        {m.key}
-                        {preview ? <span aria-hidden>{" · "}</span> : null}
-                        {preview}
-                      </span>
-                    </span>
+                    {/* F-027 (UI-audit round 1 Phase 10): the shared two-line
+                        member body (name size differs here: text-sm). */}
+                    <MemberRowBody name={m.item.name} shared={sharedCount} valueKey={m.key} preview={preview} nameSize="var(--text-sm)" />
                     <Ix icon={ChevronRight} size="sm" style={{ color: "var(--color-neutral)", flexShrink: 0 }} />
                   </button>
                 );

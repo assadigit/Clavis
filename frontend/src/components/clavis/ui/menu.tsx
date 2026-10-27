@@ -8,7 +8,7 @@ import { useCallback, useState, type CSSProperties, type ReactNode } from "react
 import type { LucideIcon } from "lucide-react";
 import { Ix } from "../icons";
 import { useDismiss } from "./dismiss";
-import type { BtnVariant } from "./buttons";
+import { btnClasses, type BtnVariant } from "./buttons";
 
 export function Menu({
   triggerIcon,
@@ -46,14 +46,7 @@ export function Menu({
   if (align === "end") pos.right = 0;
   else pos.left = 0;
 
-  const v =
-    triggerVariant === "primary"
-      ? "clavis-btn-primary"
-      : triggerVariant === "danger"
-        ? "clavis-btn-danger"
-        : triggerVariant === "ghost"
-          ? "clavis-btn-ghost"
-          : "clavis-btn-glass";
+  const v = btnClasses(triggerVariant);
 
   return (
     <div ref={ref} className="relative inline-flex">

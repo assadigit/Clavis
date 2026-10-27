@@ -18,7 +18,7 @@ import {
   sharedCountMap,
 } from "./derive";
 import { EntryTile, Ix } from "./icons";
-import { Btn, Menu, MenuItem } from "./ui-bits";
+import { Btn, Menu, MenuItem, SearchField } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
 
@@ -269,37 +269,14 @@ export function EntryList({
       }}
     >
       <header className="flex items-center" style={{ gap: "var(--space-2)" }}>
-        <div className="relative min-w-0 flex-1">
-          <Ix
-            icon={Search}
-            size="sm"
-            style={{
-              position: "absolute",
-              left: "var(--space-3)",
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--text-muted)",
-              pointerEvents: "none",
-            }}
-          />
-          <input
-            className="glass-input"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={isTrash ? "Search trash…" : "Search… (try #tag or @category)"}
-            aria-label="Search entries"
-            spellCheck={false}
-            autoComplete="off"
-            style={{
-              width: "100%",
-              padding: "var(--space-2) var(--space-3)",
-              paddingLeft: "calc(var(--space-3) + var(--text-lg) + var(--space-1))",
-              fontSize: "var(--text-sm)",
-              fontFamily: "var(--font-ui)",
-              color: "var(--text)",
-            }}
-          />
-        </div>
+        {/* F-027 (UI-audit round 1 Phase 10): the shared SearchField
+            replaces this file's copy of the icon-positioning + input styles. */}
+        <SearchField
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={isTrash ? "Search trash…" : "Search… (try #tag or @category)"}
+          ariaLabel="Search entries"
+        />
         {!isTrash ? (
           <Menu
             triggerIcon={Plus}

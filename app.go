@@ -305,7 +305,7 @@ func (c *Clavis) positionPopup() {
 		pw = 640 // the window IS the panel (solid window, no pad)
 	}
 	if ph <= 0 {
-		ph = 200
+		ph = popupHeightDefault // F-022 (UI-audit round 1 Phase 10): one constant, was a 200 drift
 	}
 	x, y := popupmath.Origin(wa.X, wa.Y, wa.Width, wa.Height, float64(target.ScaleFactor), pw, ph)
 	c.popup.SetPosition(x, y)

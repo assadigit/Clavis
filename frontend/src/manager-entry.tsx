@@ -18,7 +18,7 @@ import type { Creating, ListFilter, Selection } from "@/components/clavis/app-ty
 import { applyTheme } from "@/components/clavis/glass";
 import { Manager } from "@/components/clavis/manager";
 import { Ix } from "@/components/clavis/icons";
-import { LoadErrorPanel } from "@/components/clavis/ui-bits";
+import { LoadErrorPanel, useMaximized } from "@/components/clavis/ui-bits";
 import { platform } from "@/desktop/platform";
 
 import "@fontsource-variable/inter";
@@ -100,7 +100,6 @@ function ManagerRoot() {
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [creating, setCreating] = useState<Creating | null>(null);
-  const [maximized, setMaximized] = useState(false);
 
   const stateRef = useRef<ClavisState | null>(null);
   const aliveRef = useRef(true);
@@ -130,13 +129,9 @@ function ManagerRoot() {
     reload();
   }, [reload]);
 
-  /* ---- edge-to-edge when the native window is maximized ---- */
-  useEffect(() => {
-    const onResize = () => setMaximized(window.innerWidth >= window.screen.availWidth - 8);
-    window.addEventListener("resize", onResize);
-    onResize();
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  /* ---- edge-to-edge when the native window is maximized (the shared
+     useMaximized hook — F-027, one listener instead of two) ---- */
+  const maximized = useMaximized();
 
   useEffect(() => {
     stateRef.current = state;
