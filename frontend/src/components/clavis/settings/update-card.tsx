@@ -180,7 +180,10 @@ export function UpdateCard({ currentVersion }: { currentVersion: string }) {
               width: `${Math.max(2, Math.min(100, progress.pct))}%`,
               height: "100%",
               background: "var(--color-primary)",
-              transition: "width 200ms ease",
+              /* F-024 (UI-audit round 1 Phase 7): the one hardcoded transition
+                 goes through the motion tokens — the reduced-motion block
+                 zeroes --motion-* and this stops animating accordingly. */
+              transition: "width var(--motion-toast) var(--ease)",
             }}
           />
         </div>

@@ -115,6 +115,18 @@ export function maskFromLast4(last4: string | undefined): string {
   return last4 ? `••••••••${last4}` : "••••••••";
 }
 
+/** Row preview (F-013, UI-audit round 1 Phase 7): secrets keep the masked
+ *  dots; non-secret prompts/notes show nothing instead of lying dots —
+ *  the row icon already distinguishes a note from a key. Values never cross
+ *  the backend boundary, so rows have no text to preview (the redaction is
+ *  deliberately untouched this round). */
+export function rowPreview(item: {
+  isSecret: boolean;
+  valueLast4?: string;
+}): string {
+  return item.isSecret ? maskFromLast4(item.valueLast4) : "";
+}
+
 /** "category · tag1 · tag2" muted meta line used under entry names. */
 export function metaLine(category: string, tags: string[]): string {
   const parts: string[] = [];

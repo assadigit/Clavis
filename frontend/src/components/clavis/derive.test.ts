@@ -2,7 +2,7 @@
  * CLAVIS — derivation tests: masked previews (SPEC §5.2), group member keys.
  */
 import { describe, expect, it } from "vitest";
-import { groupMemberKeys, maskFromLast4, maskValue, metaLine } from "./derive";
+import { groupMemberKeys, maskFromLast4, maskValue, metaLine, rowPreview } from "./derive";
 import type { Group, Item, VaultData } from "@/lib/clavis/types";
 
 function item(partial: Partial<Item>): Item {
@@ -19,6 +19,18 @@ describe("maskFromLast4 (backend-computed hint)", () => {
     expect(maskFromLast4("abcd")).toBe("••••••••abcd");
     expect(maskFromLast4("")).toBe("••••••••");
     expect(maskFromLast4(undefined)).toBe("••••••••");
+  });
+});
+
+describe("rowPreview (F-013: non-secrets get no lying dots)", () => {
+  it("secrets keep the masked dots + last-4 hint", () => {
+    expect(rowPreview({ isSecret: true, valueLast4: "ef90" })).toBe("••••••••ef90");
+    expect(rowPreview({ isSecret: true, valueLast4: undefined })).toBe("••••••••");
+  });
+
+  it("non-secret prompts/notes show nothing instead of dots", () => {
+    expect(rowPreview({ isSecret: false, valueLast4: "" })).toBe("");
+    expect(rowPreview({ isSecret: false, valueLast4: undefined })).toBe("");
   });
 });
 

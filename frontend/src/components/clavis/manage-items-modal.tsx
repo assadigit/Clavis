@@ -29,7 +29,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, Check, GripVertical, Layers, Link2, Plus, Search, X } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState, Group } from "@/lib/clavis/types";
-import { groupMemberKeys, maskFromLast4, sharedCountMap } from "./derive";
+import { groupMemberKeys, rowPreview, sharedCountMap } from "./derive";
 import { EntryTypeIcon, Ix } from "./icons";
 import { Btn, FieldHint, FieldLabel, Modal } from "./ui-bits";
 import { buildSearchEntries, searchEntries } from "@/lib/clavis/search";
@@ -154,7 +154,7 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
                     name={m.item.name}
                     isSecret={m.item.isSecret}
                     valueKey={m.key}
-                    preview={maskFromLast4(m.item.valueLast4)}
+                    preview={rowPreview(m.item)}
                     shared={shared.get(m.item.id) ?? 0}
                     disabled={readOnly}
                     isDraggingEnabled={!readOnly}
@@ -263,7 +263,7 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
                         {c.name}
                       </span>
                       <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-xs)", maxWidth: "100%" }}>
-                        {maskFromLast4(it?.valueLast4)}
+                        {rowPreview({ isSecret: it?.isSecret ?? false, valueLast4: it?.valueLast4 })}
                       </span>
                     </span>
                   </button>

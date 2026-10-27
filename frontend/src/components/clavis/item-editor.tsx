@@ -23,6 +23,7 @@ import {
 import type { CallFn } from "@/lib/clavis/client";
 import { downloadExport } from "@/lib/clavis/client";
 import { autoKey } from "@/lib/clavis/dotenv";
+import { messages } from "@/lib/clavis/messages";
 import type { ClavisState, Group, Item } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
 import { allTags, formatDateTime, groupsContaining, maskValue } from "./derive";
@@ -249,12 +250,12 @@ export function ItemEditor(props: ItemEditorProps) {
     const res = await call("copy", { kind: "item", id: item.id });
     if (res.ok) {
       if (res.copied) {
-        toast.success("Copied.");
+        toast.success(messages.copied);
         if (res.containsSecret) {
-          toast("Copied. (Windows edition also excludes it from clipboard history.)");
+          toast(messages.copiedSecretNote);
         }
       } else {
-        toast.error("Could not copy to the clipboard.");
+        toast.error(messages.copyFailed);
       }
     }
   }
@@ -482,8 +483,22 @@ export function ItemEditor(props: ItemEditorProps) {
         }}
       >
         <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
-          {dirty && !readOnly ? (
-            <Btn variant="primary" icon={Check} label={saving ? "Saving…" : "Save"} onClick={() => void save()} disabled={saving} />
+          {!readOnly ? (
+            dirty ? (
+              <Btn variant="primary" icon={Check} label={saving ? "Saving…" : "Save"} onClick={() => void save()} disabled={saving} />
+            ) : (
+              /* F-020 (UI-audit round 1 Phase 7): the save affordance exists
+                 from the start — a disabled "Saved" state when the form is
+                 clean, instead of empty space. Create mode is always dirty. */
+              <Btn
+                variant="primary"
+                icon={Check}
+                label="Saved"
+                disabled
+                ariaLabel="Saved — no changes yet"
+                title="No changes yet"
+              />
+            )
           ) : null}
           {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
         </div>

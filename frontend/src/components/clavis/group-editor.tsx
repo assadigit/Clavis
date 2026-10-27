@@ -11,9 +11,10 @@ import { Check, ChevronRight, ClipboardPaste, Copy, FileJson, FileText, Layers, 
 import type { CallFn } from "@/lib/clavis/client";
 import { downloadExport } from "@/lib/clavis/client";
 import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
+import { messages } from "@/lib/clavis/messages";
 import type { ClavisState, Group } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
-import { allTags, formatDateTime, groupMemberKeys, maskFromLast4, sharedCountMap } from "./derive";
+import { allTags, formatDateTime, groupMemberKeys, rowPreview, sharedCountMap } from "./derive";
 import { EntryTile, EntryTypeIcon, Ix } from "./icons";
 import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
@@ -137,12 +138,12 @@ export function GroupEditor(props: GroupEditorProps) {
     const res = await call("copy", { kind: "group", id: group.id });
     if (res.ok) {
       if (res.copied) {
-        toast.success(res.lineCount != null ? `Copied ${res.lineCount} lines.` : "Copied.");
+        toast.success(res.lineCount != null ? messages.copiedLines(res.lineCount) : messages.copied);
         if (res.containsSecret) {
-          toast("Copied. (Windows edition also excludes it from clipboard history.)");
+          toast(messages.copiedSecretNote);
         }
       } else {
-        toast.error("Could not copy to the clipboard.");
+        toast.error(messages.copyFailed);
       }
     }
   }
@@ -173,7 +174,7 @@ export function GroupEditor(props: GroupEditorProps) {
           disabled={readOnly}
           dir="auto"
           autoFocus={mode === "create"}
-          placeholder="Sedanama credentials"
+          placeholder="Acme API credentials"
           onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
         />
       </div>
@@ -235,7 +236,7 @@ export function GroupEditor(props: GroupEditorProps) {
             <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
               {members.map((m) => {
                 const sharedCount = shared.get(m.item.id) ?? 0;
-                const preview = maskFromLast4(m.item.valueLast4);
+                const preview = rowPreview(m.item);
                 /* F-007 (UI-audit round 1): an explicit accessible name instead
                    of concatenated name + count + key + mask. */
                 const rowLabel =
@@ -343,22 +344,35 @@ export function GroupEditor(props: GroupEditorProps) {
         }}
       >
         <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
-          {dirty && !readOnly ? (
-            <Btn
-              variant="primary"
-              icon={mode === "create" ? ClipboardPaste : Check}
-              label={
-                saving
-                  ? "Saving…"
-                  : mode === "create" && envPreview && envPreview.keys.length > 0
-                    ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
-                    : mode === "create"
-                      ? "Create group"
-                      : "Save"
-              }
-              onClick={() => void save()}
-              disabled={saving}
-            />
+          {!readOnly ? (
+            dirty ? (
+              <Btn
+                variant="primary"
+                icon={mode === "create" ? ClipboardPaste : Check}
+                label={
+                  saving
+                    ? "Saving…"
+                    : mode === "create" && envPreview && envPreview.keys.length > 0
+                      ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
+                      : mode === "create"
+                        ? "Create group"
+                        : "Save"
+                }
+                onClick={() => void save()}
+                disabled={saving}
+              />
+            ) : (
+              /* F-020 (UI-audit round 1 Phase 7): a visible, disabled "Saved"
+                 state when the form is clean. */
+              <Btn
+                variant="primary"
+                icon={Check}
+                label="Saved"
+                disabled
+                ariaLabel="Saved — no changes yet"
+                title="No changes yet"
+              />
+            )
           ) : null}
           {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
         </div>

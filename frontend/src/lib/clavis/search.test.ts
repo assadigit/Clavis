@@ -57,7 +57,7 @@ function vault(): VaultData {
     ],
     groups: [
       {
-        id: "g1", name: "Sedanama credentials", categoryId: "c1", tags: ["sedanama"],
+        id: "g1", name: "Acme API credentials", categoryId: "c1", tags: ["acme"],
         itemIds: ["i1"], pinned: false, useCount: 2, lastUsedAt: "2025-01-04T00:00:00.000Z",
         createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
       },
@@ -103,7 +103,7 @@ describe("searchEntries", () => {
     expect(searchEntries("GITHUB_TOKEN", entries())[0]?.id).toBe("i1"); // key
     expect(searchEntries("graf", entries()).map((e) => e.id)).toContain("i2"); // note
     expect(searchEntries("@prompts", entries()).map((e) => e.id)).toEqual(["i3"]);
-    expect(searchEntries("#sedanama", entries()).map((e) => e.id)).toEqual(["g1"]);
+    expect(searchEntries("#acme", entries()).map((e) => e.id)).toEqual(["g1"]);
   });
 
   it("never returns soft-deleted entries", () => {

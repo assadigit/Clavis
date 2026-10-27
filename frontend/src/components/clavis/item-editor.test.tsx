@@ -108,11 +108,13 @@ describe("ItemEditor smoke", () => {
     expect(call).toHaveBeenCalledWith("getValue", { id: "fake-item-1" });
   });
 
-  it("Save appears only after the form is dirty (current behavior, F-020)", async () => {
+  it("the save affordance exists from the start — disabled Saved when clean (F-020)", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     setup();
     const name = await screen.findByLabelText("Name");
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    /* Clean form: a disabled "Saved" occupies the slot (Phase 7, F-020). */
+    const saved = screen.getByRole("button", { name: "Saved — no changes yet" }) as HTMLButtonElement;
+    expect(saved.disabled).toBe(true);
     await user.type(name, "X");
     expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
   });

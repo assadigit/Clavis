@@ -57,7 +57,7 @@ function state(): ClavisState {
       ],
       groups: [
         {
-          id: "g1", name: "Sedanama credentials", categoryId: "c1", tags: [],
+          id: "g1", name: "Acme API credentials", categoryId: "c1", tags: [],
           itemIds: ["i1", "i2"], pinned: false, useCount: 0, lastUsedAt: null,
           createdAt: "2025-01-01T00:00:00.000Z",
           updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
@@ -143,9 +143,9 @@ describe("Popup golden path", () => {
   it("→ drills into a group; Enter copies a member item; Backspace backs out", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const { call } = setup();
-    await user.type(screen.getByLabelText("Search Clavis"), "sed"); // finds the group
+    await user.type(screen.getByLabelText("Search Clavis"), "acm"); // finds the group
     await user.keyboard("{ArrowRight}"); // drill in
-    expect(screen.getByText("Sedanama credentials")).toBeTruthy();
+    expect(screen.getByText("Acme API credentials")).toBeTruthy();
     await user.keyboard("{Enter}"); // copy the first member (GitHub token)
     expect(call).toHaveBeenCalledWith("copy", { kind: "item", id: "i1" });
   });
@@ -153,7 +153,7 @@ describe("Popup golden path", () => {
   it("Ctrl+Enter inside a group copies the whole group", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const { call } = setup();
-    await user.type(screen.getByLabelText("Search Clavis"), "sed");
+    await user.type(screen.getByLabelText("Search Clavis"), "acm");
     await user.keyboard("{ArrowRight}");
     await user.keyboard("{Control>}{Enter}{/Control}");
     expect(call).toHaveBeenCalledWith("copy", { kind: "group", id: "g1" });

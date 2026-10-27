@@ -21,6 +21,7 @@ import { TrashView } from "./trash-view";
 import { Btn } from "./ui-bits";
 import { liveGroups, liveItems } from "./derive";
 import type { CallFn } from "@/lib/clavis/client";
+import { messages } from "@/lib/clavis/messages";
 import type { ClavisState } from "@/lib/clavis/types";
 
 export interface ManagerProps {
@@ -79,15 +80,18 @@ export function Manager(props: ManagerProps) {
           kind === "item"
             ? data.items.find((i) => i.id === id)?.name
             : data.groups.find((g) => g.id === id)?.name;
+        /* F-012 (UI-audit round 1 Phase 7): one voice — messages.ts. Item
+           copies are one value (lineCount means nothing); groups report
+           their block size. */
         toast.success(
-          res.lineCount != null
-            ? `Copied ${res.lineCount} lines${name ? ` — ${name}` : ""}.`
-            : `Copied ${name ?? "entry"}.`
+          kind === "group" && res.lineCount != null && name
+            ? messages.copiedEntryLines(name, res.lineCount)
+            : messages.copiedEntry(name ?? "entry")
         );
         return true;
       }
       if (res.ok) {
-        toast.error("Could not copy to the clipboard. Try again.");
+        toast.error(messages.copyFailed);
       }
       return false;
     },

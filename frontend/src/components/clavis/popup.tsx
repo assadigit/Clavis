@@ -18,8 +18,9 @@ import type { CallFn } from "@/lib/clavis/client";
 import { buildSearchEntries, compareEntries, compareRecent, searchEntries } from "@/lib/clavis/search";
 import type { SearchEntry } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
+import { messages } from "@/lib/clavis/messages";
 import type { Selection } from "./app-types";
-import { groupById, groupMemberKeys, liveGroups, liveItems, maskFromLast4, metaLine } from "./derive";
+import { groupById, groupMemberKeys, liveGroups, liveItems, metaLine, rowPreview } from "./derive";
 import { EntryTypeIcon, Ix } from "./icons";
 
 interface PopupRow {
@@ -114,7 +115,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
         name: e.name,
         meta: metaLine(e.categoryName, e.tags),
         isSecret: it?.isSecret ?? false,
-        preview: maskFromLast4(it?.valueLast4),
+        preview: rowPreview({ isSecret: it?.isSecret ?? false, valueLast4: it?.valueLast4 }),
       };
     });
   }, [query, entries, itemMap, groupMap]);
@@ -155,7 +156,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
         name: e.name,
         meta: keyById.get(e.id) ?? it?.key ?? "",
         isSecret: it?.isSecret ?? false,
-        preview: maskFromLast4(it?.valueLast4),
+        preview: rowPreview({ isSecret: it?.isSecret ?? false, valueLast4: it?.valueLast4 }),
       };
     });
   }, [drillGroup, query, entries, itemMap, state.data]);
@@ -183,14 +184,14 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
     if (res.ok) {
       if (res.copied) {
         const label =
-          kind === "group" && res.lineCount != null ? `Copied ${res.lineCount} lines` : "Copied";
+          kind === "group" && res.lineCount != null ? messages.copiedLabelLines(res.lineCount) : messages.copiedLabel;
         setCopied({ rowKey, label });
         if (res.containsSecret) {
-          toast("Copied — kept out of clipboard history.");
+          toast(messages.copiedSecretNote);
         }
         window.setTimeout(() => onHide(), 500);
       } else {
-        toast.error("Could not copy to the clipboard. Try again.");
+        toast.error(messages.copyFailed);
       }
     }
     setBusy(false);

@@ -8,6 +8,7 @@
  * Windows clipboard-privacy formats; nothing here is logged.
  */
 import { Call } from "@wailsio/runtime";
+import { messages } from "@/lib/clavis/messages";
 import type { ClavisState } from "@/lib/clavis/types";
 
 export interface BackupPreview {
@@ -95,11 +96,11 @@ export async function downloadExport(what: ExportWhat, id?: string): Promise<voi
       error?: string;
     };
     if (res?.ok && res.savedPath) {
-      toast.success(`Saved: ${res.savedPath}`);
+      toast.success(messages.exportSaved(res.savedPath));
     } else if (res && !res.ok && !res.canceled && res.error) {
       toast.error(res.error);
     }
   } catch {
-    toast.error("The export was not saved.");
+    toast.error(messages.exportFailed);
   }
 }

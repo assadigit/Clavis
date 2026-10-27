@@ -107,3 +107,15 @@ Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-00
 - Evidence: `evidence/after/manager-all-1280.png`, `evidence/after/manager-800.png` (the same screens the before set pairs against; fake data only, incl. the FAKE 32-char test entry).
 - Baseline re-run: B2 ✓ (live at all three widths), B11 ✓ (tests), E4 ✓ (800/1000/1280 checked live), canaries A2/A5/A7/B2/B18 via the suite ✓ (70/70), `bun run build` ✓.
 - Nothing skipped.
+
+### Phase 7 detail (done) — F-012, F-013, F-020, F-023, F-024 fixed
+
+- F-012: new `frontend/src/lib/clavis/messages.ts` is the single voice for clipboard/export feedback; popup, manager rows, both editors and the export path all use it ("Could not copy that value. Try again." ×1, one secret note "Copied — kept out of clipboard history.", export toasts shared). Verified by grep: exactly one "Could not copy" definition, one clipboard-history note.
+- Scope addition (small, within the finding's own rule "same event, same words"): the manager's list-row copy toast read "Copied 1 lines — <name>." for *items* (pre-existing — the real backend reports LineCount 1 for items); items now say "Copied <name>." and the line counters pluralize correctly ("1 line", "2 lines"). Found live while verifying; the audit's F-012 fix direction covers it.
+- F-013: `derive.ts` gains `rowPreview({isSecret, valueLast4})` — secrets keep the masked dots; **non-secret prompts/notes show nothing instead of lying dots** (04's explicitly-allowed "nothing + note icon" variant; every row's type icon already distinguishes key vs note). Honest deviation from 04b's sketch: `previewText(value, isSecret)` on raw values is impossible for rows — the state snapshot is redacted and Phase 7's do-not-touch list pins the backend redaction; recorded here rather than silently diverging. Verified live: the OpenAI prompt row shows no dots; every secret row still shows dots; `derive.test.ts` pins both.
+- F-020: both editors render a disabled "Saved" affordance when the form is clean (create mode is always dirty → unchanged); live-checked (`disabled=true` on open).
+- F-023: "Sedanama credentials" → "Acme API credentials" — placeholder, popup/search test fixtures, `#sedanama` → `#acme`; grep finds zero "Sedanama".
+- F-024: the update progress bar transition uses `var(--motion-toast) var(--ease)` — the existing reduced-motion block zeroes it (static-verified: `@media (prefers-reduced-motion: reduce) { --motion-toast: 0ms }`).
+- Verified live in the mocked copy + evidence: `popup-recent-640.png` (honest previews), `popup-copied-640.png` (frozen auto-hide; unified secret note), `manager-item-editor-1280.png` (disabled Saved).
+- Baseline re-run: A7 ✓ (copy feedback live), A12 ✓ (masking unchanged for secrets; honest for non-secrets), B5/B6 ✓ (editor tests), C8 ✓; canaries A2/A5/B2/B18 via the suite (72/72), `bun run build` ✓.
+- Nothing skipped.
