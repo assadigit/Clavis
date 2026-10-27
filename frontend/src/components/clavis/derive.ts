@@ -144,12 +144,6 @@ export function groupMemberKeys(group: Group, data: VaultData): { item: Item; ke
   return members.map((item, idx) => ({ item, key: keys[idx] }));
 }
 
-export function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;

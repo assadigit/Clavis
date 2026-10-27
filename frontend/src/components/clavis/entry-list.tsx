@@ -254,7 +254,7 @@ export function EntryList({
   return (
     <section
       aria-label={isTrash ? "Trash list" : "Entry list"}
-      className="clavis-col flex min-w-0 flex-1 flex-col md:flex-none"
+      className="clavis-col flex flex-none flex-col"
       style={{
         /* F-009 (UI-audit round 1 Phase 6): the list is the column users scan
            most, so it gets a real budget — 320px made even 20-char names

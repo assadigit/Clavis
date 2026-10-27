@@ -5,6 +5,7 @@
  */
 
 export const CURRENT_SCHEMA_VERSION = 1;
+// Bumped by the release workflow (release.yml compares the tag with this).
 export const APP_VERSION = "1.2.0";
 
 export type EntryKind = "item" | "group";
@@ -65,7 +66,9 @@ export interface Settings {
   shortcut: string;
   startWithWindows: boolean;
   solidMode: boolean;
-  /** 0–100, scales glass opacity and blur. */
+  /** 0–100, scales glass opacity and blur. (Reserved, unused — the slider
+   *  feature is gone; the field stays so old data files keep loading. The
+   *  Go model mirrors this comment: see internal/store/model.go.) */
   glassIntensity: number;
   showLast4: boolean;
   managerBounds: ManagerBounds | null;

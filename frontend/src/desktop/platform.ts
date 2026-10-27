@@ -53,9 +53,6 @@ export const platform = {
   managerOpenEntry(kind: "item" | "group", id: string): void {
     void Call.ByName("main.Clavis.ManagerOpenEntry", kind, id);
   },
-  quit(): void {
-    void Call.ByName("main.Clavis.QuitApp");
-  },
   /* ---- self-update (DECISIONS.md §34) ---- */
   async checkUpdate(force: boolean): Promise<{
     ok: boolean;
@@ -128,11 +125,6 @@ export const platform = {
         url: String(e.data?.url ?? ""),
         notes: String(e.data?.notes ?? ""),
       })
-    );
-  },
-  onUpdateUpToDate(cb: (a: { latest: string }) => void): () => void {
-    return Events.On("clavis:update-uptodate", (e: { data: { latest?: string } }) =>
-      cb({ latest: String(e.data?.latest ?? "") })
     );
   },
 };

@@ -1,8 +1,6 @@
 /**
  * CLAVIS — app-level view state types shared between the components.
  */
-import type { CallFn } from "@/lib/clavis/client";
-import type { ClavisState } from "@/lib/clavis/types";
 
 export type ListFilter =
   | { view: "all" }
@@ -26,18 +24,4 @@ export interface Creating {
   prefillName?: string;
   /** Item create form opened from a group editor: add to this group on save. */
   forGroupId?: string;
-}
-
-export interface EntryLike {
-  kind: "item" | "group";
-  id: string;
-  name: string;
-}
-
-export interface AppActions {
-  call: CallFn;
-  state: ClavisState;
-  readOnly: boolean;
-  /** Central delete (soft) + undo toast. Modal logic stays with the caller. */
-  deleteEntry: (kind: "item" | "group", id: string) => void;
 }

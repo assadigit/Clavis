@@ -33,12 +33,15 @@ type ManagerBounds struct {
 
 // Settings mirrors the settings block of the data file.
 type Settings struct {
-	Shortcut         string         `json:"shortcut"`
-	StartWithWindows bool           `json:"startWithWindows"`
-	SolidMode        bool           `json:"solidMode"`
-	GlassIntensity   int            `json:"glassIntensity"`
-	ShowLast4        bool           `json:"showLast4"`
-	ManagerBounds    *ManagerBounds `json:"managerBounds"`
+	Shortcut         string `json:"shortcut"`
+	StartWithWindows bool   `json:"startWithWindows"`
+	SolidMode        bool   `json:"solidMode"`
+	// GlassIntensity is reserved and unused (the slider feature was
+	// removed; UI-audit round 1 Phase 9, F-025). Kept so old data files
+	// keep loading; NormalizeVault still clamps it defensively.
+	GlassIntensity int            `json:"glassIntensity"`
+	ShowLast4      bool           `json:"showLast4"`
+	ManagerBounds  *ManagerBounds `json:"managerBounds"`
 }
 
 // Category is a user-created category.

@@ -7,12 +7,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, Key, Maximize2, Menu as MenuIcon, Minimize2, Minus, Plus, Lock, X } from "lucide-react";
+import { Key, Maximize2, Minimize2, Minus, Plus, Lock, X } from "lucide-react";
 import { platform } from "@/desktop/platform";
 import type { Creating, ListFilter, Selection } from "./app-types";
 import { EntryList } from "./entry-list";
 import { GroupEditor } from "./group-editor";
-import { Ix } from "./icons";
+import { Ix, ShortcutKeycaps } from "./icons";
 import { ItemEditor } from "./item-editor";
 import { ManageItemsModal } from "./manage-items-modal";
 import { SettingsView } from "./settings-view";
@@ -42,7 +42,6 @@ export interface ManagerProps {
 
 export function Manager(props: ManagerProps) {
   const { state, call, readOnly, filter, setFilter, query, setQuery, selection, setSelection, creating, setCreating, onHide, deleteEntry } = props;
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   /* Real window: the maximize state is mirrored for the button glyph. */
   const [maximized, setMaximized] = useState(false);
   useEffect(() => {
@@ -107,13 +106,10 @@ export function Manager(props: ManagerProps) {
     [call]
   );
 
-  function mobileBack() {
-    setSelection(null);
-    setCreating(null);
-    if (filter.view === "trash") setFilter({ view: "all" });
-  }
-
-  const hasDetailContent = creating !== null || activeSelection !== null || filter.view === "trash";
+  /* The mobile drawer was removed in UI-audit round 1 Phase 9 (F-021): the
+     manager window cannot be resized below 800 DIP, so a <768px layout was
+     unreachable in practice (only a high-DPI scaling edge case could show
+     it) and had never been tested. */
 
   function detailContent() {
     if (filter.view === "trash") {
@@ -200,7 +196,7 @@ export function Manager(props: ManagerProps) {
           <p style={{ margin: 0, fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>Welcome to Clavis</p>
           <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", maxWidth: "calc(var(--space-6) * 15)", lineHeight: "var(--leading-relaxed)" }}>
             Your keys, prompts and notes will live here. Add your first item in the list, then press{" "}
-            <span className="clavis-keycap">{data.settings.shortcut}</span>{" "}
+            <ShortcutKeycaps shortcut={data.settings.shortcut} />{" "}
             anytime to summon it.
           </p>
         </div>
@@ -250,15 +246,6 @@ export function Manager(props: ManagerProps) {
           style={{ height: "calc(var(--space-5) * 2)", padding: "0 var(--space-2)", borderBottom: "1px solid var(--glass-border)", background: "var(--glass-bg)", flexShrink: 0 }}
         >
           <div className="flex items-center" style={{ gap: "var(--space-2)" }}>
-            <button
-              type="button"
-              className="clavis-btn clavis-btn-ghost md:hidden"
-              onClick={() => setMobileSidebarOpen(true)}
-              aria-label="Open navigation"
-              style={{ padding: "var(--space-1)" }}
-            >
-              <Ix icon={MenuIcon} size="sm" />
-            </button>
             <Ix icon={Key} size="md" style={{ color: "var(--color-accent-text)" }} />
             <span style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>Clavis</span>
           </div>
@@ -312,17 +299,12 @@ export function Manager(props: ManagerProps) {
         ) : null}
 
         <div className="flex min-h-0 flex-1" style={{ gap: 0, padding: 0 }}>
-          {mobileSidebarOpen ? (
-            <div className="clavis-scrim fixed inset-0 md:hidden" style={{ zIndex: 45 }} onClick={() => setMobileSidebarOpen(false)} aria-hidden />
-          ) : null}
           <Sidebar
             state={state}
             call={call}
             readOnly={readOnly}
             filter={filter}
             setFilter={setFilter}
-            mobileOpen={mobileSidebarOpen}
-            onCloseMobile={() => setMobileSidebarOpen(false)}
           />
           {filter.view === "settings" ? (
             <SettingsView state={state} call={call} readOnly={readOnly} />
@@ -346,14 +328,9 @@ export function Manager(props: ManagerProps) {
               />
               <aside
                 aria-label="Details"
-                className={`clavis-detail-col clavis-col flex flex-col ${hasDetailContent ? "flex" : "hidden md:flex"}`}
+                className="clavis-detail-col clavis-col flex flex-col"
                 style={{ flex: 1, minWidth: 0, overflow: "hidden", background: "var(--glass-bg)" }}
               >
-                {hasDetailContent ? (
-                  <div className="flex items-center md:hidden" style={{ padding: "var(--space-2)", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>
-                    <Btn variant="ghost" icon={ChevronLeft} label="Back" onClick={mobileBack} />
-                  </div>
-                ) : null}
                 {detailContent()}
               </aside>
             </>

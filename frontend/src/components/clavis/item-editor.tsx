@@ -295,7 +295,7 @@ export function ItemEditor(props: ItemEditorProps) {
         <div className="flex items-center" style={{ gap: "var(--space-3)" }}>
           <EntryTile kind="item" isSecret={effectiveSecret} lg />
           <h2 className="flex-1 truncate" style={{ margin: 0, fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }} dir="auto">
-            {mode === "create" ? (forGroupId ? "New item" : "New item") : draft.name}
+            {mode === "create" ? "New item" : draft.name}
           </h2>
         </div>
         <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>

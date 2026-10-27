@@ -18,7 +18,6 @@ import {
   Plus,
   Settings,
   Trash2,
-  X,
 } from "lucide-react";
 import type { ListFilter } from "./app-types";
 import { allTags, categoryCounts, deletedEntries, liveGroups, liveItems, tagCounts } from "./derive";
@@ -33,8 +32,6 @@ export interface SidebarProps {
   readOnly: boolean;
   filter: ListFilter;
   setFilter: (f: ListFilter) => void;
-  mobileOpen: boolean;
-  onCloseMobile: () => void;
 }
 
 interface NavRowProps {
@@ -81,7 +78,7 @@ function SectionTitle({ children, action }: { children: string; action?: React.R
   );
 }
 
-export function Sidebar({ state, call, readOnly, filter, setFilter, mobileOpen, onCloseMobile }: SidebarProps) {
+export function Sidebar({ state, call, readOnly, filter, setFilter }: SidebarProps) {
   const [catModal, setCatModal] = useState<null | { mode: "add" } | { mode: "rename"; id: string; name: string }>(null);
   const [catName, setCatName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,9 +98,8 @@ export function Sidebar({ state, call, readOnly, filter, setFilter, mobileOpen, 
   const pick = useCallback(
     (f: ListFilter) => {
       setFilter(f);
-      onCloseMobile();
     },
-    [setFilter, onCloseMobile]
+    [setFilter]
   );
 
   async function submitCategory() {
@@ -133,20 +129,9 @@ export function Sidebar({ state, call, readOnly, filter, setFilter, mobileOpen, 
     <aside
       role="tree"
       aria-label="Clavis navigation"
-      className={`clavis-sidebar-col clavis-col clavis-scroll ${mobileOpen ? "flex" : "hidden md:flex"} flex-col`}
+      className="clavis-sidebar-col clavis-col clavis-scroll flex flex-col"
       style={{ width: "calc(var(--space-6) * 7)", flexShrink: 0, padding: "var(--space-3)", gap: "var(--space-1)", overflowY: "auto", borderRight: "1px solid var(--glass-border)" }}
     >
-      {mobileOpen ? (
-        <button
-          type="button"
-          className="clavis-btn clavis-btn-ghost self-end"
-          onClick={onCloseMobile}
-          aria-label="Close navigation"
-          style={{ padding: "var(--space-1)" }}
-        >
-          <Ix icon={X} size="sm" />
-        </button>
-      ) : null}
       <NavRow icon={Inbox} label="All" count={liveCount} active={filter.view === "all"} onClick={() => pick({ view: "all" })} />
       <NavRow icon={History} label="Recent" count={recentCount} active={filter.view === "recent"} onClick={() => pick({ view: "recent" })} />
       <NavRow icon={Pin} label="Pinned" count={pinnedCount} active={filter.view === "pinned"} onClick={() => pick({ view: "pinned" })} />

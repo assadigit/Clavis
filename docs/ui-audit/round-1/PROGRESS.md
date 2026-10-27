@@ -131,3 +131,14 @@ Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-00
 - Verified: 72/72 tests, `bun run build` ✓, `lint:tokens` clean, hex grep clean, Settings headings [level=2] in the live a11y tree, dark mode + 1px row borders unchanged live (E6 sanity; the full E6 sweep lands with R1's screenshot set).
 - Baseline re-run: E6 ✓ (token swap is value-identical by construction), E2 ✓ (focus states untouched), canaries A2/A5/B2/B18 via the suite ✓.
 - Nothing skipped.
+
+### Phase 9 detail (done) — F-025 fixed, F-021 removed; environment note
+
+- Deleted after grep-proof: `formatDate`, `formatGroupBlock` (+ `DotenvMember`), `EntryLike`, `AppActions`, `platform.quit()` (the Go side has no QuitApp), `onUpdateUpToDate()` (nothing emits that event), the `.clavis-slider` CSS block ("kept for compatibility" with zero consumers), and the item-editor no-op ternary. All greps now return zero (word-boundary-checked).
+- `ShortcutKeycaps` is no longer dead: the welcome panel renders proper Ctrl/Shift/Space keycaps instead of one raw string — the other half of F-025's one-survives rule.
+- `glassIntensity`: kept in Go model + types.ts (persisted schema — old data files must load), now marked "reserved, unused" on both sides; no UI normalization existed to remove. `APP_VERSION` kept with the "bumped by the release workflow" comment (release.yml's guard reads it).
+- **Mobile layout: REMOVED** (the plan's primary decision): the `<47.99rem` media block, `mobileSidebarOpen` state, hamburger button, drawer scrim, Back-button row, the sidebar's `mobileOpen/onCloseMobile` props, and the `md:hidden`/`md:flex` utilities. The entry list is now unconditionally fixed-width (`flex-none`). No risky bits surfaced — no fallback test needed.
+- **Environment note (recorded honestly):** while grepping for dead symbols, the raw display of `manager.tsx` appeared to show corrupted identifiers (`const [mobileSidebarOpen…` displayed without `[m`). Proven to be a display-channel artifact only — the tool output pipe strips the two-character sequence `[m` (an SGR-reset artifact); every parser (tsc/esbuild/node/vitest) reads the real bytes and all builds/tests were green throughout. No file was ever corrupted; nothing to fix. Verified with `printf 'AA[mBB'` → displays "AABB" while hashes and parse results stay consistent.
+- Verified live at 800/1280 px: sidebar 224 + list 416 + detail renders, no horizontal scroll; welcome panel shows real keycaps; console clean.
+- Baseline re-run: B2 ✓ (live), B17 ✓ (title bar untouched), E4 ✓ (800/1000/1280 all render), canaries A2/A5/B2/B18 via the suite (72/72) ✓, `bun run build` ✓, `lint:tokens` ✓, `gofmt`/`go build` ✓.
+- Nothing skipped.

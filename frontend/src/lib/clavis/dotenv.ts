@@ -57,15 +57,6 @@ export function parseDotenvValue(raw: string): string {
   return raw;
 }
 
-export interface DotenvMember {
-  key: string;
-  value: string;
-}
-
-export function formatGroupBlock(members: DotenvMember[]): string {
-  return members.map((m) => formatDotenvLine(m.key, m.value)).join("\n");
-}
-
 export function parseDotenvLine(
   line: string
 ): { key: string; value: string } | null {
