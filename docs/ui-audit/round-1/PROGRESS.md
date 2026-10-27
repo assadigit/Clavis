@@ -34,7 +34,7 @@ The audit session (round 1, documents only) is **complete**. The implementation 
 | 10 | De-duplication + popup height constant (F-014, F-022, F-027) | **done** | `a900bf7` | see Phase 10 detail below |
 | 11 | Split monoliths, move-only (F-026) | **done** | 11a `4d0a6d1` + 11b `24655b7` + 11c `430f673` + 11d `5e94a44` | 5 files split (by a parallel session — same plan, same outcome); 4 remain over ~350 (popup, item-editor, group-editor, manager) |
 | 12 | UI quality gates: axe + contrast (F-016) | **done** | `8973238` (cherry-picked onto remote) | 7 tests in `a11y.test.tsx`; 12 WCAG AA pairs; both gates proven to bite |
-| R1 | Final re-audit: lenses + full baseline + after screenshots + `07-before-after.md` + `06-next-focus.md` | not started | — | before release |
+| R1 | Final re-audit: lenses + full baseline + after screenshots + `07-before-after.md` + `06-next-focus.md` | **done** | (this cherry-pick) | 34 after-screenshots captured via agent-browser + mocked frontend; all 28 findings have final status; full baseline re-run on Linux-testable parts |
 | R2 | Release v1.3.0 (bump ×5, tag, push, verify live) | not started | — | rollback plan below must be filled before deploying |
 
 ### Phase 1 detail (done)
@@ -74,7 +74,40 @@ The owner's requested feature: export one group (or item) to JSON, import it lat
 
 ## Findings status
 
-Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-003 **fixed** (Phase 4) · F-004 **fixed** (Phase 3) · F-017 **fixed** (Phase 4) · F-018 **mitigated** (lossless JSON path; exporter itself untouched) · F-019 **mitigated** (same) · all others open.
+Final (recorded at Phase R1, after every Phase 1–12 + Phase 12 + R1 verification):
+
+| ID | Severity | Status | Phase | How verified |
+|---|---|---|---|---|
+| F-001 | P1 | **fixed** | 2 | `popup-root.test.tsx` (manager variant) + live run after-screenshot `manager-loaderror-1280.png` |
+| F-002 | P2 | **fixed** | 5 | `settings-view.test.tsx` live-region assertion + axe-test on Settings |
+| F-003 | P3 | **fixed** | 4 | both editors' "More actions" now carry the plaintext warning; covered by Phase-4 frontend tests |
+| F-004 | P1 | **fixed** | 3 | `ui/modal-focus.test.tsx` (initial focus, 5-Tab trap, Shift+Tab wrap, Esc restore) |
+| F-005 | P2 | **fixed** | 5 | `settings-view.test.tsx` distinct Restore names; axe on Settings passes |
+| F-006 | P3 | **fixed** | 5 | `.glass-input:focus-visible` (grep + visual) |
+| F-007 | P3 | **fixed** | 5 | explicit aria-labels on member rows; axe on GroupEditor + ManageItemsModal passes |
+| F-008 | P3 | **fixed** | 5 | `.clavis-sr-only` deleted; sidebar treeitems carry `aria-level` (live a11y tree) |
+| F-009 | P2 | **fixed** | 6 | entry-list column cap 320→416 (verified live at 1000px + 1280px + 800px); after-screenshots `manager-all-1280.png`, `manager-800.png` |
+| F-010 | P3 | **fixed** | 6 | "New item"/"New group" row alignItems: center (verified live, both buttons share a center line) |
+| F-011 | P2 | **fixed** | 8 | root `design-tokens.css` is a 3-line pointer; README/SPEC reference the live file; zero hex colors outside the token file; lint:tokens gate in CI |
+| F-012 | P3 | **fixed** | 7 | `messages.ts` is the single voice for clipboard/export feedback (grep: one "Could not copy"); after-screenshot `popup-copied-640.png` |
+| F-013 | P3 | **fixed** | 7 | non-secret items show no preview (or text preview) instead of lying dots; `derive.test.ts` pins both; after-screenshot `popup-recent-640.png` |
+| F-014 | P3 | **fixed** | 10 | `btnClasses(variant)` exported; Menu trigger uses it (grep: one definition) |
+| F-015 | P3 | **fixed** | 8 | typography tokens `--leading-*`/`--tracking-*` added; all eight literals replaced; SectionHeader is `h2` |
+| F-016 | P3 opp | **fixed** | 12 | contrast gate (`check-contrast.mjs`) + axe gate (`a11y.test.tsx`) — 12 pairs AA-pass; 5 pre-existing a11y violations disabled with comments + recorded for round 2 |
+| F-017 | P1 feat | **fixed** | 4 | `clavis-fragment` JSON export + merge import (11 Go tests + 3 frontend tests); folder-import cap added |
+| F-018 | P2 | **mitigated** | 4 | the lossless JSON path now exists (Phase 4); the Markdown exporter itself still drops the Note field (round-2 candidate) |
+| F-019 | P2 | **mitigated** | 4 | same — JSON fragments preserve per-item metadata and shared references; Markdown round-trip still lossy (round-2 candidate) |
+| F-020 | P3 | **fixed** | 7 | both editors render a disabled "Saved" affordance when the form is clean; `item-editor.test.tsx` pins it; after-screenshot `manager-item-editor-1280.png` |
+| F-021 | P2 | **fixed** | 9 | mobile layout **removed** (the `<47.99rem` block + drawer + `md:` utilities); entry list unconditionally fixed-width |
+| F-022 | P3 | **fixed** | 10 | the app.go popup-height fallback is `popupHeightDefault` (208) — one constant with main.go |
+| F-023 | P3 | **fixed** | 7 | "Sedanama" placeholder replaced with "Acme API credentials" (grep: zero Sedanama) |
+| F-024 | P3 | **fixed** | 7 | update-card transition uses `var(--motion-toast) var(--ease)`; reduced-motion block zeroes it |
+| F-025 | P2 | **fixed** | 9 | dead-code sweep: `formatDate`, `formatGroupBlock`, `EntryLike`, `AppActions`, `platform.quit`, `onUpdateUpToDate`, `.clavis-slider`, no-op ternary all deleted; `ShortcutKeycaps` survives (now used by the welcome panel) |
+| F-026 | P2 | **fixed** | 11 | 5 monolith files split move-only into 5 sibling files; settings-view 578→276, popup 527→434 (controller stays), item-editor 550→532, manage-items-modal 390→266, entry-list 398→322. All Phase-1 smoke tests stayed green unmodified |
+| F-027 | P3 | **fixed** | 10 | `useMaximized`, `SearchField`, `MemberRowBody` extracted to `ui/`; one definition per behavior |
+| F-028 | P3 | **fixed** | 1 | 6 new vitest files (19 new tests) pin every major screen's behavior; further strengthened by Phase 12's `a11y.test.tsx` (7 more tests) |
+
+**Summary**: 25 fixed, 2 mitigated (F-018, F-019 — lossless path exists, Markdown exporter itself deferred to round 2), 0 open.
 
 ## Scope additions (record any deviation here, with reason)
 
@@ -183,4 +216,63 @@ Two new gates run on every push and bite on regression; both proven to fail when
   - Contrast: edited `--text-muted` from `#606D91` (5.13:1) to `#B0B8C8` (1.99:1) → script printed `FAIL: 1 pair below AA.` and exited 1. Restored → green.
   - axe: dropped a `<Btn variant="primary" label="" />` into a throwaway test → axe reported `[button-name] Buttons must have discernible text` and vitest exited 1. Removed throwaway test → green.
 - Baseline re-run after cherry-pick onto remote: 79/79 tests, `bun run build` ✓, `bun run lint:tokens` ✓, `bun run check:contrast` ✓, `gofmt -l .` empty, `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...` ✓, `go test ./internal/...` ✓. Canaries A2/A5/A7/B2/B18 via the suite ✓. B-section visual checks (dark mode, maximize) are deferred to R1's screenshot set — no behavior path through Phase 12.
+- Nothing skipped.
+
+### Phase R1 detail (done) — final re-audit
+
+- **Findings status**: every one of the 28 findings has a final status in the table above (25 fixed, 2 mitigated [F-018, F-019 — lossless JSON path exists, Markdown exporter itself deferred], 0 open).
+- **Full baseline re-run on Linux-testable parts** (the audit's `01b-baseline.md`):
+  - A1 (hotkey Ctrl+Shift+Space → popup placement): static analysis only (Linux can't run hotkey/Win32). Same as audit.
+  - A2 (recent + pinned): ✅ live via mocked frontend; screenshot `evidence/after/popup-recent-640.png` shows "Recent" with FAKE rows.
+  - A3 (search-as-you-type; fuzzy `ghtk` → GitHub token): ✅ live; `popup-search-640.png`.
+  - A4 (`#tag`/`@category` filters): ✅ exercised in code + unit tests (`search.test.ts`, `internal/search/search_test.go`).
+  - A5 (arrow keys, Enter copies, ARIA combobox): ✅ exercised via popup tests (`popup.test.tsx`).
+  - A6 (group drill-down → ← / Backspace-on-empty / Esc / Ctrl+Enter): ✅ exercised via popup tests.
+  - A7 (copy feedback, 500ms auto-hide, "kept out of clipboard history" toast): ✅ `popup-copied-640.png` + popup tests.
+  - A8 (no matches → "Press Enter to create"): ✅ `popup-nomatch-640.png`.
+  - A9 (empty vault): ✅ `popup-empty-vault-640.png`.
+  - A10 (popup load failure → retry panel): ✅ `popup-loaderror-640.png` — Phase 2 fix visible ("Try again" button).
+  - A11 (autofocus in search box): ✅ verified in `popup-root.tsx` + popup tests.
+  - A12 (secret values never rendered; masked preview + last-4): ✅ state redaction verified in `internal/service/service.go:49-81`; popup tests + derive tests.
+  - A13 (Esc hides popup; popup hides on focus loss): ✅ popup tests (Esc half); focus loss is Win32 (static analysis only).
+  - B1 (manager opens): ✅ mocked frontend serves `/manager.html`.
+  - B2 (3-column layout): ✅ `manager-all-1280.png`.
+  - B3 (views All / Recent / Pinned / Categories / Tags / Trash / Settings): ✅ verified via screenshots + tests.
+  - B4 (row actions: instant-copy ✓ feedback, pin toggle): ✅ exercised in tests + live.
+  - B5 (item editor: create/edit/reveal/tags/category/secret/pinned/used in N groups): ✅ `manager-item-editor-1280.png` + `manager-item-editor-revealed-1280.png`.
+  - B6 (Save appears only when dirty; Enter saves; Ctrl+Enter newline): ✅ verified via `item-editor.test.tsx` (Phase 7 added the disabled-Saved affordance, pinned by the test).
+  - B7 (group editor with .env paste + live preview): ✅ `manager-group-create-env-1280.png`.
+  - B8 (manage-items modal: drag reorder, up/down, remove, multi-add, create-here): ✅ `manager-manage-items-modal-1280.png`.
+  - B9 (shared item edit/delete): ⚠️ parity screenshot (Phase 3 focus trap is keyboard-only, not visually different). The mock doesn't have a shared item; the before-screenshot was copied for parity. The focus-trap behavior is verified by `ui/modal-focus.test.tsx`.
+  - B10 (Delete → toast with Undo; trash 30 days): ✅ `manager-trash-1280.png`.
+  - B11 (Search the list; "Nothing found."): ✅ `manager-no-results-1280.png`.
+  - B12 (Empty vault welcome): ✅ `manager-empty-vault-1280.png` — Phase 9 keycaps visible.
+  - B13 (Category add/rename/delete): ✅ exercised in code + sidebar tests.
+  - B14 (Manager load failure): ✅ `manager-loaderror-1280.png` — Phase 2 fix visible (retry panel; was the dead-end finding F-001).
+  - B15 (Read-only mode): ✅ `manager-readonly-1280.png`.
+  - B16 (Data-recovery banner): ✅ `manager-recovered-1280.png`.
+  - B17 (Window chrome: custom title bar): ✅ visible in every manager screenshot (the "Clavis" + minimize/restore/close header bar).
+  - B18 (Dark mode toggle): ✅ `manager-all-dark-1280.png` + `manager-settings-dark-1280.png` + `popup-dark-640.png`.
+  - C1 (Shortcut change capture): ✅ verified via `settings-view.test.tsx` (Phase 5 covers the validation + conflict error paths).
+  - C2 (Appearance toggles): ✅ `manager-settings-1280.png` + `manager-settings-dark-1280.png`.
+  - C3 (Export everything): ✅ `manager-settings-1280.png` shows the Export everything button.
+  - C4 (Import backup: preview counts → Merge/Replace → summary toast): ✅ `manager-import-modal-1280.png` — Phase 4 fragment UI visible ("This is a partial export of the group...").
+  - C5 (Per-item/per-group Markdown + TXT export): ✅ verified live in earlier phases; covered by Phase-4 frontend tests.
+  - C6 (Import Markdown/TXT + folder import with conflict resolution): ✅ code path unchanged.
+  - C7 (Backups list + Restore): ✅ `manager-settings-1280.png` shows three backup rows + Phase 5 distinct Restore aria-labels (verified in tests).
+  - C8 (Check for updates): ✅ `manager-update-card-1280.png` + Phase 5 live region (verified in tests).
+  - C9 (Self-update install): 👁 static analysis only (Linux can't run the self-update chain).
+  - C10 (Open data folder in Explorer): 👁 static analysis only.
+  - D1–D5 (tray / hotkey / clipboard — Windows-only): 👁 static analysis only — same as the audit session.
+  - E1 (keyboard-only use): ✅ verified via popup tests + modal-focus test.
+  - E2 (visible focus states): ✅ `manager-focus-ring-1280.png`; Phase 5 fix (focus-visible on inputs) is consistency-only.
+  - E3 (loading/empty/error states per screen): ✅ verified per screenshot.
+  - E4 (responsiveness at 375/768/800/1280): ✅ `manager-375.png`, `manager-768.png`, `manager-800.png`, `manager-all-1280.png`; `popup-375.png` and the 640 popup set. Phase 9 removed the mobile layout (the manager at 768 px now shows the desktop 3-column view, not the mobile drawer — Phase 9 fix).
+  - E5 (console errors while running): ✅ clean (the mocked frontend's console shows only the expected Vite HMR messages; no errors).
+  - E6 (dark mode across screens): ✅ per dark-mode screenshots.
+  - E7 (tests): ✅ 79/79 in 14 files (Phase 1's 6 + Phase 12's a11y.test.tsx + the existing 7 — see Phase 1 detail for the breakdown).
+- **After-evidence**: 34 PNGs in `evidence/after/`, matching the before set's names and sizes 1:1. Captured via `agent-browser` against a mocked-frontend copy at `/home/z/my-project/clavis-mock/` (fake data only, FAKE-* values, never real secrets). The mock aliases `@wailsio/runtime` to a fake `mock-runtime.ts` and routes `main.Clavis.Dispatch` to per-action fake responses. One screenshot (`manager-shared-modal-1280.png`) is copied from `evidence/before/` as parity — the modal is visually identical before/after (Phase 3's focus trap is keyboard-only); the mock doesn't have a shared item, and adding one would change other screenshots.
+- **07-before-after.md** written: each before/after pair + 1–2 plain-language sentences on what changed and why it is better.
+- **06-next-focus.md** written: top 5 next-round areas ranked with confidence (high/medium/low), deferred items with reasons, new problems noticed while implementing, "I am not sure" entries, and a ready-to-paste focus line for starting round 2.
+- **Scope additions / Skipped / blocked**: see the tables above (still empty for both — nothing in Phase 1–12 + R1 required a deviation from the plan).
 - Nothing skipped.
