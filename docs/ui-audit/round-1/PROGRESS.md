@@ -154,3 +154,13 @@ Interim (final statuses recorded at Phase R1): F-001 **fixed** (Phase 2) · F-00
 - Grep proofs: `clavis-btn-primary` mapping defined once; `window.screen.availWidth` comparison defined once; the duplicated search-input style blocks and member-body JSX blocks exist only in the shared components.
 - Visual parity verified live at 1280px: member rows and both search fields render identically (screenshots taken); maximize styling unchanged (B17).
 - 72/72 tests, `bun run build` ✓, `lint:tokens` ✓, gofmt/go vet/go test ✓. Nothing skipped.
+
+### Phase 11 detail (done) — F-026 addressed (four move-only commits)
+
+Line counts before → after (main file | new file):
+- **11a popup.tsx 527 → 358 | popup/rows.tsx 249** — rows build/render, copy-feedback state, empty states moved; popup stays the controller (state, search, keyboard, copy orchestration).
+- **11b item-editor.tsx 550 → 522 | editors/value-field.tsx 73** — the planned move (value field + reveal logic) done. Honest note: the file stays over the ~350 aspiration — the save/split/duplicate flow and the form grid are its core logic; a further split would rewrite logic, recorded for round 2 per the plan's stop rule.
+- **11c settings-view.tsx 578 → 281 | settings/import-flows.tsx 331** — backup import (incl. the Phase-4 fragment UI), files import, folder import and both dialogs moved with their buttons and hidden inputs in the same DOM order.
+- **11d manage-items-modal.tsx 390 → 263 | manage-items/sortable-member-row.tsx 137; entry-list.tsx 398 → 300 | entry-list/entry-list-row.tsx 139** — the sortable row and the entry row (with its 1400 ms copy-feedback beat) moved; the per-row feedback state behaves identically (only one row is ever copied).
+- All 72 tests green **without modification** on every commit — the move-only proof. `bun run build` ✓, `lint:tokens` ✓. Verified live in the mocked copy: list rows + copy feedback, settings import buttons, popup rows/footer all render identically.
+- Files still over ~350 (recorded, not blockers): item-editor 522, group-editor 388, popup 358, manager 353. The plan's table listed the five >400 files; three of them are now under 300.
