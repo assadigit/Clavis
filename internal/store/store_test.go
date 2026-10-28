@@ -7,6 +7,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -238,6 +239,7 @@ func TestDeleteUndoTrash(t *testing.T) {
 		t.Fatalf("DeleteEntry 2: %v", err)
 	}
 	f.advance(31 * 24 * time.Hour)
+	f.s.Close() // v1.4.1: the data-folder lock is exclusive — simulate the process ending
 	s2, err := NewWithClock(f.dir, "1.0.0", f.clock)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
@@ -353,6 +355,7 @@ func TestAtomicWriteCrashSafety(t *testing.T) {
 		t.Fatalf("original file corrupted: %v", err)
 	}
 	// And a store re-open must ignore the leftover tmp.
+	f.s.Close() // v1.4.1: exclusive lock — release before re-opening the folder
 	s2, err := New(f.dir, "1.0.0")
 	if err != nil {
 		t.Fatalf("reopen with leftover tmp: %v", err)
@@ -439,6 +442,7 @@ func TestNewerSchemaReadOnly(t *testing.T) {
 	b, _ := json.Marshal(v)
 	writeDataFile(t, f.dir, string(b))
 
+	f.s.Close() // v1.4.1: exclusive lock — release before re-opening the folder
 	s2, err := New(f.dir, "1.0.0")
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -463,6 +467,7 @@ func TestCorruptFileRecovery(t *testing.T) {
 	mustItem(t, f.s, "B", "2") // makes a daily backup containing A only
 
 	writeDataFile(t, f.dir, `{ this is not json `)
+	f.s.Close() // v1.4.1: exclusive lock — release before re-opening the folder
 	s2, err := New(f.dir, "1.0.0")
 	if err != nil {
 		t.Fatalf("New with corrupt file: %v", err)
@@ -1101,3 +1106,210 @@ func TestNormalizeCategoryDepthLift(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+/* ── v1.4.1: deletions stick (DECISIONS.md §42) ─────────────────────────── */
+
+// liveifyEntry returns the vault text with the entry's deletedAt cleared.
+func liveifyEntry(t *testing.T, text, id string) string {
+	t.Helper()
+	var v map[string]any
+	if err := json.Unmarshal([]byte(text), &v); err != nil {
+		t.Fatalf("liveify: parse: %v", err)
+	}
+	for _, key := range []string{"items", "groups"} {
+		arr, _ := v[key].([]any)
+		for _, e := range arr {
+			if m, ok := e.(map[string]any); ok && m["id"] == id {
+				m["deletedAt"] = nil
+			}
+		}
+	}
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
+// resurrectEntry simulates the reported bug's mechanism: something (a stale
+// second copy of the app, an old backup) rewrites the data file with the
+// entry LIVE again.
+func resurrectEntry(t *testing.T, dir, id string) {
+	t.Helper()
+	writeDataFile(t, dir, liveifyEntry(t, readDataFile(t, dir), id))
+}
+
+func TestDeletedEntriesStayDeleted(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Ghost key", "v")
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+
+	// The reported mechanism: the file gets rewritten with the entry live.
+	resurrectEntry(t, f.dir, a.ID)
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	st := s2.State()
+	if !isDeleted(st, KindItem, a.ID) {
+		t.Fatal("a deleted entry that reappeared in the file must be moved back to the Trash (v1.4.1 tombstones)")
+	}
+	if st.RecoveredNotice == nil {
+		t.Fatal("the re-applied deletions must be explained by a banner")
+	}
+	// And the correction must be persisted, not just in-memory.
+	var onDisk map[string]any
+	if err := json.Unmarshal([]byte(readDataFile(t, f.dir)), &onDisk); err != nil {
+		t.Fatalf("disk parse: %v", err)
+	}
+	for _, e := range onDisk["items"].([]any) {
+		if m := e.(map[string]any); m["id"] == a.ID {
+			if m["deletedAt"] == nil {
+				t.Fatal("the resurrected entry must be re-deleted ON DISK")
+			}
+		}
+	}
+}
+
+func TestTombstoneClearedByRestoreEntry(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Keep me", "v")
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if err := f.s.RestoreEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("RestoreEntry: %v", err)
+	}
+	// Even if an old copy later resurrects the file entry, the user's
+	// explicit restore must win: no tombstone is left to fight it.
+	resurrectEntry(t, f.dir, a.ID)
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if isDeleted(s2.State(), KindItem, a.ID) {
+		t.Fatal("an intentionally restored entry must stay live")
+	}
+}
+
+func TestTombstoneClearedByUndo(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Undo me", "v")
+	token, err := f.s.DeleteEntry(KindItem, a.ID)
+	if err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if err := f.s.UndoDelete(token); err != nil {
+		t.Fatalf("UndoDelete: %v", err)
+	}
+	resurrectEntry(t, f.dir, a.ID)
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if isDeleted(s2.State(), KindItem, a.ID) {
+		t.Fatal("an undone delete must stay live")
+	}
+}
+
+func TestEmptyTrashKeepsTombstones(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Gone for good", "v")
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	// Snapshot while the entry is still in the file (in Trash) — the state a
+	// stale copy of the app would still hold in memory.
+	stale := liveifyEntry(t, readDataFile(t, f.dir), a.ID)
+	if err := f.s.EmptyTrash(); err != nil {
+		t.Fatalf("EmptyTrash: %v", err)
+	}
+	// The stale copy rewrites its older snapshot, entry live.
+	writeDataFile(t, f.dir, stale)
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if !isDeleted(s2.State(), KindItem, a.ID) {
+		t.Fatal("an emptied-trash entry that reappears must be re-deleted")
+	}
+}
+
+func TestRestoreBackupClearsTombstones(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Before backup", "v")
+	f.advance(24 * time.Hour)
+	mustItem(t, f.s, "Triggers daily backup", "v") // backup contains a live
+	backups := f.s.ListBackups()
+	if len(backups) == 0 {
+		t.Fatal("expected a daily backup")
+	}
+	name := backups[len(backups)-1].Name // newest
+
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if err := f.s.RestoreBackup(name); err != nil {
+		t.Fatalf("RestoreBackup: %v", err)
+	}
+	// The user explicitly chose the past state: the restored entry must be
+	// live now AND stay live across reloads (tombstones were cleared).
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if isDeleted(s2.State(), KindItem, a.ID) {
+		t.Fatal("RestoreBackup is an explicit user choice — the entry must stay live")
+	}
+}
+
+func TestDataFolderLockExclusive(t *testing.T) {
+	dir := t.TempDir()
+	s1, err := New(dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("first New: %v", err)
+	}
+	if _, err := New(dir, "1.0.0"); err == nil {
+		t.Fatal("a second store on the same data folder must be refused (v1.4.1)")
+	} else if !strings.Contains(err.Error(), "already running") {
+		t.Fatalf("expected the friendly double-launch error, got: %v", err)
+	}
+	s1.Close()
+	s2, err := New(dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("New after Close: %v", err)
+	}
+	s2.Close()
+}
+
+func TestTmpFilesUniqueAndSwept(t *testing.T) {
+	dir := t.TempDir()
+	s, err := New(dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	mustItem(t, s, "A", "1")
+	mustItem(t, s, "B", "2")
+	// No plain shared tmp file may linger after writes.
+	if _, err := os.Stat(filepath.Join(dir, "clavis-data.json.tmp")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("writes must not leave a shared clavis-data.json.tmp behind")
+	}
+	// A dead writer's tmp file is garbage and must be swept on next open.
+	stale := filepath.Join(dir, "clavis-data.json.tmp-999-1")
+	if err := os.WriteFile(stale, []byte("garbage"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s2, err := New(dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("New after sweep: %v", err)
+	}
+	defer s2.Close()
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("a leftover tmp file from a dead writer must be swept on open")
+	}
+}

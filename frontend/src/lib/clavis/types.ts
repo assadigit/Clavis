@@ -6,7 +6,7 @@
 
 export const CURRENT_SCHEMA_VERSION = 1;
 // Bumped by the release workflow (release.yml compares the tag with this).
-export const APP_VERSION = "1.4.0";
+export const APP_VERSION = "1.4.1";
 
 export type EntryKind = "item" | "group";
 

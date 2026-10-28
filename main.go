@@ -53,26 +53,16 @@ func hasHiddenFlag() bool {
 }
 
 func main() {
-	st, err := store.New(dataDir(), AppVersion)
-	if err != nil {
-		log.Fatal("Clavis could not open its data folder: ", err)
-		return
-	}
-	core := &service.Service{Store: st}
-	svc := &Clavis{core: core}
-	core.RegisterShortcut = svc.RegisterShortcut
-	core.SyncAutostart = svc.syncAutostart
-	settings := st.State().Data.Settings
-
 	hidden := hasHiddenFlag()
 
-	// Manager bounds (§3.4: remembers its size and position).
-	mgrW, mgrH := 1000, 680
-	mgrX, mgrY := -1, -1
-	if b := settings.ManagerBounds; b != nil && b.W >= 520 && b.H >= 360 {
-		mgrW, mgrH, mgrX, mgrY = b.W, b.H, b.X, b.Y
-	}
-
+	/* v1.4.1 (DECISIONS.md §42): the single-instance check runs BEFORE
+	   the data folder is opened. A second copy used to open the store
+	   first — and Wails' mutex exit only happened later. Now a second
+	   copy never touches the data at all: application.New exits it
+	   inside (notifying this instance → ShowManager). The service shell
+	   is created empty; its store is wired right after, once this
+	   process is the only one standing. */
+	svc := &Clavis{core: &service.Service{}}
 	app := application.New(application.Options{
 		Name:        "Clavis",
 		Description: "Your keys, one shortcut away.",
@@ -95,6 +85,26 @@ func main() {
 			DisableQuitOnLastWindowClosed: true, // the tray owns quitting
 		},
 	})
+
+	// Only the surviving instance opens the data folder (exclusive lock
+	// inside store.New — a stale copy can never rewrite older data).
+	st, err := store.New(dataDir(), AppVersion)
+	if err != nil {
+		log.Fatal("Clavis could not open its data folder: ", err)
+		return
+	}
+	core := &service.Service{Store: st}
+	svc.core = core
+	core.RegisterShortcut = svc.RegisterShortcut
+	core.SyncAutostart = svc.syncAutostart
+	settings := st.State().Data.Settings
+
+	// Manager bounds (§3.4: remembers its size and position).
+	mgrW, mgrH := 1000, 680
+	mgrX, mgrY := -1, -1
+	if b := settings.ManagerBounds; b != nil && b.W >= 520 && b.H >= 360 {
+		mgrW, mgrH, mgrX, mgrY = b.W, b.H, b.X, b.Y
+	}
 
 	// The Popup (§3.3b): frameless, transparent, always on top, no taskbar
 	// entry, hidden until the shortcut/tray shows it.

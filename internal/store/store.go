@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"clavis/internal/exchange"
@@ -206,6 +207,20 @@ type Store struct {
 	undoRing        map[string]undoRecord
 	undoOrder       []string // FIFO of live undo tokens, oldest first
 
+	/* v1.4.1 (DECISIONS.md §42): the exclusive data-folder lock — no two
+	   Clavis processes (or two stores) may ever hold the same data
+	   folder, so a stale copy can never rewrite an older snapshot over
+	   the user's deletions. releaseLock is nil after Close. */
+	releaseLock func()
+
+	/* v1.4.1: deletion tombstones (see tombstones.go) — the log that
+	   makes deletions stick even if something resurrects the file. */
+	tombs map[string]string
+
+	/* v1.4.1: per-write tmp sequence so two writers could never share a
+	   tmp file (belt to the lock's suspenders). */
+	tmpSeq uint64
+
 	/* version is the snapshot generation counter: it bumps on every path
 	   that can change what State() returns (persisted writes via
 	   writeAtomicLocked, notice clears, reopens) and lets the service memoize
@@ -223,6 +238,10 @@ func (s *Store) dataFile() string    { return filepath.Join(s.dir, "clavis-data.
 func (s *Store) backupsDir() string  { return filepath.Join(s.dir, "backups") }
 func (s *Store) backupIndex() string { return filepath.Join(s.dir, "backups", "index.json") }
 
+// errDataFolderInUse is the friendly double-launch error (v1.4.1).
+var errDataFolderInUse = errors.New("Clavis is already running — its data folder is in use. " +
+	"Close the other Clavis (check the tray area near the clock) and try again.")
+
 // New opens (or creates) the store in dir and returns it ready to use.
 func New(dir, appVersion string) (*Store, error) {
 	return NewWithClock(dir, appVersion, time.Now)
@@ -236,22 +255,64 @@ func NewWithClock(dir, appVersion string, now func() time.Time) (*Store, error) 
 		now:        now,
 		newID:      NewUUID,
 		undoRing:   map[string]undoRecord{},
+		tombs:      map[string]string{},
 	}
 	if err := os.MkdirAll(s.backupsDir(), 0o755); err != nil {
 		return nil, fmt.Errorf("cannot create data folder: %w", err)
 	}
+	/* v1.4.1: exclusive lock FIRST — from here on, this is the only
+	   store on this data folder, whatever else is (or stops) running. */
+	release, err := acquireDirLock(filepath.Join(dir, "clavis.lock"))
+	if err != nil {
+		return nil, err
+	}
+	s.releaseLock = release
+	s.sweepTmpFilesLocked()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.initLocked(); err != nil {
+		release()
+		s.releaseLock = nil
 		return nil, err
 	}
 	return s, nil
+}
+
+// Close releases the data-folder lock. Production code never calls it (the
+// OS releases the lock when the process exits, crash included); tests use
+// it to simulate a process ending before opening the folder again.
+func (s *Store) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.releaseLock != nil {
+		s.releaseLock()
+		s.releaseLock = nil
+	}
+}
+
+// sweepTmpFilesLocked removes leftover atomic-write temp files. Safe only
+// while the data-folder lock is held: any clavis-data.json.tmp-* that
+// exists belongs to a dead writer.
+func (s *Store) sweepTmpFilesLocked() {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		n := e.Name()
+		if strings.HasPrefix(n, "clavis-data.json.tmp") || strings.HasPrefix(n, "deletions.json.tmp") {
+			_ = os.Remove(filepath.Join(s.dir, n))
+		}
+	}
 }
 
 // SetClock is used by tests to control time.
 func (s *Store) SetClock(now func() time.Time) { s.now = now }
 
 func (s *Store) initLocked() error {
+	/* v1.4.1: the tombstone log is loaded before anything else so every
+	   path below (fresh, parse, recovery, migration) can apply it. */
+	s.tombs = s.loadTombsLocked()
 	text, err := os.ReadFile(s.dataFile())
 	if errors.Is(err, os.ErrNotExist) {
 		s.data = StarterVault(s.appVersion, s.newID, s.now())
@@ -262,7 +323,10 @@ func (s *Store) initLocked() error {
 	}
 	parsed, ok := s.parseVault(string(text))
 	if !ok {
-		return s.recoverFromBackupLocked(string(text))
+		if err := s.recoverFromBackupLocked(string(text)); err != nil {
+			return err
+		}
+		return s.finishLoadLocked()
 	}
 	s.data = parsed
 	if parsed.SchemaVersion > CurrentSchemaVersion {
@@ -279,6 +343,24 @@ func (s *Store) initLocked() error {
 		s.data.SchemaVersion = CurrentSchemaVersion
 		s.data.AppVersion = s.appVersion
 		// (v1 is the only version today; migration steps would go here.)
+		if err := s.writeAtomicLocked(); err != nil {
+			return err
+		}
+	}
+	return s.finishLoadLocked()
+}
+
+// finishLoadLocked is the shared tail of every load path (v1.4.1):
+// re-apply deletion tombstones (anything a stale copy or an old backup
+// resurrected goes back to the Trash, with a banner), then the usual
+// 30-day trash purge. Caller holds s.mu.
+func (s *Store) finishLoadLocked() error {
+	if n := s.applyTombsLocked(); n > 0 {
+		notice := tombstoneNotice(n)
+		if s.recoveredNotice != nil {
+			notice = *s.recoveredNotice + " " + notice
+		}
+		s.recoveredNotice = &notice
 		if err := s.writeAtomicLocked(); err != nil {
 			return err
 		}
@@ -322,6 +404,13 @@ func (s *Store) recoverFromBackupLocked(brokenText string) error {
 	return s.writeAtomicLocked()
 }
 
+// uniqueTmpPath builds a per-write temp path (v1.4.1): pid + sequence
+// means no two writers — even two processes, if it ever came to that —
+// can ever share a tmp file and interleave bytes into corruption.
+func (s *Store) uniqueTmpPath(base string) string {
+	return fmt.Sprintf("%s.tmp-%d-%d", base, os.Getpid(), atomic.AddUint64(&s.tmpSeq, 1))
+}
+
 // writeAtomicLocked writes tmp, fsyncs, then renames over the real file.
 func (s *Store) writeAtomicLocked() error {
 	s.version++ // the in-memory snapshot changes on every write path
@@ -329,7 +418,7 @@ func (s *Store) writeAtomicLocked() error {
 	if err != nil {
 		return err
 	}
-	tmp := s.dataFile() + ".tmp"
+	tmp := s.uniqueTmpPath(s.dataFile())
 	fh, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return fmt.Errorf("cannot open temp file: %w", err)
@@ -1119,7 +1208,13 @@ func (s *Store) DeleteEntry(kind EntryKind, id string) (string, error) {
 		group.UpdatedAt = now
 		s.trackUndo(token)
 	}
-	return token, s.saveLocked(kindDaily)
+	if err := s.saveLocked(kindDaily); err != nil {
+		return "", err
+	}
+	/* v1.4.1 (DECISIONS.md §42): remember the deletion so nothing can
+	   resurrect this entry silently (see tombstones.go). */
+	s.addTombLocked(id, now)
+	return token, nil
 }
 
 // trackUndo appends a token to the FIFO and evicts the oldest records
@@ -1183,7 +1278,16 @@ func (s *Store) UndoDelete(token string) error {
 			s.data.Groups = append(s.data.Groups, saved)
 		}
 	}
-	return s.saveLocked(kindDaily)
+	if err := s.saveLocked(kindDaily); err != nil {
+		return err
+	}
+	/* v1.4.1: undo is an intentional un-delete — forget the tombstone. */
+	if rec.Kind == KindItem {
+		s.removeTombLocked(rec.Item.ID)
+	} else {
+		s.removeTombLocked(rec.Group.ID)
+	}
+	return nil
 }
 
 // RestoreEntry takes an entry out of the trash.
@@ -1208,7 +1312,13 @@ func (s *Store) RestoreEntry(kind EntryKind, id string) error {
 		group.DeletedAt = nil
 		group.UpdatedAt = NowISO(s.now())
 	}
-	return s.saveLocked(kindDaily)
+	if err := s.saveLocked(kindDaily); err != nil {
+		return err
+	}
+	/* v1.4.1: restoring from the Trash is an intentional un-delete —
+	   forget the tombstone. */
+	s.removeTombLocked(id)
+	return nil
 }
 
 // PurgeEntry removes an entry forever.
@@ -1655,6 +1765,10 @@ func (s *Store) RestoreBackup(name string) error {
 	}
 	s.data = parsed
 	s.data.AppVersion = s.appVersion
+	/* v1.4.1 (DECISIONS.md §42): restoring a backup is the user
+	   explicitly choosing a past state — every tombstone is forgotten,
+	   so whatever the backup brings back stays. */
+	s.clearTombsLocked()
 	return s.writeAtomicLocked()
 }
 
@@ -1679,5 +1793,8 @@ func (s *Store) Reopen() error {
 	} else {
 		s.readOnlyReason = nil
 	}
-	return nil
+	/* v1.4.1: same load-time guarantees as a fresh start — reload the
+	   tombstone log and re-apply it to whatever the file now says. */
+	s.tombs = s.loadTombsLocked()
+	return s.finishLoadLocked()
 }
