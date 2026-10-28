@@ -6,7 +6,7 @@
 
 export const CURRENT_SCHEMA_VERSION = 1;
 // Bumped by the release workflow (release.yml compares the tag with this).
-export const APP_VERSION = "1.4.1";
+export const APP_VERSION = "1.5.0";
 
 export type EntryKind = "item" | "group";
 
@@ -49,14 +49,33 @@ export interface Group {
   name: string;
   categoryId: string | null;
   tags: string[];
-  /** References to items (shared items), in group order. */
+  /** References to items (shared items), in group order. Empty for
+   *  document groups. */
   itemIds: string[];
+  /** "document" = whole-document bulk-paste group (v1.5.0 §40); absent or
+   *  anything else = classic items group. */
+  mode?: string;
+  /** Always "" in the state snapshot — documents are redacted at the
+   *  backend boundary like item values; the editor fetches one document via
+   *  the "getGroupDocument" action. NEVER logged. */
+  document?: string;
+  /** Document groups only: copies are secret payloads (clipboard-history
+   *  exclusion, §5.2). Items-mode groups derive the verdict from members. */
+  isSecret?: boolean;
+  /** Document size hints (redacted state carries no text, just stats). */
+  docChars?: number;
+  docLines?: number;
   pinned: boolean;
   useCount: number;
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+/** True when the group stores one verbatim pasted document (§40). */
+export function isDocumentGroup(g: Pick<Group, "mode"> | undefined | null): boolean {
+  return g?.mode === "document";
 }
 
 export interface ManagerBounds {

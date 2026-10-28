@@ -180,3 +180,18 @@ func (c *Clavis) OpenDataFolder() map[string]any {
 	}
 	return map[string]any{"ok": true}
 }
+
+// OpenURL opens an http(s) link in the user's default browser (§40). The
+// scheme is validated here AND in the dispatch core; anything but http/https
+// is refused (a secrets app never runs arbitrary schemes).
+func (c *Clavis) OpenURL(rawURL string) map[string]any {
+	u := strings.TrimSpace(rawURL)
+	low := strings.ToLower(u)
+	if !strings.HasPrefix(low, "http://") && !strings.HasPrefix(low, "https://") {
+		return service.Fail("Only http and https links can be opened.", 400)
+	}
+	if err := system.OpenURL(u); err != nil {
+		return service.Fail("Clavis could not open the link.", 400)
+	}
+	return map[string]any{"ok": true}
+}

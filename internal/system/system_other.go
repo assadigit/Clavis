@@ -24,3 +24,8 @@ type sysErr string
 func (e sysErr) Error() string { return string(e) }
 
 const errUnsupported sysErr = "not supported outside Windows"
+
+func openURL(rawURL string) error {
+	_ = rawURL
+	return errUnsupported
+}

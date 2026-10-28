@@ -111,3 +111,20 @@ Short running entries. (Newest last.)
   `-tags server`; plain `go build` (devtools on) stays available for local
   debugging only.
 - See docs/ENGINEERING_NOTES.md for the full hardening log.
+
+## v1.5.0 — two storage modes (whole-document paste + one-by-one items) and the add-item bug
+
+- User report: (1) a full markdown file could not be pasted into a group; (2) adding a single item to an existing group created a NEW group instead.
+- Backend (Go):
+  - `Group` gains `mode` ("document"), `document`, `isSecret` (all `omitempty` — byte-identical saves for legacy vaults; lenient loading in `NormalizeVault` coerces unknown modes).
+  - New store calls: `CreateGroupFromDoc` (verbatim, no trim), `SetGroupDocument` (byte-exact re-paste), `CreateItemInGroup` (atomic create + membership — can never create a group), `GroupDocument`, `GroupCopyText` (manual-copy fallback only); `GroupPatch.IsSecret`.
+  - `Copy` returns the verbatim document for document groups; markdown/TXT/JSON exports + "export all" + markdown import handle document groups (`mode: document` front-matter round-trips).
+  - Service: new actions `createGroupFromDoc`, `getGroupDocument`, `setGroupDocument`, `createItemInGroup`, `getGroupCopyText` (fallback-only), `copyGroupMarkdown`, `openUrl` (http/https validated); state redaction now covers documents (`uiGroup` → docChars/docLines hints only).
+  - `system.OpenURL` (rundll32 FileProtocolHandler on Windows, stub elsewhere) + `Clavis.OpenURL` shell method.
+- Frontend:
+  - Create-group form: radio-card mode choice — "Add items one by one" (existing .env paste kept as optional) / "Paste whole document" (raw textarea + live char/line stats + Secret toggle, default on). Save passes the textarea value through untouched.
+  - Group editor (edit): document groups get DocumentPanel — one prominent **Copy document** button, stats row, Secret toggle, Edit-document re-paste editor (loads the stored text on demand, saves byte-exact, refuses to save empty). Items groups get the always-visible **Name + Value + Add** quick form (atomic `createItemInGroup`) above the member list.
+  - Member rows: per-item Copy (✓ beat; failure → manual-copy dialog with pre-selected content), Reveal toggle (on-demand `getValue`, fixed-length `••••••••` mask so length never leaks), Open-link for revealed http(s) values, per-item Delete (soft delete + Undo), edit via the row's main button (sibling buttons — axe-clean, no nested interactives).
+  - "Copy all as markdown" menu item (backend-side clipboard write); manual-copy fallback (`ManualCopyModal`) wired to group copy, markdown copy and member copy.
+  - List rows + popup show `document · N chars` for document groups; versions bumped to 1.5.0 (types.ts, app.go, winres info, NSIS).
+- Verification: `go vet` + all Go tests green; frontend `tsc` clean, 98/98 vitest green (2 group-editor tests updated to the new row names/menu order); production Windows exe cross-builds (13.3 MB) with regenerated version resource; interactive verification of both modes performed in the sandbox web edition (byte-identical round-trip diff, atomic add-to-group, sidebar counts, fallback dialog).

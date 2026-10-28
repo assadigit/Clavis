@@ -29,3 +29,7 @@ func InstallDir() string { return installDir() }
 // hwnd is the native window handle (WebviewWindow.NativeWindow()); nil is a
 // safe no-op. Non-Windows builds stub it out.
 func ForceForeground(hwnd unsafe.Pointer) { forceForeground(hwnd) }
+
+// OpenURL opens an http(s) link in the user's default browser. Callers must
+// validate the scheme (only http/https pass) — this is a plain shell exec.
+func OpenURL(rawURL string) error { return openURL(rawURL) }

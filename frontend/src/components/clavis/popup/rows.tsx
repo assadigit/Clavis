@@ -47,6 +47,11 @@ export function useTopRows(
     return list.map((e) => {
       if (e.kind === "group") {
         const g = groupMap.get(e.id);
+        if (g && g.mode === "document") {
+          /* Whole-document groups carry a file, not members (§40). */
+          const stats = `document · ${(g.docChars ?? 0).toLocaleString()} chars`;
+          return { kind: "group" as const, id: e.id, name: e.name, meta: metaLine(e.categoryName, e.tags), isSecret: g.isSecret ?? false, preview: stats };
+        }
         const count = g ? g.itemIds.filter((id) => itemMap.has(id)).length : 0;
         return { kind: "group" as const, id: e.id, name: e.name, meta: metaLine(e.categoryName, e.tags), isSecret: false, preview: `${count} items` };
       }

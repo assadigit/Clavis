@@ -20,6 +20,11 @@ const (
 	// DECISIONS.md §41). 8 is far beyond any sane sidebar tree while
 	// still bounding the ancestor walks that guard against cycles.
 	MaxCategoryDepth = 8
+	// GroupModeDocument marks a whole-document group (v1.5.0, DECISIONS.md
+	// §40): the user pasted one entire text/markdown file during creation
+	// and the group stores it VERBATIM. Anything else — including "" — is
+	// a classic items group (a references list over shared items).
+	GroupModeDocument = "document"
 )
 
 // Encryption is the hook for a future master password (always off in v1).
@@ -78,20 +83,38 @@ type Item struct {
 	DeletedAt  *string  `json:"deletedAt"`
 }
 
-// Group stores references to items (shared items), in group order.
+// Group stores references to items (shared items), in group order — or, in
+// document mode, one verbatim pasted document (v1.5.0, DECISIONS.md §40).
+// Mode/Document/IsSecret are omitempty so vaults written by older versions
+// stay byte-identical on load+save, and older Clavis builds simply ignore
+// the unknown keys (§4.2 lenient loading).
 type Group struct {
 	ID         string   `json:"id"`
 	Name       string   `json:"name"`
 	CategoryID *string  `json:"categoryId"`
 	Tags       []string `json:"tags"`
 	ItemIDs    []string `json:"itemIds"`
-	Pinned     bool     `json:"pinned"`
-	UseCount   int      `json:"useCount"`
-	LastUsedAt *string  `json:"lastUsedAt"`
-	CreatedAt  string   `json:"createdAt"`
-	UpdatedAt  string   `json:"updatedAt"`
-	DeletedAt  *string  `json:"deletedAt"`
+	// Mode is "" (classic items group) or GroupModeDocument.
+	Mode string `json:"mode,omitempty"`
+	// Document holds the whole pasted file byte-exact (every whitespace
+	// char, line break and blank line) when Mode == GroupModeDocument.
+	Document string `json:"document,omitempty"`
+	// IsSecret marks document-group copies as secret payloads so the
+	// §5.2 clipboard-privacy formats apply (kept out of Win+V history
+	// and cloud sync). Items-mode groups derive the verdict from their
+	// members, exactly as before.
+	IsSecret   bool    `json:"isSecret,omitempty"`
+	Pinned     bool    `json:"pinned"`
+	UseCount   int     `json:"useCount"`
+	LastUsedAt *string `json:"lastUsedAt"`
+	CreatedAt  string  `json:"createdAt"`
+	UpdatedAt  string  `json:"updatedAt"`
+	DeletedAt  *string `json:"deletedAt"`
 }
+
+// IsDocumentGroup reports whether the group stores one verbatim document
+// instead of a member-item list.
+func (g Group) IsDocumentGroup() bool { return g.Mode == GroupModeDocument }
 
 // VaultData is the whole clavis-data.json document.
 type VaultData struct {

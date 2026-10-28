@@ -54,7 +54,19 @@ type uiItem struct {
 	ValueLast4 string `json:"valueLast4,omitempty"` // §5.2 rule
 }
 
-// uiVaultData mirrors store.VaultData with redacted items.
+// uiGroup is the frontend view of a group. Document groups (v1.5.0 §40)
+// keep the pasted document OUT of the state snapshot exactly like item
+// values: Document is shadowed to "" and only size hints (chars/lines)
+// travel to the UI; the editor fetches the document on demand via
+// getGroupDocument.
+type uiGroup struct {
+	store.Group
+	Document string `json:"document,omitempty"` // always "" in state
+	DocChars int    `json:"docChars,omitempty"`
+	DocLines int    `json:"docLines,omitempty"`
+}
+
+// uiVaultData mirrors store.VaultData with redacted items and groups.
 type uiVaultData struct {
 	SchemaVersion int              `json:"schemaVersion"`
 	AppVersion    string           `json:"appVersion"`
@@ -62,7 +74,7 @@ type uiVaultData struct {
 	Settings      store.Settings   `json:"settings"`
 	Categories    []store.Category `json:"categories"`
 	Items         []uiItem         `json:"items"`
-	Groups        []store.Group    `json:"groups"`
+	Groups        []uiGroup        `json:"groups"`
 }
 
 // last4PerRule implements the §5.2 masked-preview rule: expose the last
@@ -89,9 +101,22 @@ func redactState(st store.State, transparencyOn bool) StateEnvelope {
 		it.Value = ""
 		items[i] = uiItem{Item: it, Value: "", ValueLast4: last4PerRule(v, st.Data.Settings.ShowLast4)}
 	}
-	groups := st.Data.Groups
+	groups := make([]uiGroup, len(st.Data.Groups))
+	for i := range st.Data.Groups {
+		g := st.Data.Groups[i]
+		doc := g.Document // capture before redaction…
+		g.Document = ""   // …documents never cross to the webview in state (§40)
+		ug := uiGroup{Group: g}
+		if g.IsDocumentGroup() {
+			ug.DocChars = len([]rune(doc))
+			if doc != "" {
+				ug.DocLines = strings.Count(doc, "\n") + 1
+			}
+		}
+		groups[i] = ug
+	}
 	if groups == nil {
-		groups = []store.Group{}
+		groups = []uiGroup{}
 	}
 	cats := st.Data.Categories
 	if cats == nil {
@@ -365,6 +390,61 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			}
 			return s.done(map[string]any{"id": group.ID})
 		}
+	case "createGroupFromDoc":
+		{
+			// Whole-document bulk paste (§40): the text is stored VERBATIM —
+			// the service layer deliberately does NOT trim it.
+			input := subMap(p, "input")
+			group, err := s.Store.CreateGroupFromDoc(store.NewGroup{
+				Name:       getStr(input, "name"),
+				CategoryID: getStrPtr(input, "categoryId"),
+				Tags:       getStrArr(input, "tags"),
+				Pinned:     deref(getBool(input, "pinned")),
+				IsSecret:   getBool(input, "isSecret"),
+			}, getStr(input, "text"))
+			if err != nil {
+				return FailErr(err)
+			}
+			return s.done(map[string]any{"id": group.ID})
+		}
+	case "getGroupDocument":
+		{
+			// One-group document fetch for the group editor (the state snapshot
+			// is redacted; §5.4-style on-demand reveal, §40).
+			document, err := s.Store.GroupDocument(getStr(p, "id"))
+			if err != nil {
+				return FailErr(err)
+			}
+			return map[string]any{"ok": true, "document": document}
+		}
+	case "setGroupDocument":
+		{
+			// Re-paste / edit the stored document (byte-exact replacement).
+			if err := s.Store.SetGroupDocument(getStr(p, "id"), getStr(p, "document")); err != nil {
+				return FailErr(err)
+			}
+			return s.done(nil)
+		}
+	case "createItemInGroup":
+		{
+			// The group view's quick "Name + Value + Add" form (§40). ONE atomic
+			// action: the item is created and appended to THIS group in a single
+			// save — adding an item can never create a group as a side effect.
+			input := subMap(p, "input")
+			item, err := s.Store.CreateItemInGroup(getStr(p, "groupId"), store.NewItem{
+				Name:       getStr(input, "name"),
+				Value:      getStr(input, "value"),
+				Key:        getStr(input, "key"),
+				Note:       getStr(input, "note"),
+				CategoryID: getStrPtr(input, "categoryId"),
+				Tags:       getStrArr(input, "tags"),
+				IsSecret:   getBool(input, "isSecret"),
+			})
+			if err != nil {
+				return FailErr(err)
+			}
+			return s.done(map[string]any{"id": item.ID})
+		}
 	case "updateGroup":
 		{
 			patch := subMap(p, "patch")
@@ -373,6 +453,7 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 				CategoryID: catPtrOf(patch),
 				Tags:       tagsPtrOf(patch),
 				Pinned:     getBool(patch, "pinned"),
+				IsSecret:   getBool(patch, "isSecret"),
 			})
 			if err != nil {
 				return FailErr(err)
@@ -473,9 +554,51 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			}
 			return s.done(nil)
 		}
+	case "openUrl":
+		{
+			// A revealed item value that is a link (§40 nice-to-have: URLs
+			// render as clickable). Only http/https ever reach the shell.
+			u := strings.TrimSpace(getStr(p, "url"))
+			low := strings.ToLower(u)
+			if !strings.HasPrefix(low, "http://") && !strings.HasPrefix(low, "https://") {
+				return Fail("Only http and https links can be opened.", 400)
+			}
+			if err := system.OpenURL(u); err != nil {
+				return FailErr(err)
+			}
+			return s.done(nil)
+		}
 	case "updateSettings":
 		{
 			return s.updateSettings(subMap(p, "patch"))
+		}
+	case "getGroupCopyText":
+		{
+			// Manual-copy fallback (§40): after a failed clipboard write the
+			// UI fetches the exact payload here and shows it pre-selected.
+			// The success path never calls this.
+			text, secret, err := s.Store.GroupCopyText(getStr(p, "id"))
+			if err != nil {
+				return FailErr(err)
+			}
+			return map[string]any{"ok": true, "text": text, "containsSecret": secret}
+		}
+	case "copyGroupMarkdown":
+		{
+			// "Copy all as markdown" (§40): the Clavis-markdown export —
+			// front-matter + NAME=value block, or the verbatim document for
+			// document groups — written by THIS backend so real values never
+			// cross to the webview on success. Markdown carries real values,
+			// so the payload always counts as a secret.
+			target, err := s.Store.ExportEntryMarkdown(store.KindGroup, getStr(p, "id"))
+			if err != nil {
+				return FailErr(err)
+			}
+			copied := s.writeToClipboard(target.Body, true)
+			if copied {
+				_ = s.Store.MarkUsed(store.KindGroup, getStr(p, "id"))
+			}
+			return s.done(map[string]any{"copied": copied})
 		}
 	case "copy":
 		{

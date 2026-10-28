@@ -37,8 +37,11 @@ export interface ApiResult {
   copied?: boolean;
   lineCount?: number;
   containsSecret?: boolean;
-  /** "getValue": the value of one item (edit form). */
+  /** "getValue" / "getGroupDocument" / "getGroupCopyText": on-demand
+   *  payloads for the edit form and the manual-copy fallback. */
   value?: string;
+  document?: string;
+  text?: string;
   summary?: { added: number; updated: number; skipped: number };
   preview?: BackupPreview | FilesPreview;
 }

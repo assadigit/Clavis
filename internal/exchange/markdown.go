@@ -53,6 +53,11 @@ type Imported struct {
 	Tags         []string
 	IsSecret     bool
 	Lines        []Member // groups only
+	// Mode/Document (v1.5.0 §40): a group .md whose header carries
+	// "mode: document" imports as a whole-document group and its body IS
+	// the verbatim document (never parsed as KEY=value lines).
+	Mode     string
+	Document string
 }
 
 // MdItem is the subset of store.Item needed for Markdown export.
@@ -71,7 +76,16 @@ type MdGroup struct {
 	Name       string
 	CategoryID *string
 	Tags       []string
+	// Mode/Document (v1.5.0 §40): when Mode == ModeDocument the body is the
+	// raw document itself and the header announces "mode: document" so the
+	// import round-trips without trying to parse KEY=value lines.
+	Mode     string
+	Document string
 }
+
+// ModeDocument is the group-mode marker in Markdown headers (§40). The
+// store package re-exports the same value as GroupModeDocument.
+const ModeDocument = "document"
 
 func headerValue(label, value string) string {
 	if value == "" {
@@ -102,7 +116,10 @@ func ExportItemMarkdown(item MdItem, categoryName string) string {
 	return strings.Join(lines, "\n") + "\n" + item.Value
 }
 
-// ExportGroupMarkdown renders a group as Clavis Markdown.
+// ExportGroupMarkdown renders a group as Clavis Markdown. Document groups
+// (§40) carry "mode: document" in the header and store the pasted file
+// verbatim as the body — byte-exact, no KEY=value parsing in either
+// direction.
 func ExportGroupMarkdown(group MdGroup, members []Member, categoryName string) string {
 	lines := []string{
 		"---",
@@ -110,8 +127,12 @@ func ExportGroupMarkdown(group MdGroup, members []Member, categoryName string) s
 		headerValue("name", group.Name),
 		headerValue("category", categoryName),
 		"tags: " + tagsField(group.Tags),
-		"---",
 	}
+	if group.Mode == ModeDocument {
+		lines = append(lines, "mode: "+ModeDocument)
+		return strings.Join(lines, "\n") + "\n---\n" + group.Document
+	}
+	lines = append(lines, "---")
 	return strings.Join(lines, "\n") + "\n" + FormatGroupBlock(members)
 }
 
@@ -125,7 +146,8 @@ func boolField(b bool) string {
 // ExportItemText is the item .txt export: the value only.
 func ExportItemText(value string) string { return value }
 
-// ExportGroupText is the group .txt export: the KEY=value lines only.
+// ExportGroupText is the group .txt export: the KEY=value lines only — or,
+// for document groups (§40), the verbatim document itself.
 func ExportGroupText(members []Member) string { return FormatGroupBlock(members) }
 
 func baseName(fileName string) string {
@@ -226,6 +248,14 @@ func ParseMarkdown(fileName, content string) (Imported, error) {
 		return Imported{
 			Kind: KindItem, Name: name, Key: header["key"], Value: body,
 			CategoryName: categoryName, Tags: tags, IsSecret: isSecret,
+		}, nil
+	}
+
+	// Whole-document groups (§40): the body is the pasted file, verbatim.
+	if strings.ToLower(header["mode"]) == ModeDocument {
+		return Imported{
+			Kind: KindGroup, Name: name, CategoryName: categoryName, Tags: tags,
+			IsSecret: isSecret, Mode: ModeDocument, Document: body,
 		}, nil
 	}
 

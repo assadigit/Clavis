@@ -110,3 +110,14 @@ func installDir() string {
 	}
 	return strings.TrimSpace(v)
 }
+
+// openURL hands an http(s) link to the default browser through the shell.
+// rundll32's FileProtocolHandler is the classic, dependency-free way to
+// open a URL with zero quoting pitfalls (no cmd.exe involved).
+func openURL(rawURL string) error {
+	cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", rawURL)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("could not open the link: %w", err)
+	}
+	return nil
+}

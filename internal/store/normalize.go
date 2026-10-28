@@ -142,12 +142,23 @@ func NormalizeVault(parsed any, appVersion string, nowISO string, newID func() s
 		if id == "" {
 			id = newID()
 		}
+		// Mode (v1.5.0 §40): only the exact "document" value switches a
+		// group to whole-document mode; everything else — missing, "" or a
+		// hand-edited value — is a classic items group. The document text
+		// itself passes through untouched (byte-exact, no trimming).
+		mode := normStr(gr["mode"])
+		if mode != GroupModeDocument {
+			mode = ""
+		}
 		groups = append(groups, Group{
 			ID:         id,
 			Name:       normStr(gr["name"]),
 			CategoryID: normStrPtr(gr["categoryId"]),
 			Tags:       normStrArr(gr["tags"]),
 			ItemIDs:    normStrArr(gr["itemIds"]),
+			Mode:       mode,
+			Document:   normStr(gr["document"]),
+			IsSecret:   normBool(gr["isSecret"], false),
 			Pinned:     normBool(gr["pinned"], false),
 			UseCount:   num(gr["useCount"]),
 			LastUsedAt: normStrPtr(gr["lastUsedAt"]),

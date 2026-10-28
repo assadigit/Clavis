@@ -15,10 +15,12 @@ Copied secrets are automatically kept out of the Windows clipboard history
 - **Keyboard-first quick search** — fuzzy matching, `#tag` and `@category`
   filters, groups open with `→`, whole-group copy as `KEY=value` lines with
   dotenv quoting.
-- **Manager window** — items, groups (shared by reference: edit once, every
-  group sees it), categories, tags, trash with 30-day retention and Undo
-  on every delete. Every row has an instant-copy button and a pin toggle;
-  new groups can be built by pasting a whole project's `.env`.
+- **Two group modes** — "Add items one by one" (named credentials, each with
+  its own Copy button, added inside the open group) or "Paste whole document"
+  (an entire markdown/text file stored byte-exact, one prominent Copy button
+  that hands back the identical bytes, re-paste to replace it later). Classic
+  groups can still be built by pasting a whole project's `.env`; "Copy all as
+  markdown" exports any group.
 - **Safe by design** — atomic writes, automatic daily backups (plus backups
   before every import/migration), corrupt-file auto-recovery, a read-only
   guard for files from newer versions.

@@ -20,6 +20,9 @@ export interface EntryRowData {
   pinned: boolean;
   shared: number;
   memberCount?: number;
+  /** Document groups (§40) show their size instead of a member count. */
+  isDocument?: boolean;
+  docChars?: number;
 }
 
 export function EntryListRow({
@@ -87,7 +90,7 @@ export function EntryListRow({
       ) : null}
       {row.kind === "group" ? (
         <span className="t-muted" style={{ fontSize: "var(--text-xs)", flexShrink: 0 }}>
-          {row.memberCount} items
+          {row.isDocument ? `document · ${(row.docChars ?? 0).toLocaleString()} chars` : `${row.memberCount ?? 0} items`}
         </span>
       ) : null}
       {/* Instant copy — one click, no round-trip through the editor. */}

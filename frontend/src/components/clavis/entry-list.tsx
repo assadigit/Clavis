@@ -7,6 +7,7 @@
 
 import { useMemo, useRef } from "react";
 import { Key, Layers, MoreHorizontal, Plus, Search, Upload } from "lucide-react";
+import { isDocumentGroup } from "@/lib/clavis/types";
 import type { ListFilter, Selection } from "./app-types";
 import {
   categoryName,
@@ -99,15 +100,23 @@ export function EntryList({
     return ranked.map((e) => {
       if (e.kind === "group") {
         const g = groupMap.get(e.id);
+        const isDoc = isDocumentGroup(g);
         return {
           kind: "group" as const,
           id: e.id,
           name: e.name,
           meta: metaLine(categoryName(data, g?.categoryId ?? null), e.tags),
-          isSecret: false,
+          isSecret: g?.isSecret ?? false,
           pinned: e.pinned,
           shared: 0,
-          memberCount: g ? g.itemIds.filter((id) => data.items.some((i) => i.id === id && !i.deletedAt)).length : 0,
+          /* Document groups carry a whole file, not members (§40). */
+          memberCount: isDoc
+            ? undefined
+            : g
+              ? g.itemIds.filter((id) => data.items.some((i) => i.id === id && !i.deletedAt)).length
+              : 0,
+          isDocument: isDoc,
+          docChars: g?.docChars,
         };
       }
       const it = itemMap.get(e.id);

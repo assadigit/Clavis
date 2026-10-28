@@ -126,6 +126,11 @@ export const platform = {
       })
     );
   },
+  /** Open an http(s) link in the default browser (§40). Only http/https
+   *  pass — the Go side validates the scheme again. */
+  openUrl(url: string): void {
+    void Call.ByName("main.Clavis.OpenURL", url);
+  },
   onUpdateAvailable(cb: (a: { current: string; latest: string; url: string; notes: string }) => void): () => void {
     return Events.On("clavis:update-available", (e: { data: { current?: string; latest?: string; url?: string; notes?: string } }) =>
       cb({

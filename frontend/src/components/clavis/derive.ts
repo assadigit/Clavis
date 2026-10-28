@@ -241,3 +241,13 @@ export function formatDateTime(iso: string): string {
     minute: "2-digit",
   });
 }
+
+/** True when a value is a plain http(s) URL (one token, no whitespace) —
+ *  revealed values that match render as clickable links (§40 nice-to-have).
+ *  Everything else (ftp:, javascript:, multi-line text) is deliberately NOT
+ *  treated as a link. */
+export function isHttpUrl(value: string): boolean {
+  const v = value.trim();
+  if (/[^!-~]/.test(v)) return false; // any whitespace/control char → not a link
+  return /^https?:\/\/\S+$/i.test(v);
+}

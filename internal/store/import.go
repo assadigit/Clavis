@@ -56,6 +56,14 @@ func (s *Store) ExportEntryMarkdown(kind EntryKind, id string) (ExportTarget, er
 	if group == nil || group.DeletedAt != nil {
 		return ExportTarget{}, notFound("Group", id)
 	}
+	// Document groups (§40) export the pasted file itself, verbatim, with a
+	// "mode: document" header so the import round-trips.
+	if group.IsDocumentGroup() {
+		return ExportTarget{
+			Body:     exchange.ExportGroupMarkdown(exchange.MdGroup{Name: group.Name, CategoryID: group.CategoryID, Tags: group.Tags, Mode: exchange.ModeDocument, Document: group.Document}, nil, catName(group.CategoryID)),
+			Filename: exchange.SafeFilename(group.Name) + ".md",
+		}, nil
+	}
 	members, err := s.groupMembersLocked(id)
 	if err != nil {
 		return ExportTarget{}, err
@@ -80,6 +88,10 @@ func (s *Store) ExportEntryText(kind EntryKind, id string) (ExportTarget, error)
 	group := s.findGroup(id)
 	if group == nil || group.DeletedAt != nil {
 		return ExportTarget{}, notFound("Group", id)
+	}
+	// Document groups (§40): the .txt body is the verbatim document.
+	if group.IsDocumentGroup() {
+		return ExportTarget{Body: group.Document, Filename: exchange.SafeFilename(group.Name) + ".txt"}, nil
 	}
 	members, err := s.groupMembersLocked(id)
 	if err != nil {
@@ -131,6 +143,11 @@ func (s *Store) ExportAllMarkdown() ([]ExportAllFile, error) {
 	for gi := range s.data.Groups {
 		group := s.data.Groups[gi]
 		if group.DeletedAt != nil {
+			continue
+		}
+		if group.IsDocumentGroup() {
+			body := exchange.ExportGroupMarkdown(exchange.MdGroup{Name: group.Name, CategoryID: group.CategoryID, Tags: group.Tags, Mode: exchange.ModeDocument, Document: group.Document}, nil, catName(group.CategoryID))
+			out = append(out, ExportAllFile{Body: body, Filename: uniqueName(group.Name, ".md")})
 			continue
 		}
 		members, err := s.groupMembersLocked(group.ID)
@@ -438,6 +455,24 @@ func (s *Store) ImportFilesApply(files []ImportedFile, res ImportResolution) (Im
 		}
 
 		categoryID := resolveCategory(imp.CategoryName)
+
+		// Whole-document group import (§40): the body IS the document.
+		if imp.Mode == exchange.ModeDocument {
+			groupName := imp.Name
+			if hasConflict && choice == "create" {
+				groupName = s.uniqueGroupName(imp.Name)
+			}
+			now := NowISO(s.now())
+			s.data.Groups = append(s.data.Groups, Group{
+				ID: s.newID(), Name: groupName, CategoryID: categoryID, Tags: imp.Tags,
+				ItemIDs: []string{}, Mode: GroupModeDocument, Document: imp.Document,
+				IsSecret: imp.IsSecret, Pinned: false, UseCount: 0, LastUsedAt: nil,
+				CreatedAt: now, UpdatedAt: now, DeletedAt: nil,
+			})
+			summary.Added++
+			continue
+		}
+
 		if hasConflict && choice == "reuse" {
 			var existing *Group
 			for i := range s.data.Groups {
@@ -460,21 +495,7 @@ func (s *Store) ImportFilesApply(files []ImportedFile, res ImportResolution) (Im
 		}
 		groupName := imp.Name
 		if hasConflict && choice == "create" {
-			n := 2
-			for {
-				taken := false
-				for i := range s.data.Groups {
-					if s.data.Groups[i].DeletedAt == nil && s.data.Groups[i].Name == groupName {
-						taken = true
-						break
-					}
-				}
-				if !taken {
-					break
-				}
-				groupName = imp.Name + " (" + itoa(n) + ")"
-				n++
-			}
+			groupName = s.uniqueGroupName(imp.Name)
 		}
 		now := NowISO(s.now())
 		group := Group{
@@ -492,6 +513,25 @@ func (s *Store) ImportFilesApply(files []ImportedFile, res ImportResolution) (Im
 		summary.Added++
 	}
 	return summary, s.writeAtomicLocked()
+}
+
+// uniqueGroupName finds the first free "Name", "Name (2)", "Name (3)"…
+// among live groups (§5.8B keep-both naming). Caller holds the lock.
+func (s *Store) uniqueGroupName(base string) string {
+	name := base
+	for n := 2; ; n++ {
+		taken := false
+		for i := range s.data.Groups {
+			if s.data.Groups[i].DeletedAt == nil && s.data.Groups[i].Name == name {
+				taken = true
+				break
+			}
+		}
+		if !taken {
+			return name
+		}
+		name = base + " (" + itoa(n) + ")"
+	}
 }
 
 // sanitizeImportPath keeps only the base name for display.

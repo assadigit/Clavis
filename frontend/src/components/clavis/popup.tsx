@@ -272,7 +272,9 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                   {drillGroup.name}
                 </span>
                 <span className="t-muted" style={{ fontSize: "var(--text-xs)", flexShrink: 0 }}>
-                  {drillGroup.itemIds.filter((id) => itemMap.has(id)).length} items
+                  {drillGroup.mode === "document"
+                    ? `document · ${(drillGroup.docChars ?? 0).toLocaleString()} chars`
+                    : `${drillGroup.itemIds.filter((id) => itemMap.has(id)).length} items`}
                 </span>
               </div>
             ) : null}

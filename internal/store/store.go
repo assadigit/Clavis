@@ -84,6 +84,10 @@ type NewGroup struct {
 	Tags       []string
 	Pinned     bool
 	ItemIDs    []string
+	// IsSecret applies to document groups only (v1.5.0 §40): nil → true
+	// (a pasted credentials document is a secret until the user says
+	// otherwise — never under-mask).
+	IsSecret *bool
 }
 
 // GroupPatch is a partial group update.
@@ -92,6 +96,9 @@ type GroupPatch struct {
 	CategoryID *string
 	Tags       *[]string
 	Pinned     *bool
+	// IsSecret applies to document groups (the clipboard-privacy verdict
+	// for whole-document copies; §40).
+	IsSecret *bool
 }
 
 // SettingsPatch is the partial settings update (§5.9).
@@ -737,6 +744,23 @@ func (s *Store) ItemValue(id string) (string, error) {
 	return item.Value, nil
 }
 
+// GroupDocument returns the verbatim document of a live document group.
+// The UI state snapshot is redacted (documents stripped, like item values);
+// the group editor fetches the document on demand for the copy fallback and
+// the re-paste editor.
+func (s *Store) GroupDocument(id string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	group := s.findGroup(id)
+	if group == nil || group.DeletedAt != nil {
+		return "", notFound("Group", id)
+	}
+	if !group.IsDocumentGroup() {
+		return "", errors.New("this group stores items, not a document")
+	}
+	return group.Document, nil
+}
+
 // ReadOnly reports the read-only guard state.
 func (s *Store) ReadOnly() bool {
 	s.mu.Lock()
@@ -793,6 +817,72 @@ func (s *Store) CreateItem(input NewItem) (Item, error) {
 		DeletedAt:  nil,
 	}
 	s.data.Items = append(s.data.Items, item)
+	return item, s.saveLocked(kindDaily)
+}
+
+// CreateItemInGroup creates an item AND appends it to a live group in ONE
+// atomic save (v1.5.0, DECISIONS.md §40 — the quick "Name + Value + Add"
+// form inside an open group). This is the only sanctioned add-an-item-to-a-
+// group path from the group view: it can never create a group as a side
+// effect, and there is no window where the item exists but is not yet a
+// member. Item semantics mirror CreateItem (name required, isSecret derives
+// from the group's category when not forced).
+func (s *Store) CreateItemInGroup(groupID string, input NewItem) (Item, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.assertWritable(); err != nil {
+		return Item{}, err
+	}
+	group := s.findGroup(groupID)
+	if group == nil || group.DeletedAt != nil {
+		return Item{}, notFound("Group", groupID)
+	}
+	if group.IsDocumentGroup() {
+		return Item{}, errors.New("this group stores a whole document and takes no items")
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return Item{}, errors.New("give the item a name first")
+	}
+	var categoryID *string
+	if input.CategoryID != nil && *input.CategoryID != "" {
+		categoryID = input.CategoryID
+	} else {
+		// Default to the group's own category so a quick-added
+		// credential lands where the group lives.
+		categoryID = group.CategoryID
+	}
+	isSecret := false
+	if input.IsSecret != nil {
+		isSecret = *input.IsSecret
+	} else if categoryID != nil {
+		for _, c := range s.data.Categories {
+			if c.ID == *categoryID && c.Name == "Credentials" {
+				isSecret = true
+				break
+			}
+		}
+	}
+	now := NowISO(s.now())
+	item := Item{
+		ID:         s.newID(),
+		Name:       name,
+		Key:        strings.TrimSpace(input.Key),
+		Value:      input.Value,
+		Note:       input.Note,
+		CategoryID: categoryID,
+		Tags:       cleanTags(input.Tags),
+		IsSecret:   isSecret,
+		Pinned:     input.Pinned,
+		UseCount:   0,
+		LastUsedAt: nil,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		DeletedAt:  nil,
+	}
+	s.data.Items = append(s.data.Items, item)
+	group.ItemIDs = append(group.ItemIDs, item.ID)
+	group.UpdatedAt = now
 	return item, s.saveLocked(kindDaily)
 }
 
@@ -1013,6 +1103,71 @@ func (s *Store) CreateGroupFromEnv(input NewGroup, text string) (Group, error) {
 	return group, s.saveLocked(kindDaily)
 }
 
+// CreateGroupFromDoc creates a whole-document group (v1.5.0, DECISIONS.md
+// §40): the user pasted one entire markdown/text file during creation and
+// the group stores it VERBATIM — byte-exact, every whitespace character,
+// line break and blank line preserved; nothing is trimmed, parsed or
+// re-formatted. Copy on such a group hands back exactly these bytes.
+func (s *Store) CreateGroupFromDoc(input NewGroup, document string) (Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.assertWritable(); err != nil {
+		return Group{}, err
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return Group{}, errors.New("give the group a name first")
+	}
+	var categoryID *string
+	if input.CategoryID != nil && *input.CategoryID != "" {
+		categoryID = input.CategoryID
+	}
+	isSecret := true // never under-mask: a pasted credentials doc is secret by default
+	if input.IsSecret != nil {
+		isSecret = *input.IsSecret
+	}
+	now := NowISO(s.now())
+	group := Group{
+		ID:         s.newID(),
+		Name:       name,
+		CategoryID: categoryID,
+		Tags:       cleanTags(input.Tags),
+		ItemIDs:    []string{},
+		Mode:       GroupModeDocument,
+		Document:   document,
+		IsSecret:   isSecret,
+		Pinned:     input.Pinned,
+		UseCount:   0,
+		LastUsedAt: nil,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		DeletedAt:  nil,
+	}
+	s.data.Groups = append(s.data.Groups, group)
+	return group, s.saveLocked(kindDaily)
+}
+
+// SetGroupDocument replaces the stored document of a live document group.
+// The replacement is verbatim (byte-exact) — this is the "edit / re-paste
+// the content later" path (§40).
+func (s *Store) SetGroupDocument(id string, document string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.assertWritable(); err != nil {
+		return err
+	}
+	group := s.findGroup(id)
+	if group == nil || group.DeletedAt != nil {
+		return notFound("Group", id)
+	}
+	if !group.IsDocumentGroup() {
+		return errors.New("this group stores items, not a document")
+	}
+	group.Document = document
+	group.UpdatedAt = NowISO(s.now())
+	return s.saveLocked(kindDaily)
+}
+
 // CreateGroup adds a group; itemIds are filtered to live items.
 func (s *Store) CreateGroup(input NewGroup) (Group, error) {
 	s.mu.Lock()
@@ -1074,6 +1229,9 @@ func (s *Store) UpdateGroup(id string, patch GroupPatch) error {
 	}
 	if patch.Pinned != nil {
 		group.Pinned = *patch.Pinned
+	}
+	if patch.IsSecret != nil && group.IsDocumentGroup() {
+		group.IsSecret = *patch.IsSecret
 	}
 	group.UpdatedAt = NowISO(s.now())
 	return s.saveLocked(kindDaily)
@@ -1671,6 +1829,16 @@ func (s *Store) Copy(kind EntryKind, id string) (CopyResult, error) {
 	if group == nil || group.DeletedAt != nil {
 		return CopyResult{}, notFound("Group", id)
 	}
+	// Document groups copy the stored document VERBATIM — the identical
+	// bytes that were pasted, not a summary or a re-formatting (§40).
+	if group.IsDocumentGroup() {
+		doc := group.Document
+		lines := 0
+		if doc != "" {
+			lines = strings.Count(doc, "\n") + 1
+		}
+		return CopyResult{Text: doc, LineCount: lines, ContainsSecret: group.IsSecret}, nil
+	}
 	members, err := s.groupMembersLocked(id)
 	if err != nil {
 		return CopyResult{}, err
@@ -1684,6 +1852,34 @@ func (s *Store) Copy(kind EntryKind, id string) (CopyResult, error) {
 		}
 	}
 	return CopyResult{Text: block, LineCount: len(members), ContainsSecret: containsSecret}, nil
+}
+
+// GroupCopyText returns the exact text a Copy would put on the clipboard —
+// the verbatim document for document groups, the KEY=value block otherwise.
+// Exposed ONLY for the manual-copy fallback after a failed clipboard write
+// (§40): the normal copy path never carries the payload through the UI.
+func (s *Store) GroupCopyText(id string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	group := s.findGroup(id)
+	if group == nil || group.DeletedAt != nil {
+		return "", false, notFound("Group", id)
+	}
+	if group.IsDocumentGroup() {
+		return group.Document, group.IsSecret, nil
+	}
+	members, err := s.groupMembersLocked(id)
+	if err != nil {
+		return "", false, err
+	}
+	secret := false
+	for _, m := range members {
+		if m.Item.IsSecret {
+			secret = true
+			break
+		}
+	}
+	return exchange.FormatGroupBlock(membersToPairs(members)), secret, nil
 }
 
 // MarkUsed records one successful use (useCount + lastUsedAt + daily save).

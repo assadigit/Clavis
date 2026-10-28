@@ -118,15 +118,16 @@ describe("GroupEditor smoke", () => {
     expect(screen.getByText("FAKE GitHub token")).toBeTruthy();
     expect(screen.getByText("FAKE Grafana token")).toBeTruthy();
     expect(screen.getByText(/2 items · used 2× · updated/)).toBeTruthy();
-    /* F-007 fixed (Phase 5): member rows read as clean sentences. Both
-        members are in this one group; the second's key is autoKey'd from
-        its name ("FAKE Grafana token" → FAKE_GRAFANA_TOKEN). */
+    /* v1.5.0 (§40): every member row is editable by its accessible name and
+       carries its own Copy / Reveal / Delete actions as sibling buttons. */
     expect(
-      screen.getByRole("button", { name: "FAKE GitHub token, used in 1 group, key GITHUB_TOKEN" })
+      screen.getByRole("button", { name: "Edit FAKE GitHub token (secret)" })
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "FAKE Grafana token, used in 1 group, key FAKE_GRAFANA_TOKEN" })
+      screen.getByRole("button", { name: "Edit FAKE Grafana token (secret)" })
     ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy FAKE GitHub token" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy FAKE Grafana token" })).toBeTruthy();
   });
 
   it("Export Markdown in the More actions menu calls downloadExport", async () => {
@@ -137,15 +138,18 @@ describe("GroupEditor smoke", () => {
     expect(downloadExport).toHaveBeenCalledWith("group-md", "fake-group-1");
   });
 
-  it("Export JSON (backup-safe) sits first and calls downloadExport with group-json (Phase 4)", async () => {
+  it("Export JSON (backup-safe) sits after the markdown copy and calls downloadExport with group-json (Phase 4)", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     setup();
     await user.click(screen.getByTitle("More actions"));
     const items = screen.getAllByRole("menuitem");
-    expect(items[0].textContent).toContain("Export JSON (backup-safe)");
+    /* v1.5.0 (§40): "Copy all as markdown" leads the menu; the lossless
+       JSON export follows it. */
+    expect(items[0].textContent).toContain("Copy all as markdown");
+    expect(items[1].textContent).toContain("Export JSON (backup-safe)");
     /* F-003: the plaintext warning is visible inside the menu. */
-    expect(items[0].textContent).toContain("Contains your real value in plain text.");
-    await user.click(items[0]);
+    expect(items[1].textContent).toContain("Contains your real value in plain text.");
+    await user.click(items[1]);
     expect(downloadExport).toHaveBeenCalledWith("group-json", "fake-group-1");
   });
 });

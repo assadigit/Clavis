@@ -7,16 +7,21 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronRight, ClipboardPaste, Copy, FileJson, FileText, Layers, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Check, ClipboardPaste, Copy, FileJson, FileText, FilePlus2, KeyRound, Layers, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { downloadExport } from "@/lib/clavis/client";
 import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
 import { messages } from "@/lib/clavis/messages";
 import type { ClavisState, Group } from "@/lib/clavis/types";
+import { isDocumentGroup } from "@/lib/clavis/types";
 import type { Selection } from "./app-types";
-import { allTags, formatDateTime, groupMemberKeys, rowPreview, sharedCountMap } from "./derive";
-import { EntryTile, EntryTypeIcon, Ix } from "./icons";
-import { Btn, CategorySelect, FieldHint, FieldLabel, MemberRowBody, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
+import { allTags, formatDateTime, groupMemberKeys, sharedCountMap } from "./derive";
+import { DocumentPanel } from "./group-editor/document-panel";
+import { GroupMemberRow } from "./group-editor/group-member-row";
+import { QuickAddForm } from "./group-editor/quick-add-form";
+import { ManualCopyModal } from "./manual-copy-modal";
+import { EntryTile, Ix } from "./icons";
+import { Btn, CategorySelect, FieldHint, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
 export interface GroupEditorProps {
   mode: "create" | "edit";
@@ -51,9 +56,17 @@ export function GroupEditor(props: GroupEditorProps) {
       : { name: "", categoryId: null, tags: [], pinned: false }
   );
   const [saving, setSaving] = useState(false);
-  /* Create mode: paste a whole project's credentials as KEY=value lines and
-     Clavis builds the group AND every member item in one shot. */
+  /* Create mode: the two storage modes (v1.5.0 §40). "items" is the classic
+     group of named credentials (with the optional whole-.env paste);
+     "document" stores ONE pasted file verbatim. */
+  const [createMode, setCreateMode] = useState<"items" | "document">("items");
+  /* "items" create mode: paste a whole project's credentials as KEY=value
+     lines and Clavis builds the group AND every member item in one shot. */
   const [envText, setEnvText] = useState("");
+  /* "document" create mode: the whole pasted file, stored byte-exact —
+     deliberately NEVER trimmed, parsed or re-formatted. */
+  const [docText, setDocText] = useState("");
+  const [docSecret, setDocSecret] = useState(true);
 
   /* The manager remounts this editor with a fresh key whenever the group or
      its updatedAt changes, so the draft resets by remounting. */
@@ -75,7 +88,7 @@ export function GroupEditor(props: GroupEditorProps) {
   /* Live parse of the pasted block: keys preview + bad-line detection,
      exactly what will be created (deduped like the store will dedupe). */
   const envPreview = useMemo(() => {
-    if (mode !== "create") return null;
+    if (mode !== "create" || createMode !== "items") return null;
     const keys: string[] = [];
     let bad = 0;
     for (const line of envText.split(/\r?\n/)) {
@@ -85,7 +98,21 @@ export function GroupEditor(props: GroupEditorProps) {
       else bad++;
     }
     return { keys: dedupeKeys(keys), bad };
-  }, [mode, envText]);
+  }, [mode, createMode, envText]);
+
+  /* Live size preview of the pasted document (byte-exact storage, so the
+     preview counts exactly what will be saved). */
+  const docPreview = useMemo(() => {
+    if (mode !== "create" || createMode !== "document") return null;
+    return {
+      chars: docText.length,
+      lines: docText === "" ? 0 : docText.split("\n").length,
+    };
+  }, [mode, createMode, docText]);
+
+  /* Payload for the manual-copy fallback dialog (only set when the platform
+     copy failed and the exact text has been fetched). */
+  const [manualText, setManualText] = useState<string | null>(null);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key !== "Enter") return;
@@ -105,7 +132,26 @@ export function GroupEditor(props: GroupEditorProps) {
     }
     setSaving(true);
     if (mode === "create") {
-      /* With a pasted KEY=value block: group + all member items in one shot. */
+      /* MODE 1 — whole document: the text goes to the store VERBATIM (no
+         trim — byte-exact is the contract, §40). */
+      if (createMode === "document") {
+        if (docText === "") {
+          setSaving(false);
+          toast.error(messages.docEmptyWarning);
+          return;
+        }
+        const res = await call("createGroupFromDoc", {
+          input: { name, categoryId: draft.categoryId, tags: draft.tags, pinned: draft.pinned, isSecret: docSecret, text: docText },
+        });
+        setSaving(false);
+        if (res.ok && res.id) {
+          toast.success(messages.docCreated(name));
+          onDone({ kind: "group", id: res.id });
+        }
+        return;
+      }
+      /* MODE 2 — items: with a pasted KEY=value block, group + all member
+         items in one shot; otherwise an empty group to fill one-by-one. */
       const text = envText.trim();
       if (text !== "" && envPreview && envPreview.keys.length > 0) {
         const res = await call("createGroupFromEnv", {
@@ -131,10 +177,10 @@ export function GroupEditor(props: GroupEditorProps) {
 
   async function copyGroup() {
     if (!group) return;
-    /* Backend-side copy: the KEY=value block never enters the webview, and
-       the §5.2 privacy formats are applied whenever any member is a secret
-       (this was previously missed here — group copies could land in the
-       Win+V clipboard history). */
+    /* Backend-side copy: the payload (verbatim document for document
+       groups, KEY=value block otherwise) never enters the webview on the
+       success path, and the §5.2 privacy formats are applied whenever the
+       payload contains a secret. */
     const res = await call("copy", { kind: "group", id: group.id });
     if (res.ok) {
       if (res.copied) {
@@ -143,7 +189,29 @@ export function GroupEditor(props: GroupEditorProps) {
           toast(messages.copiedSecretNote);
         }
       } else {
-        toast.error(messages.copyFailed);
+        /* Fallback: the platform blocked the copy — fetch the exact payload
+           (getGroupCopyText) and show it pre-selected for a manual Ctrl+C. */
+        const fb = await call("getGroupCopyText", { id: group.id });
+        if (fb.ok && typeof fb.text === "string") setManualText(fb.text);
+        else toast.error(messages.copyFailed);
+      }
+    }
+  }
+
+  async function copyGroupMarkdown() {
+    if (!group) return;
+    /* "Copy all as markdown" (§40 nice-to-have): the Clavis-markdown export
+       (front-matter + NAME=value block) — or the verbatim document itself
+       for document groups — written by the backend. */
+    const res = await call("copyGroupMarkdown", { id: group.id });
+    if (res.ok) {
+      if (res.copied) {
+        toast.success(messages.copied);
+        toast(messages.copiedSecretNote);
+      } else {
+        const fb = await call("getGroupCopyText", { id: group.id });
+        if (fb.ok && typeof fb.text === "string") setManualText(fb.text);
+        else toast.error(messages.copyFailed);
       }
     }
   }
@@ -209,9 +277,19 @@ export function GroupEditor(props: GroupEditorProps) {
         disabled={readOnly}
       />
 
-      {mode === "edit" && group ? (
+      {mode === "edit" && group && isDocumentGroup(group) ? (
+        /* MODE 1 — whole-document group: one prominent Copy button, stats,
+           secret toggle and the re-paste editor. No member list. */
+        <DocumentPanel
+          group={group}
+          call={call}
+          readOnly={readOnly}
+          docChars={group.docChars ?? 0}
+          docLines={group.docLines ?? 0}
+        />
+      ) : mode === "edit" && group ? (
         <section className="flex flex-col" style={{ gap: "var(--space-2)" }} aria-label="Members">
-          <div className="flex items-center justify-between" style={{ gap: "var(--space-2)" }}>
+          <div className="flex items-center justify-between" style={{ gap: "var(--space-2)", minHeight: "var(--text-xl)" }}>
             <FieldLabel>Members</FieldLabel>
             {!readOnly ? (
               <Btn
@@ -223,95 +301,160 @@ export function GroupEditor(props: GroupEditorProps) {
               />
             ) : null}
           </div>
-          <FieldHint>Copied as NAME=value lines, in this order.</FieldHint>
+          {/* MODE 2 — the always-visible Name + Value + Add form (§40):
+              adding an item happens HERE, inside the open group, through the
+              atomic createItemInGroup action — it can never create a group. */}
+          {!readOnly ? <QuickAddForm groupId={group.id} call={call} readOnly={readOnly} /> : null}
+          <FieldHint>Copied as NAME=value lines, in this order. Each row copies its own value.</FieldHint>
 
           {members.length === 0 ? (
             <div className="clavis-members-box flex flex-col items-center" style={{ gap: "var(--space-2)", padding: "var(--space-4)", textAlign: "center" }}>
               <Ix icon={Layers} size="lg" style={{ color: "var(--color-accent-text)" }} />
               <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
-                No items yet. Add the items you want to copy together.
+                No items yet. Add the first one above, or use “Add item” to manage existing ones.
               </span>
             </div>
           ) : (
             <div className="clavis-members-box clavis-scroll flex flex-col" style={{ gap: "var(--space-2)" }}>
-              {members.map((m) => {
-                const sharedCount = shared.get(m.item.id) ?? 0;
-                const preview = rowPreview(m.item);
-                /* F-007 (UI-audit round 1): an explicit accessible name instead
-                   of concatenated name + count + key + mask. */
-                const rowLabel =
-                  sharedCount > 0
-                    ? `${m.item.name}, used in ${sharedCount} ${sharedCount === 1 ? "group" : "groups"}, key ${m.key}`
-                    : `${m.item.name}, key ${m.key}`;
-                return (
-                  <button
-                    key={m.item.id}
-                    type="button"
-                    className="clavis-member-row clavis-focusable flex items-center"
-                    onClick={() => onSelectEntry({ kind: "item", id: m.item.id, groupContextId: group.id })}
-                    title={`Edit ${m.item.name}`}
-                    aria-label={rowLabel}
-                    style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", cursor: "pointer", textAlign: "left" }}
-                  >
-                    <EntryTypeIcon kind="item" isSecret={m.item.isSecret} size="md" />
-                    {/* F-027 (UI-audit round 1 Phase 10): the shared two-line
-                        member body (name size differs here: text-sm). */}
-                    <MemberRowBody name={m.item.name} shared={sharedCount} valueKey={m.key} preview={preview} nameSize="var(--text-sm)" />
-                    <Ix icon={ChevronRight} size="sm" style={{ color: "var(--color-neutral)", flexShrink: 0 }} />
-                  </button>
-                );
-              })}
+              {members.map((m) => (
+                <GroupMemberRow
+                  key={m.item.id}
+                  item={m.item}
+                  valueKey={m.key}
+                  sharedCount={shared.get(m.item.id) ?? 0}
+                  call={call}
+                  readOnly={readOnly}
+                  onSelect={() => onSelectEntry({ kind: "item", id: m.item.id, groupContextId: group.id })}
+                  onDelete={() => deleteEntry("item", m.item.id)}
+                />
+              ))}
             </div>
           )}
         </section>
       ) : (
         <section className="flex flex-col" style={{ gap: "var(--space-2)" }} aria-label="Members">
-          <div className="flex items-baseline justify-between" style={{ gap: "var(--space-2)" }}>
-            <FieldLabel>Credentials for the whole project — paste them here</FieldLabel>
-          </div>
-          <TextArea
-            value={envText}
-            onChange={(e) => setEnvText(e.target.value)}
-            disabled={readOnly}
-            mono
-            rows={6}
-            id="clavis-group-env"
-            placeholder={"DATABASE_URL=postgres://…\nAPI_KEY=sk-live-…\nSTRIPE_SECRET=…"}
-            aria-label="Paste KEY=value lines — one credential per line"
-            spellCheck={false}
-            dir="auto"
-            style={{ fontSize: "var(--text-sm)" }}
-          />
-          <FieldHint>
-            One <span className="t-mono">KEY=value</span> per line (.env format). Saving creates the group and an item for every line — each masked as a secret, ready to copy together or one by one.
-          </FieldHint>
-          {envPreview && envText.trim() !== "" ? (
-            <div className="glass-row flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", padding: "var(--space-2) var(--space-3)", border: "1px solid var(--glass-border)" }} aria-live="polite">
-              <Ix icon={Layers} size="sm" style={{ color: "var(--color-accent-text)" }} />
-              {envPreview.keys.length === 0 ? (
+          {/* The two storage modes (§40) — chosen here, at creation. */}
+          <FieldLabel>What goes into this group?</FieldLabel>
+          <div className="flex flex-wrap" style={{ gap: "var(--space-2)" }} role="radiogroup" aria-label="Group storage mode">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={createMode === "items"}
+              className="clavis-focusable glass-row"
+              onClick={() => setCreateMode("items")}
+              data-selected={createMode === "items" ? "true" : "false"}
+              style={{ flex: "1 1 calc(var(--space-6) * 6)", display: "flex", gap: "var(--space-2)", alignItems: "flex-start", padding: "var(--space-3)", cursor: "pointer", textAlign: "left" }}
+            >
+              <Ix icon={KeyRound} size="md" style={{ color: createMode === "items" ? "var(--color-accent-text)" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }} />
+              <span className="flex flex-col" style={{ gap: "calc(var(--space-1) / 2)", minWidth: 0 }}>
+                <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>Add items one by one</span>
                 <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
-                  No KEY=value lines yet — keep typing or paste your project's .env.
+                  Named credentials (token, key, link) — each with its own Copy button.
                 </span>
-              ) : (
-                <span className="flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", minWidth: 0 }}>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={createMode === "document"}
+              className="clavis-focusable glass-row"
+              onClick={() => setCreateMode("document")}
+              data-selected={createMode === "document" ? "true" : "false"}
+              style={{ flex: "1 1 calc(var(--space-6) * 6)", display: "flex", gap: "var(--space-2)", alignItems: "flex-start", padding: "var(--space-3)", cursor: "pointer", textAlign: "left" }}
+            >
+              <Ix icon={FilePlus2} size="md" style={{ color: createMode === "document" ? "var(--color-accent-text)" : "var(--text-muted)", flexShrink: 0, marginTop: 2 }} />
+              <span className="flex flex-col" style={{ gap: "calc(var(--space-1) / 2)", minWidth: 0 }}>
+                <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>Paste whole document</span>
+                <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
+                  One markdown/text file stored byte-exact — one Copy button for all of it.
+                </span>
+              </span>
+            </button>
+          </div>
+
+          {createMode === "items" ? (
+            <>
+              <FieldLabel>Credentials for the whole project — paste them here (optional)</FieldLabel>
+              <TextArea
+                value={envText}
+                onChange={(e) => setEnvText(e.target.value)}
+                disabled={readOnly}
+                mono
+                rows={6}
+                id="clavis-group-env"
+                placeholder={"DATABASE_URL=postgres://…\nAPI_KEY=sk-live-…\nSTRIPE_SECRET=…"}
+                aria-label="Paste KEY=value lines — one credential per line"
+                spellCheck={false}
+                dir="auto"
+                style={{ fontSize: "var(--text-sm)" }}
+              />
+              <FieldHint>
+                One <span className="t-mono">KEY=value</span> per line (.env format). Saving creates the group and an item for every line — each masked as a secret, ready to copy together or one by one.
+              </FieldHint>
+              {envPreview && envText.trim() !== "" ? (
+                <div className="glass-row flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", padding: "var(--space-2) var(--space-3)", border: "1px solid var(--glass-border)" }} aria-live="polite">
+                  <Ix icon={Layers} size="sm" style={{ color: "var(--color-accent-text)" }} />
+                  {envPreview.keys.length === 0 ? (
+                    <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
+                      No KEY=value lines yet — keep typing or paste your project's .env.
+                    </span>
+                  ) : (
+                    <span className="flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", minWidth: 0 }}>
+                      <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)" }}>
+                        {envPreview.keys.length} credential{envPreview.keys.length === 1 ? "" : "s"}:
+                      </span>
+                      {envPreview.keys.map((k) => (
+                        <span key={k} className="t-mono glass-chip" style={{ fontSize: "var(--text-xs)", padding: "calc(var(--space-1) / 2) var(--space-2)", maxWidth: "calc(var(--space-6) * 6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {k}
+                        </span>
+                      ))}
+                      {envPreview.bad > 0 ? (
+                        <span className="t-warning" style={{ fontSize: "var(--text-xs)" }}>
+                          {envPreview.bad} line{envPreview.bad === 1 ? "" : "s"} without KEY=value will be skipped
+                        </span>
+                      ) : null}
+                    </span>
+                  )}
+                </div>
+              ) : null}
+              <FieldHint>Prefer to type them in later? Save the group empty — an always-visible “Name + Value + Add” form sits at the top of the group.</FieldHint>
+            </>
+          ) : (
+            <>
+              <FieldLabel htmlFor="clavis-group-doc">Paste the whole document — it is stored exactly as pasted</FieldLabel>
+              <TextArea
+                value={docText}
+                onChange={(e) => setDocText(e.target.value)}
+                disabled={readOnly}
+                mono
+                rows={12}
+                id="clavis-group-doc"
+                placeholder={"# Project notes / credentials\n\nToken: …\nLogin: …\n\n(Anything — markdown, .env, plain text.)"}
+                aria-label="Paste the whole document — markdown or any text, stored verbatim"
+                spellCheck={false}
+                dir="auto"
+                style={{ fontSize: "var(--text-sm)" }}
+              />
+              <FieldHint>
+                Stored verbatim — every whitespace character, line break and blank line is kept. One prominent Copy button hands back the identical bytes; you can re-paste and save over it later.
+              </FieldHint>
+              {docPreview ? (
+                <div className="glass-row flex flex-wrap items-center" style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", border: "1px solid var(--glass-border)" }} aria-live="polite">
+                  <Ix icon={FilePlus2} size="sm" style={{ color: "var(--color-accent-text)" }} />
                   <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)" }}>
-                    {envPreview.keys.length} credential{envPreview.keys.length === 1 ? "" : "s"}:
+                    {messages.docStats(docPreview.chars, docPreview.lines)}
                   </span>
-                  {envPreview.keys.map((k) => (
-                    <span key={k} className="t-mono glass-chip" style={{ fontSize: "var(--text-xs)", padding: "calc(var(--space-1) / 2) var(--space-2)", maxWidth: "calc(var(--space-6) * 6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {k}
-                    </span>
-                  ))}
-                  {envPreview.bad > 0 ? (
-                    <span className="t-warning" style={{ fontSize: "var(--text-xs)" }}>
-                      {envPreview.bad} line{envPreview.bad === 1 ? "" : "s"} without KEY=value will be skipped
-                    </span>
-                  ) : null}
-                </span>
-              )}
-            </div>
-          ) : null}
-          <FieldHint>Prefer to bundle entries you already have? Save this group empty, then use “Add item” inside it.</FieldHint>
+                </div>
+              ) : null}
+              <Toggle
+                checked={docSecret}
+                onChange={setDocSecret}
+                label="Secret"
+                note="Copies stay out of clipboard history"
+                disabled={readOnly}
+              />
+            </>
+          )}
         </section>
       )}
 
@@ -329,15 +472,19 @@ export function GroupEditor(props: GroupEditorProps) {
             dirty ? (
               <Btn
                 variant="primary"
-                icon={mode === "create" ? ClipboardPaste : Check}
+                icon={mode === "create" && createMode === "document" ? FilePlus2 : mode === "create" ? ClipboardPaste : Check}
                 label={
                   saving
                     ? "Saving…"
-                    : mode === "create" && envPreview && envPreview.keys.length > 0
-                      ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
-                      : mode === "create"
-                        ? "Create group"
-                        : "Save"
+                    : mode === "create" && createMode === "document"
+                      ? docText === ""
+                        ? "Create group with document"
+                        : `Create group with document`
+                      : mode === "create" && envPreview && envPreview.keys.length > 0
+                        ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
+                        : mode === "create"
+                          ? "Create group"
+                          : "Save"
                 }
                 onClick={() => void save()}
                 disabled={saving}
@@ -359,8 +506,18 @@ export function GroupEditor(props: GroupEditorProps) {
         </div>
         {mode === "edit" && group ? (
           <div className="flex flex-1 flex-wrap items-center justify-end" style={{ gap: "var(--space-2)" }}>
-            <Btn variant="glass" icon={Copy} label="Copy group" onClick={() => void copyGroup()} title="Copy the NAME=value block" disabled={readOnly} />
+            <Btn
+              variant="glass"
+              icon={Copy}
+              label={isDocumentGroup(group) ? "Copy document" : "Copy group"}
+              onClick={() => void copyGroup()}
+              title={isDocumentGroup(group) ? "Copy the entire document, byte-identical" : "Copy the NAME=value block"}
+              disabled={readOnly}
+            />
             <Menu triggerIcon={MoreHorizontal} triggerTitle="More actions" align="end" triggerVariant="glass" disabled={readOnly}>
+              {/* "Copy all as markdown" (§40): the whole group as one markdown
+                  document on the clipboard. */}
+              <MenuItem icon={Copy} label="Copy all as markdown" onClick={() => void copyGroupMarkdown()} />
               {/* UI-audit round 1 Phase 4 (F-017/F-003): lossless JSON export
                   first, plaintext warning included (same sentence as
                   Settings, singular — the menu is for this one entry). */}
@@ -383,6 +540,13 @@ export function GroupEditor(props: GroupEditorProps) {
           </div>
         ) : null}
       </footer>
+
+      <ManualCopyModal
+        open={manualText !== null}
+        title={`Copy “${draft.name}” manually`}
+        text={manualText ?? ""}
+        onClose={() => setManualText(null)}
+      />
     </div>
   );
 }
