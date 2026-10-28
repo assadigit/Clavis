@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 import { Check, ChevronDown, Plus } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import type { Category } from "@/lib/clavis/types";
+import { categoryPathLabel } from "../derive";
 import { Ix } from "../icons";
 import { useDismiss } from "./dismiss";
 
@@ -93,7 +94,11 @@ export function CategorySelect({
           fontSize: "var(--text-sm)",
         }}
       >
-        <span style={{ color: "var(--text)" }}>{current ? current.name : "No category"}</span>
+        {/* v1.4.0: nested categories show their full path ("Projects / Hibana")
+            so same-named children stay distinguishable. */}
+        <span className="truncate" style={{ color: "var(--text)" }}>
+          {current ? categoryPathLabel(categories, current.id) : "No category"}
+        </span>
         <Ix icon={ChevronDown} size="sm" style={{ color: "var(--text-muted)" }} />
       </button>
       {open ? (
@@ -103,7 +108,7 @@ export function CategorySelect({
           style={{ top: "100%", marginTop: "var(--space-1)", zIndex: 60, width: "100%" }}
         >
           {row(null, "No category")}
-          {categories.map((c) => row(c.id, c.name))}
+          {categories.map((c) => row(c.id, categoryPathLabel(categories, c.id)))}
           <div aria-hidden style={{ borderTop: "1px solid var(--glass-border)", margin: "var(--space-1) 0" }} />
           <div className="flex items-center" style={{ gap: "var(--space-1)", padding: "var(--space-1)" }}>
             <input

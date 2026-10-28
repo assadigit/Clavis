@@ -446,7 +446,7 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 		}
 	case "createCategory":
 		{
-			cat, err := s.Store.CreateCategory(getStr(p, "name"))
+			cat, err := s.Store.CreateCategory(getStr(p, "name"), getStrPtr(p, "parentId"))
 			if err != nil {
 				return FailErr(err)
 			}
@@ -455,6 +455,13 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 	case "renameCategory":
 		{
 			if err := s.Store.RenameCategory(getStr(p, "id"), getStr(p, "name")); err != nil {
+				return FailErr(err)
+			}
+			return s.done(nil)
+		}
+	case "setCategoryParent":
+		{
+			if err := s.Store.SetCategoryParent(getStr(p, "id"), getStrPtr(p, "parentId")); err != nil {
 				return FailErr(err)
 			}
 			return s.done(nil)

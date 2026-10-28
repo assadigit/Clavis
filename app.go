@@ -33,7 +33,7 @@ import (
 )
 
 // AppVersion is embedded in the exe and written into the data file.
-const AppVersion = "1.3.2"
+const AppVersion = "1.4.0"
 
 // shortcutTakenMessage is the §3.3 conflict message.
 const shortcutTakenMessage = "This shortcut is used by another app. Choose a different one."

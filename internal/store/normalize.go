@@ -171,8 +171,10 @@ func NormalizeVault(parsed any, appVersion string, nowISO string, newID func() s
 			ID:        id,
 			Name:      normStr(cat["name"]),
 			SortOrder: num(cat["sortOrder"]),
+			ParentID:  normStrPtr(cat["parentId"]),
 		})
 	}
+	sanitizeCategoryTree(categories)
 
 	return VaultData{
 		SchemaVersion: int(sv),
@@ -190,6 +192,83 @@ func orNow(s, fallback string) string {
 		return fallback
 	}
 	return s
+}
+
+// sanitizeCategoryTree repairs broken nesting that could only come from a
+// hand-edited or third-party file (v1.4.0, DECISIONS.md §41): dangling
+// parent ids, self-parents, cycles, and chains deeper than MaxCategoryDepth
+// all drop to the closest surviving ancestor (or top level). It runs in
+// place on the slice loaded by NormalizeVault, before anything else sees it.
+func sanitizeCategoryTree(cats []Category) {
+	byID := make(map[string]int, len(cats))
+	for i := range cats {
+		byID[cats[i].ID] = i
+	}
+	// resolved reports whether cat's parent chain is sound, memoized via
+	// a tri-state map so each node is walked at most once per outcome.
+	const (
+		unknown = 0
+		broken  = 1
+		sound   = 2
+	)
+	state := make(map[string]int, len(cats))
+	var resolve func(i int, seen map[string]bool) int
+	resolve = func(i int, seen map[string]bool) int {
+		switch state[cats[i].ID] {
+		case sound:
+			return sound
+		case broken:
+			return broken
+		}
+		if seen[cats[i].ID] {
+			return broken // cycle
+		}
+		seen[cats[i].ID] = true
+		if cats[i].ParentID == nil {
+			state[cats[i].ID] = sound
+			return sound
+		}
+		p, ok := byID[*cats[i].ParentID]
+		if !ok || p == i {
+			state[cats[i].ID] = broken
+			return broken
+		}
+		if resolve(p, seen) == broken {
+			state[cats[i].ID] = broken
+			return broken
+		}
+		state[cats[i].ID] = sound
+		return sound
+	}
+	for i := range cats {
+		if resolve(i, map[string]bool{}) == broken {
+			cats[i].ParentID = nil
+		}
+	}
+	// Depth pass: sound chains can still be deeper than the cap (e.g. a
+	// long hand-written chain). Every over-deep category lifts one level
+	// per pass (to its grandparent); repeat until stable — total depth
+	// strictly decreases, so this terminates. Cycles/dangles are already
+	// gone, so the upward walks are safe.
+	for changed := true; changed; {
+		changed = false
+		for i := range cats {
+			if cats[i].ParentID == nil {
+				continue
+			}
+			d, cur := 1, i
+			for cats[cur].ParentID != nil && d <= MaxCategoryDepth+1 {
+				cur = byID[*cats[cur].ParentID]
+				d++
+			}
+			if d > MaxCategoryDepth {
+				// lift one level: parent := grandparent
+				pid := *cats[i].ParentID
+				cats[i].ParentID = cats[byID[pid]].ParentID
+				changed = true
+			}
+		}
+	}
 }
 
 // NewUUID is the ID generator (UUID v4).

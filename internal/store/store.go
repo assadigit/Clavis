@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,9 @@ func shortID(id string) string {
 	}
 	return id
 }
+
+// badRequest is a validation failure the UI can show as-is (no ids, no values).
+func badRequest(msg string) error { return errors.New(msg) }
 
 // NewItem is the create-item input (§5.3 one short form).
 type NewItem struct {
@@ -1284,12 +1288,20 @@ func (s *Store) EmptyTrash() error {
 	return s.saveLocked(kindDaily)
 }
 
-// CreateCategory adds a category at the end.
-func (s *Store) CreateCategory(name string) (Category, error) {
+// CreateCategory adds a category at the end, optionally nested under
+// parentID (v1.4.0, DECISIONS.md §41). parentID nil/"" = top level.
+func (s *Store) CreateCategory(name string, parentID *string) (Category, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.assertWritable(); err != nil {
 		return Category{}, err
+	}
+	parent, err := s.resolveParentLocked(parentID)
+	if err != nil {
+		return Category{}, err
+	}
+	if parent != nil && s.categoryDepthLocked(*parent)+1 > MaxCategoryDepth {
+		return Category{}, badRequest("categories cannot nest more than " + strconv.Itoa(MaxCategoryDepth) + " levels deep")
 	}
 	sortOrder := -1
 	for _, c := range s.data.Categories {
@@ -1297,9 +1309,107 @@ func (s *Store) CreateCategory(name string) (Category, error) {
 			sortOrder = c.SortOrder
 		}
 	}
-	cat := Category{ID: s.newID(), Name: strings.TrimSpace(name), SortOrder: sortOrder + 1}
+	cat := Category{ID: s.newID(), Name: strings.TrimSpace(name), SortOrder: sortOrder + 1, ParentID: parent}
 	s.data.Categories = append(s.data.Categories, cat)
 	return cat, s.saveLocked(kindDaily)
+}
+
+// SetCategoryParent re-parents a category (move it under another category or
+// back to the top level). It refuses self-parenting, unknown ids, parents
+// inside the moved subtree (would create a cycle), and results deeper than
+// MaxCategoryDepth.
+func (s *Store) SetCategoryParent(id string, parentID *string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.assertWritable(); err != nil {
+		return err
+	}
+	idx := -1
+	for i := range s.data.Categories {
+		if s.data.Categories[i].ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return notFound("Category", id)
+	}
+	parent, err := s.resolveParentLocked(parentID)
+	if err != nil {
+		return err
+	}
+	if parent != nil {
+		if *parent == id {
+			return badRequest("a category cannot be its own parent")
+		}
+		// The new parent must not live inside the moved subtree.
+		cur := parent
+		for cur != nil {
+			if *cur == id {
+				return badRequest("cannot move a category under one of its own subcategories")
+			}
+			cur = s.data.categoryByID(*cur).ParentID
+		}
+		// Deepest resulting node: the moved node sits at depth(parent)+1,
+		// its subtree adds height(id)-1 more — i.e. depth(parent)+height(id).
+		if s.categoryDepthLocked(*parent)+s.categoryHeightLocked(id) > MaxCategoryDepth {
+			return badRequest("categories cannot nest more than " + strconv.Itoa(MaxCategoryDepth) + " levels deep")
+		}
+	}
+	s.data.Categories[idx].ParentID = parent
+	return s.saveLocked(kindDaily)
+}
+
+// resolveParentLocked validates a parent reference (nil/"" → nil = top
+// level; otherwise the id must exist). It returns a COPY of the id — the
+// store never retains the caller's pointer, which may be a scratch variable
+// the caller reuses after the call (aliasing it would corrupt the tree).
+// Caller holds s.mu.
+func (s *Store) resolveParentLocked(parentID *string) (*string, error) {
+	if parentID == nil || *parentID == "" {
+		return nil, nil
+	}
+	id := *parentID
+	if s.data.categoryByID(id) == nil {
+		return nil, notFound("Category", id)
+	}
+	return &id, nil
+}
+
+// categoryByID returns the category or nil. Caller holds s.mu.
+func (d *VaultData) categoryByID(id string) *Category {
+	for i := range d.Categories {
+		if d.Categories[i].ID == id {
+			return &d.Categories[i]
+		}
+	}
+	return nil
+}
+
+// categoryDepthLocked returns the category's depth (top level = 1). Caller
+// holds s.mu. Parent chains are acyclic by construction (validated on every
+// write; NormalizeVault repairs foreign files).
+func (s *Store) categoryDepthLocked(id string) int {
+	d := 1
+	for c := s.data.categoryByID(id); c != nil && c.ParentID != nil; c = s.data.categoryByID(*c.ParentID) {
+		d++
+	}
+	return d
+}
+
+// categoryHeightLocked returns the height of the subtree rooted at id
+// (single node = 1). Caller holds s.mu.
+func (s *Store) categoryHeightLocked(id string) int {
+	h := 1
+	for _, c := range s.data.Categories {
+		if c.ParentID != nil && *c.ParentID == id {
+			sub := s.categoryHeightLocked(c.ID)
+			if sub+1 > h {
+				h = sub + 1
+			}
+		}
+	}
+	return h
 }
 
 // RenameCategory renames a category.
@@ -1318,18 +1428,29 @@ func (s *Store) RenameCategory(id, name string) error {
 	return notFound("Category", id)
 }
 
-// DeleteCategory keeps its items (they become uncategorized).
+// DeleteCategory keeps its items (they become uncategorized) and lifts its
+// subcategories one level up — to the deleted category's own parent, or the
+// top level. No subcategory is ever deleted by side effect.
 func (s *Store) DeleteCategory(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.assertWritable(); err != nil {
 		return err
 	}
+	victim := s.data.categoryByID(id)
+	if victim == nil {
+		return notFound("Category", id)
+	}
+	orphan := victim.ParentID // where the children go
 	cats := s.data.Categories[:0]
 	for _, c := range s.data.Categories {
-		if c.ID != id {
-			cats = append(cats, c)
+		if c.ID == id {
+			continue
 		}
+		if c.ParentID != nil && *c.ParentID == id {
+			c.ParentID = orphan
+		}
+		cats = append(cats, c)
 	}
 	s.data.Categories = cats
 	for i := range s.data.Items {

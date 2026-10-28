@@ -6,7 +6,7 @@
 
 export const CURRENT_SCHEMA_VERSION = 1;
 // Bumped by the release workflow (release.yml compares the tag with this).
-export const APP_VERSION = "1.3.2";
+export const APP_VERSION = "1.4.0";
 
 export type EntryKind = "item" | "group";
 
@@ -14,6 +14,10 @@ export interface Category {
   id: string;
   name: string;
   sortOrder: number;
+  /** Parent category id — hierarchical categories (v1.4.0, DECISIONS §41).
+   *  Absent/null = top level. Mirrors Go's omitempty so flat vaults stay
+   *  byte-identical to files written by older versions. */
+  parentId?: string | null;
 }
 
 export interface Item {

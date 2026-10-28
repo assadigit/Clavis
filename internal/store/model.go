@@ -16,6 +16,10 @@ const (
 	DailyKeep = 10
 	// PreKeepDays is how long pre-migration/pre-import backups are kept.
 	PreKeepDays = 30
+	// MaxCategoryDepth caps how deep categories may nest (v1.4.0,
+	// DECISIONS.md §41). 8 is far beyond any sane sidebar tree while
+	// still bounding the ancestor walks that guard against cycles.
+	MaxCategoryDepth = 8
 )
 
 // Encryption is the hook for a future master password (always off in v1).
@@ -44,11 +48,16 @@ type Settings struct {
 	ManagerBounds  *ManagerBounds `json:"managerBounds"`
 }
 
-// Category is a user-created category.
+// Category is a user-created category. ParentID nests it under another
+// category (nil = top level); nesting arrived in v1.4.0 (DECISIONS.md §41).
+// The field is omitempty so flat vaults stay byte-identical to older files,
+// and older Clavis versions simply ignore the unknown key (§4.2 lenient
+// loading) — subcategories then appear as plain top-level categories.
 type Category struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	SortOrder int    `json:"sortOrder"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	SortOrder int     `json:"sortOrder"`
+	ParentID  *string `json:"parentId,omitempty"`
 }
 
 // Item is a stored secret / prompt / note. Value never appears in logs.

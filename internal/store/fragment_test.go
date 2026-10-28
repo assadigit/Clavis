@@ -65,7 +65,7 @@ func fragFixture(t *testing.T) (*fixture, Group, []Item, string) {
 
 func mustCategory(t *testing.T, s *Store, name string) string {
 	t.Helper()
-	c, err := s.CreateCategory(name)
+	c, err := s.CreateCategory(name, nil)
 	if err != nil {
 		t.Fatalf("CreateCategory: %v", err)
 	}

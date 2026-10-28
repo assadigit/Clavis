@@ -152,4 +152,66 @@ describe("Manager smoke", () => {
     );
     expect(screen.getByRole("alert").textContent).toContain("Read-only");
   });
+
+  it("a category view lists the whole subtree's entries (v1.4.0 hierarchy)", async () => {
+    cleanup();
+    const nested: ClavisState = {
+      ...state(),
+      data: {
+        ...state().data,
+        categories: [
+          { id: "c1", name: "Credentials", sortOrder: 0 },
+          { id: "p", name: "Projects", sortOrder: 1 },
+          { id: "h", name: "Hibana", sortOrder: 2, parentId: "p" },
+        ],
+        items: [
+          {
+            id: "fake-item-1", name: "FAKE Projects root key", key: "", value: "",
+            valueLast4: "", note: "", categoryId: "p", tags: [],
+            isSecret: true, pinned: false, useCount: 0, lastUsedAt: null,
+            createdAt: "2025-01-01T00:00:00.000Z",
+            updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
+          },
+          {
+            id: "fake-item-2", name: "FAKE Hibana key", key: "", value: "",
+            valueLast4: "", note: "", categoryId: "h", tags: [],
+            isSecret: true, pinned: false, useCount: 0, lastUsedAt: null,
+            createdAt: "2025-01-01T00:00:00.000Z",
+            updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
+          },
+          {
+            id: "fake-item-3", name: "FAKE unrelated key", key: "", value: "",
+            valueLast4: "", note: "", categoryId: "c1", tags: [],
+            isSecret: true, pinned: false, useCount: 0, lastUsedAt: null,
+            createdAt: "2025-01-01T00:00:00.000Z",
+            updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
+          },
+        ],
+        groups: [],
+      },
+    };
+    const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+    render(
+      <Manager
+        state={nested}
+        call={call}
+        readOnly={false}
+        filter={{ view: "category", categoryId: "p" } as ListFilter}
+        setFilter={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        selection={null}
+        setSelection={vi.fn()}
+        creating={null}
+        setCreating={vi.fn()}
+        onHide={vi.fn()}
+        deleteEntry={vi.fn()}
+      />,
+    );
+    /* The parent's own entry AND the subcategory's entry appear… */
+    expect(screen.getByText("FAKE Projects root key")).toBeTruthy();
+    expect(screen.getByText("FAKE Hibana key")).toBeTruthy();
+    /* …while entries outside the subtree stay out. */
+    expect(screen.queryByText("FAKE unrelated key")).toBeNull();
+  });
 });

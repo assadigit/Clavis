@@ -71,11 +71,18 @@ function state(opts: { withDeleted?: boolean } = {}): ClavisState {
         showLast4: true,
         managerBounds: null,
       },
-      categories: [{ id: "c1", name: "Credentials", sortOrder: 0 }],
+      categories: [
+        { id: "c1", name: "Credentials", sortOrder: 0 },
+        /* v1.4.0: nested categories so the axe gate covers the tree UI
+           (chevron disclosure buttons, indent spacers, subtree counts). */
+        { id: "p1", name: "Projects", sortOrder: 1 },
+        { id: "h1", name: "Hibana", sortOrder: 2, parentId: "p1" },
+      ],
       items: [
         item("fake-item-1", "FAKE GitHub token"),
         item("fake-item-2", "FAKE Grafana token"),
         ...(opts.withDeleted ? [item("fake-item-3", "FAKE Old login", true, "2025-01-04T00:00:00.000Z")] : []),
+        { ...item("fake-item-4", "FAKE Hibana key"), categoryId: "h1" },
       ],
       groups: [group()],
     },

@@ -3,7 +3,7 @@
  * (live entries, shared markers, tags, masked previews).
  */
 import { autoKey, dedupeKeys } from "@/lib/clavis/dotenv";
-import type { Group, Item, VaultData } from "@/lib/clavis/types";
+import type { Category, Group, Item, VaultData } from "@/lib/clavis/types";
 
 export function liveItems(data: VaultData): Item[] {
   return data.items.filter((i) => i.deletedAt === null);
@@ -98,6 +98,92 @@ export function tagCounts(data: VaultData): Map<string, number> {
   for (const i of liveItems(data)) i.tags.forEach(bump);
   for (const g of liveGroups(data)) g.tags.forEach(bump);
   return map;
+}
+
+/* ── Hierarchical categories (v1.4.0, DECISIONS.md §41) ────────────────── */
+
+/** One node of the sidebar category tree. */
+export interface CatNode {
+  cat: Category;
+  /** 0 = top level. */
+  depth: number;
+  children: CatNode[];
+}
+
+/**
+ * Nested category tree sorted by (sortOrder, name). Parent references that
+ * dangle or self-loop fall back to top level defensively — the Go backend
+ * already repairs those on load; this is the belt to its suspenders.
+ */
+export function categoryTree(data: VaultData): CatNode[] {
+  const known = new Set(data.categories.map((c) => c.id));
+  const byParent = new Map<string, Category[]>();
+  const sorted = [...data.categories].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)
+  );
+  for (const c of sorted) {
+    const key = c.parentId && known.has(c.parentId) && c.parentId !== c.id ? c.parentId : "";
+    const list = byParent.get(key);
+    if (list) list.push(c);
+    else byParent.set(key, [c]);
+  }
+  const build = (key: string, depth: number): CatNode[] =>
+    (byParent.get(key) ?? []).map((cat) => ({ cat, depth, children: build(cat.id, depth + 1) }));
+  return build("", 0);
+}
+
+/** A category plus all of its descendants (used to filter the entry list). */
+export function categorySubtreeIds(data: VaultData, id: string): Set<string> {
+  const out = new Set<string>([id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const c of data.categories) {
+      if (c.parentId && out.has(c.parentId) && !out.has(c.id)) {
+        out.add(c.id);
+        grew = true;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Live-entry count per category INCLUDING all descendants — the number the
+ * sidebar tree shows. An entry bumps its own category and every ancestor.
+ */
+export function subtreeCounts(data: VaultData): Map<string, number> {
+  const parentOf = new Map<string, string>();
+  for (const c of data.categories) {
+    if (c.parentId) parentOf.set(c.id, c.parentId);
+  }
+  const out = new Map<string, number>();
+  const bumpChain = (start: string | null) => {
+    const seen = new Set<string>();
+    let cur = start;
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      out.set(cur, (out.get(cur) ?? 0) + 1);
+      cur = parentOf.get(cur) ?? null;
+    }
+  };
+  for (const i of liveItems(data)) bumpChain(i.categoryId);
+  for (const g of liveGroups(data)) bumpChain(g.categoryId);
+  return out;
+}
+
+/** "Projects / Hibana" — full path label for dropdowns and breadcrumbs. */
+export function categoryPathLabel(categories: Category[], id: string): string {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const names: string[] = [];
+  const seen = new Set<string>();
+  let cur = byId.get(id);
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    names.unshift(cur.name);
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return names.join(" / ");
 }
 
 /**

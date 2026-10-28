@@ -10,6 +10,7 @@ import { Key, Layers, MoreHorizontal, Plus, Search, Upload } from "lucide-react"
 import type { ListFilter, Selection } from "./app-types";
 import {
   categoryName,
+  categorySubtreeIds,
   deletedEntries,
   formatDateTime,
   liveGroups,
@@ -69,8 +70,11 @@ export function EntryList({
       items = items.filter((i) => i.lastUsedAt !== null);
       groups = groups.filter((g) => g.lastUsedAt !== null);
     } else if (filter.view === "category") {
-      items = items.filter((i) => i.categoryId === filter.categoryId);
-      groups = groups.filter((g) => g.categoryId === filter.categoryId);
+      /* v1.4.0: a category view includes every descendant category's
+       * entries (DECISIONS.md §41) — “Projects” shows Hibana's keys too. */
+      const ids = categorySubtreeIds(data, filter.categoryId);
+      items = items.filter((i) => i.categoryId !== null && ids.has(i.categoryId));
+      groups = groups.filter((g) => g.categoryId !== null && ids.has(g.categoryId));
     } else if (filter.view === "tag") {
       const t = filter.tag.toLowerCase();
       items = items.filter((i) => i.tags.some((x) => x.toLowerCase() === t));

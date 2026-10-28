@@ -304,7 +304,7 @@ func TestGroupDeleteKeepsItems(t *testing.T) {
 
 func TestCategoryLifecycle(t *testing.T) {
 	f := newFixture(t)
-	cat, err := f.s.CreateCategory("Servers")
+	cat, err := f.s.CreateCategory("Servers", nil)
 	if err != nil {
 		t.Fatalf("CreateCategory: %v", err)
 	}
@@ -841,3 +841,263 @@ func TestVersionBumpsOnEveryStateChange(t *testing.T) {
 		t.Error("pure reads must not bump the version")
 	}
 }
+
+/* ── Hierarchical categories (v1.4.0, DECISIONS.md §41) ─────────────────── */
+
+func parentOf(t *testing.T, s *Store, id string) *string {
+	t.Helper()
+	for _, c := range s.State().Data.Categories {
+		if c.ID == id {
+			return c.ParentID
+		}
+	}
+	t.Fatalf("category %s vanished", id)
+	return nil
+}
+
+func TestCreateCategoryNested(t *testing.T) {
+	f := newFixture(t)
+	projects, err := f.s.CreateCategory("Projects", nil)
+	if err != nil {
+		t.Fatalf("CreateCategory top: %v", err)
+	}
+	leaf, err := f.s.CreateCategory("Hibana", &projects.ID)
+	if err != nil {
+		t.Fatalf("CreateCategory nested: %v", err)
+	}
+	if p := parentOf(t, f.s, leaf.ID); p == nil || *p != projects.ID {
+		t.Errorf("nested category should point at its parent, got %v", p)
+	}
+	// Empty-string parent is the JSON "absent" form — must behave as top level.
+	top, err := f.s.CreateCategory("Lonely", strPtr(""))
+	if err != nil {
+		t.Fatalf("CreateCategory empty parent: %v", err)
+	}
+	if p := parentOf(t, f.s, top.ID); p != nil {
+		t.Errorf("empty parent should mean top level, got %v", *p)
+	}
+	// Unknown parent is refused loudly.
+	if _, err := f.s.CreateCategory("Ghost", strPtr("no-such-id")); err == nil {
+		t.Error("unknown parent must be rejected")
+	}
+}
+
+func TestSetCategoryParent(t *testing.T) {
+	f := newFixture(t)
+	a, _ := f.s.CreateCategory("A", nil)
+	b, _ := f.s.CreateCategory("B", &a.ID)
+	c, _ := f.s.CreateCategory("C", &b.ID)
+
+	if err := f.s.SetCategoryParent(c.ID, nil); err != nil {
+		t.Fatalf("move to top: %v", err)
+	}
+	if p := parentOf(t, f.s, c.ID); p != nil {
+		t.Errorf("C should now be top level, got %v", *p)
+	}
+	if err := f.s.SetCategoryParent(c.ID, &a.ID); err != nil {
+		t.Fatalf("move under A: %v", err)
+	}
+	if p := parentOf(t, f.s, c.ID); p == nil || *p != a.ID {
+		t.Errorf("C should be under A, got %v", p)
+	}
+
+	if err := f.s.SetCategoryParent(a.ID, &a.ID); err == nil {
+		t.Error("self-parent must be rejected")
+	}
+	if err := f.s.SetCategoryParent(a.ID, &c.ID); err == nil {
+		t.Error("moving A under its own descendant C must be rejected")
+	}
+	if err := f.s.SetCategoryParent(a.ID, strPtr("no-such-id")); err == nil {
+		t.Error("unknown parent must be rejected")
+	}
+	if err := f.s.SetCategoryParent("no-such-id", nil); err == nil {
+		t.Error("unknown category must be rejected")
+	}
+
+	// Depth cap: build a MaxCategoryDepth chain under A, then verify both
+	// creation and re-parenting refuse to go one level deeper.
+	deep := a.ID
+	for i := 1; i < MaxCategoryDepth; i++ {
+		next, err := f.s.CreateCategory(fmt.Sprintf("d%d", i), &deep)
+		if err != nil {
+			t.Fatalf("chain build at %d: %v", i, err)
+		}
+		deep = next.ID // ends at depth MaxCategoryDepth
+	}
+	if _, err := f.s.CreateCategory("over", &deep); err == nil {
+		t.Error("creating beyond the depth cap must be rejected")
+	}
+	// c is a leaf under A; moving it under deep (depth 8) would make it 9.
+	if err := f.s.SetCategoryParent(c.ID, &deep); err == nil {
+		t.Error("re-parenting beyond the depth cap must be rejected")
+	}
+	// Moving under the grandparent-ish level that still fits is allowed:
+	// climb from deep until depth(parent)+1 <= cap-… find depth-7 ancestor.
+	fit := deep
+	for f.s.categoryDepthLockedForTest(fit) > MaxCategoryDepth-1 {
+		fit = *parentOf(t, f.s, fit)
+	}
+	if err := f.s.SetCategoryParent(c.ID, &fit); err != nil {
+		t.Fatalf("move to depth %d should be allowed: %v", f.s.categoryDepthLockedForTest(fit)+1, err)
+	}
+}
+
+// categoryDepthLockedForTest exposes chain depth for test assertions.
+func (s *Store) categoryDepthLockedForTest(id string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.categoryDepthLocked(id)
+}
+
+func TestCreateCategoryDepthCap(t *testing.T) {
+	f := newFixture(t)
+	parent, _ := f.s.CreateCategory("root", nil)
+	for i := 1; i < MaxCategoryDepth; i++ {
+		next, err := f.s.CreateCategory(fmt.Sprintf("lvl%d", i), &parent.ID)
+		if err != nil {
+			t.Fatalf("depth %d should be fine: %v", i, err)
+		}
+		parent = next
+	}
+	if _, err := f.s.CreateCategory("too deep", &parent.ID); err == nil {
+		t.Errorf("creating beyond depth %d must be rejected", MaxCategoryDepth)
+	}
+}
+
+func TestDeleteCategoryPromotesChildren(t *testing.T) {
+	f := newFixture(t)
+	top, _ := f.s.CreateCategory("Projects", nil)
+	mid, _ := f.s.CreateCategory("Client work", &top.ID)
+	leaf, _ := f.s.CreateCategory("Hibana", &mid.ID)
+
+	mustItem(t, f.s, "i-top", "v")
+	it := mustItem(t, f.s, "i-leaf", "v")
+	if err := f.s.UpdateItem(it.ID, ItemPatch{CategoryID: &leaf.ID}); err != nil {
+		t.Fatalf("UpdateItem: %v", err)
+	}
+
+	// Delete the MIDDLE category: its child lifts to top's level; the item in
+	// the deleted category becomes uncategorized; nothing else is deleted.
+	if err := f.s.DeleteCategory(mid.ID); err != nil {
+		t.Fatalf("DeleteCategory: %v", err)
+	}
+	if p := parentOf(t, f.s, leaf.ID); p == nil || *p != top.ID {
+		t.Errorf("orphaned child should lift to the deleted category's parent, got %v", p)
+	}
+	st := f.s.State()
+	ids := map[string]bool{}
+	for _, c := range st.Data.Categories {
+		ids[c.ID] = true
+	}
+	if !ids[top.ID] || !ids[leaf.ID] {
+		t.Error("delete must not cascade to other categories")
+	}
+	if ids[mid.ID] {
+		t.Error("deleted category must be gone")
+	}
+	for _, i := range st.Data.Items {
+		if i.ID == it.ID {
+			// The item lives in the LEAF, which survived the mid-level delete
+			// (promoted, not removed) — so it must still be categorized there.
+			if i.CategoryID == nil || *i.CategoryID != leaf.ID {
+				t.Error("items in a surviving (promoted) subcategory must keep their category")
+			}
+		}
+	}
+
+	// Deleting a TOP category sends its grandchildren to the top level.
+	if err := f.s.DeleteCategory(top.ID); err != nil {
+		t.Fatalf("DeleteCategory top: %v", err)
+	}
+	if p := parentOf(t, f.s, leaf.ID); p != nil {
+		t.Errorf("children of a deleted top category become top level, got %v", *p)
+	}
+
+	// Deleting the LEAF itself uncategorizes only its own items.
+	if err := f.s.DeleteCategory(leaf.ID); err != nil {
+		t.Fatalf("DeleteCategory leaf: %v", err)
+	}
+	st2 := f.s.State()
+	for _, i := range st2.Data.Items {
+		if i.ID == it.ID && i.CategoryID != nil {
+			t.Error("items of the deleted category become uncategorized")
+		}
+	}
+}
+
+func TestNormalizeCategoryTreeSanitization(t *testing.T) {
+	// Dangling parent, self-parent, and a 2-cycle all drop to top level.
+	raw := map[string]any{
+		"schemaVersion": float64(1),
+		"categories": []any{
+			map[string]any{"id": "a", "name": "A", "sortOrder": 0},
+			map[string]any{"id": "b", "name": "B", "sortOrder": 1, "parentId": "ghost"},
+			map[string]any{"id": "c", "name": "C", "sortOrder": 2, "parentId": "c"},
+			map[string]any{"id": "d", "name": "D", "sortOrder": 3, "parentId": "e"},
+			map[string]any{"id": "e", "name": "E", "sortOrder": 4, "parentId": "d"},
+			map[string]any{"id": "f", "name": "F", "sortOrder": 5, "parentId": "a"},
+		},
+		"items":  []any{},
+		"groups": []any{},
+	}
+	v, ok := NormalizeVault(raw, "1.4.0", "2025-01-01T00:00:00.000Z", NewUUID)
+	if !ok {
+		t.Fatal("NormalizeVault: expected ok")
+	}
+	for _, c := range v.Categories {
+		switch c.ID {
+		case "b", "c", "d", "e":
+			if c.ParentID != nil {
+				t.Errorf("%s: broken parent should be cleared, got %v", c.ID, *c.ParentID)
+			}
+		case "f":
+			if c.ParentID == nil || *c.ParentID != "a" {
+				t.Error("f: healthy parent must survive")
+			}
+		}
+	}
+}
+
+func TestNormalizeCategoryDepthLift(t *testing.T) {
+	// A hand-written 12-deep chain must be lifted to at most MaxCategoryDepth.
+	cats := []any{map[string]any{"id": "n0", "name": "n0", "sortOrder": 0}}
+	for i := 1; i <= 12; i++ {
+		cats = append(cats, map[string]any{
+			"id": fmt.Sprintf("n%d", i), "name": fmt.Sprintf("n%d", i),
+			"sortOrder": i, "parentId": fmt.Sprintf("n%d", i-1),
+		})
+	}
+	raw := map[string]any{
+		"schemaVersion": float64(1),
+		"categories":    cats,
+		"items":         []any{},
+		"groups":        []any{},
+	}
+	v, ok := NormalizeVault(raw, "1.4.0", "2025-01-01T00:00:00.000Z", NewUUID)
+	if !ok {
+		t.Fatal("NormalizeVault: expected ok")
+	}
+	byID := map[string]Category{}
+	for _, c := range v.Categories {
+		byID[c.ID] = c
+	}
+	depth := func(id string) int {
+		d := 1
+		for byID[id].ParentID != nil {
+			id = *byID[id].ParentID
+			d++
+		}
+		return d
+	}
+	for _, c := range v.Categories {
+		if d := depth(c.ID); d > MaxCategoryDepth {
+			t.Errorf("%s ends up at depth %d (cap %d)", c.ID, d, MaxCategoryDepth)
+		}
+	}
+	// The chain order itself must survive (each node still has a parent).
+	if byID["n12"].ParentID == nil {
+		t.Error("deep nodes must be lifted, not detached to top level")
+	}
+}
+
+func strPtr(s string) *string { return &s }
