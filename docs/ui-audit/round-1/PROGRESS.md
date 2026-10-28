@@ -322,6 +322,7 @@ The user reported deleted entries resurrecting even across app updates, and corr
 - **Tests**: +7 Go → all green; 4 existing tests that double-opened a folder now Close first (the real second-process behavior).
 - **Gates at the release commit**: `bun run build` ✓ · `bun run test` 98/98 ✓ · `lint:tokens` ✓ · `check:contrast` 30/30 ✓ · `gofmt -l .` empty ✓ · windows/amd64 `go vet` + `go build` ✓ · `go test ./internal/...` ✓.
 - **User-facing behavior after this release**: a second Clavis copy can no longer run against the same data (it just opens the first copy's Manager); if anything ever resurrects a deleted entry anyway, Clavis silently moves it back to the Trash and says so in a banner; intentional restores (Trash → Restore, Undo, Settings → restore a backup) work exactly as before.
+- **Windows CI follow-up (same day)**: the lock file was first opened without FILE_SHARE_DELETE, so `t.TempDir()` cleanup failed on the Windows runner (every store-creating test failed at cleanup; Linux was immune). Fixed by opening the handle via `windows.CreateFile` with full sharing including delete — test-only defect, the shipped v1.4.1 binaries were unaffected, no re-release needed.
 - **Undo path**: `git revert <v1.4.1-release-sha> --no-edit` on `main`, then bump the 5 version places to 1.4.2 and tag (forward-fix pattern; never force-push tags). The lock/tombstone layer is purely additive — a revert cannot corrupt data.
 
 ### Phase R1 detail (done) — final re-audit

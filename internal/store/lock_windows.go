@@ -8,15 +8,24 @@
  * lock when the process dies, so a crashed Clavis can never leave a stale
  * lock behind. A second store on the same folder gets a clear error after
  * the retry window.
+ *
+ * The handle is opened with FILE_SHARE_DELETE so the lock file can be
+ * deleted while held (tests run inside t.TempDir() folders that Go removes
+ * at test end; without delete-sharing every Windows test failed cleanup).
+ * Mutual exclusion itself comes from the byte-range lock, which keeps
+ * working on a deleted-but-open stream; if something ever removes the lock
+ * file mid-run, Wails' single-instance mutex (checked before the store is
+ * even opened) is still the first line of defense.
  */
 package store
 
 import (
 	"fmt"
-	"os"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // lockRetryWait is how long acquireDirLock keeps retrying before giving up:
@@ -37,12 +46,23 @@ var (
 
 func acquireDirLock(path string) (func(), error) {
 	deadline := time.Now().Add(lockRetryWait)
+	path16, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create lock file: %w", err)
+	}
 	for {
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+		h, err := windows.CreateFile(
+			path16,
+			windows.GENERIC_READ|windows.GENERIC_WRITE,
+			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+			nil,
+			windows.OPEN_ALWAYS,
+			windows.FILE_ATTRIBUTE_NORMAL,
+			0,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create lock file: %w", err)
 		}
-		h := syscall.Handle(f.Fd())
 		var ov syscall.Overlapped
 		r1, _, _ := procLockFileEx.Call(
 			uintptr(h),
@@ -55,10 +75,10 @@ func acquireDirLock(path string) (func(), error) {
 			return func() {
 				var uov syscall.Overlapped
 				procUnlockFileEx.Call(uintptr(h), 0, 1, 0, uintptr(unsafe.Pointer(&uov)))
-				_ = f.Close()
+				_ = windows.CloseHandle(h)
 			}, nil
 		}
-		f.Close()
+		_ = windows.CloseHandle(h)
 		if time.Now().After(deadline) {
 			return nil, errDataFolderInUse
 		}
