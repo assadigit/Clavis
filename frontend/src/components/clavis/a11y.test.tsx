@@ -11,8 +11,8 @@
  * the real Manager — so the `region` rule measures production context,
  * not a bare test render.
  */
-import { describe, it, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { describe, it, vi, expect, beforeEach, afterEach } from "vitest";
+import { cleanup, render, waitFor } from "@testing-library/react";
 
 vi.mock("@wailsio/runtime", () => ({
   Call: { ByName: vi.fn(async () => ({})) },
@@ -30,6 +30,7 @@ import { ItemEditor } from "./item-editor";
 import { GroupEditor } from "./group-editor";
 import { TrashView } from "./trash-view";
 import { ManageItemsModal } from "./manage-items-modal";
+import { SharedHome } from "./shared-duplicates";
 import { Popup } from "./popup";
 import { expectNoViolations } from "@/test/a11y";
 import type { ClavisState, Group, Item } from "@/lib/clavis/types";
@@ -198,6 +199,49 @@ describe("a11y: every major screen passes axe (color-contrast disabled — owned
         onCreateItemHere={vi.fn()}
       />,
     );
+    await expectNoViolations(document.body);
+  });
+
+  /* v1.8.0 (DECISIONS §48): the Shared view's home panel — rendered with a
+     detected cluster (card + chips + merge action) so the axe gate covers
+     the detection UI, not just the all-clear line. */
+  it("SharedHome (duplicate detection) passes axe", async () => {
+    render(
+      <aside aria-label="Details">
+        <SharedHome
+          state={state()}
+          call={vi.fn(async (action: string) => {
+            if (action === "detectSharedDuplicates") {
+              return {
+                ok: true,
+                status: 200,
+                clusters: [
+                  {
+                    itemId: "fake-item-1",
+                    name: "FAKE GitHub token",
+                    key: "GITHUB_TOKEN",
+                    valueLast4: "tOKn",
+                    copies: 2,
+                    groupNames: ["FAKE Alpha", "FAKE Beta"],
+                    members: [
+                      { itemId: "fake-item-1", name: "FAKE GitHub token", key: "GITHUB_TOKEN", groupNames: ["FAKE Alpha"] },
+                      { itemId: "fake-item-2", name: "FAKE GH_PAT", key: "GH_PAT", groupNames: ["FAKE Beta"] },
+                    ],
+                  },
+                ],
+              };
+            }
+            return { ok: true, status: 200 };
+          }) as unknown as CallFn}
+          readOnly={false}
+        />
+      </aside>,
+    );
+    // Wait for the async scan so the card (not just the loading line) is
+    // what axe measures.
+    await waitFor(() => {
+      expect(document.body.textContent).toContain("FAKE GH_PAT");
+    });
     await expectNoViolations(document.body);
   });
 
