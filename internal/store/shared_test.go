@@ -65,6 +65,63 @@ func TestDetectSharedDuplicatesAcrossGroups(t *testing.T) {
 	}
 }
 
+// The user's clarified criterion, pinned: the cluster key is the VALUE being
+// IDENTICAL — a 20-character value pasted once into each of 5 groups is ONE
+// cluster of 5 copies spanning 5 groups, and a value that differs by a single
+// character's case is a DIFFERENT value that never joins ("The Value must be
+// identical, like a 20 character value that is repeated among 5 groups").
+func TestDetectSharedDuplicatesIdenticalValueFiveGroups(t *testing.T) {
+	f := newFixture(t)
+	const v = "ghp_20char_abc123XYZ" // exactly 20 characters, token-shaped
+	if len(v) != 20 {
+		t.Fatalf("the test value must be 20 characters, got %d", len(v))
+	}
+	first := mustItem(t, f.s, "GitHub token", v) // oldest → canonical
+	f.advance(time.Minute)
+	second := mustItem(t, f.s, "GH_PAT", v)
+	f.advance(time.Minute)
+	third := mustItem(t, f.s, "ci token", v)
+	f.advance(time.Minute)
+	fourth := mustItem(t, f.s, "deploy token", v)
+	f.advance(time.Minute)
+	fifth := mustItem(t, f.s, "backup token", v)
+	mustGroup(t, f.s, "Project A", first.ID)
+	mustGroup(t, f.s, "Project B", second.ID)
+	mustGroup(t, f.s, "Project C", third.ID)
+	mustGroup(t, f.s, "Project D", fourth.ID)
+	mustGroup(t, f.s, "Project E", fifth.ID)
+
+	// The near miss: same shape, first character's case flipped — NOT an
+	// identical value. One case-insensitive comparison anywhere in the scan
+	// would absorb it as a 6th copy; byte-exact matching must not.
+	flipped := "G" + v[1:]
+	if flipped == v {
+		t.Fatal("the near-miss value must differ from the real one")
+	}
+	nearMiss := mustItem(t, f.s, "near-miss token", flipped)
+	mustGroup(t, f.s, "Project F", nearMiss.ID)
+
+	clusters := DetectSharedDuplicates(f.s.State().Data)
+	if len(clusters) != 1 {
+		t.Fatalf("detected %d clusters, want exactly 1 — the identical 20-character value; the case-flipped near miss is a different value", len(clusters))
+	}
+	c := clusters[0]
+	if c.Copies != 5 || len(c.Members) != 5 {
+		t.Fatalf("copies = %d, members = %d — want 5/5 (the near miss must NOT join)", c.Copies, len(c.Members))
+	}
+	if c.ItemID != first.ID {
+		t.Fatalf("canonical = %s, want the oldest copy %s", c.ItemID, first.ID)
+	}
+	if want := "Project A,Project B,Project C,Project D,Project E"; strings.Join(c.GroupNames, ",") != want {
+		t.Fatalf("groupNames = %v, want the five projects only", c.GroupNames)
+	}
+	for _, m := range c.Members {
+		if m.ItemID == nearMiss.ID {
+			t.Fatal("a value differing by one character's case is not identical — it must never join the cluster")
+		}
+	}
+}
+
 // An already-shared copy wins the canonical rank even when younger, so a
 // merge keeps the Shared-view identity the user already has.
 func TestDetectSharedDuplicatesPrefersSharedCanonical(t *testing.T) {
