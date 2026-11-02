@@ -1648,3 +1648,223 @@ func writeTempBackup(t *testing.T, dir, vault string) string {
 	}
 	return name
 }
+
+/* ------------------- v1.7.0: start from scratch (§47) ------------------- */
+
+func TestResetAllDataStartsFromScratch(t *testing.T) {
+	f := newFixture(t)
+	// A used vault: a shared item, a group, a user category, a trash entry
+	// with its tombstone, live undo history — and daily backups on disk
+	// (every mutation path saves through saveLocked, so the first change of
+	// the day leaves a backup of the pre-change file).
+	a := mustItem(t, f.s, "GitHub token", "ghp_x")
+	if err := f.s.UpdateItem(a.ID, ItemPatch{Shared: boolp(true)}); err != nil {
+		t.Fatalf("UpdateItem: %v", err)
+	}
+	if _, err := f.s.CreateGroup(NewGroup{Name: "Hibana", ItemIDs: []string{a.ID}}); err != nil {
+		t.Fatalf("CreateGroup: %v", err)
+	}
+	if _, err := f.s.CreateCategory("Projects", nil); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	b := mustItem(t, f.s, "Doomed", "v")
+	undoToken, err := f.s.DeleteEntry(KindItem, b.ID)
+	if err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if len(f.s.State().Backups) == 0 {
+		t.Fatal("precondition: the used vault must have daily backups on disk")
+	}
+
+	if err := f.s.ResetAllData(true); err != nil {
+		t.Fatalf("ResetAllData: %v", err)
+	}
+
+	// The state is the first-run state.
+	st := f.s.State()
+	if len(st.Data.Items) != 0 || len(st.Data.Groups) != 0 {
+		t.Fatalf("after reset: items=%d groups=%d, want 0/0", len(st.Data.Items), len(st.Data.Groups))
+	}
+	if len(st.Data.Categories) != 3 {
+		t.Fatalf("after reset: categories=%d, want the 3 starter ones", len(st.Data.Categories))
+	}
+	if len(st.Backups) != 0 {
+		t.Fatalf("after reset: %d backups left, want 0", len(st.Backups))
+	}
+	if st.RecoveredNotice != nil {
+		t.Fatal("after reset: no stale banner may survive")
+	}
+
+	// The deletion memory is empty on disk (not just in memory).
+	tombs := readDeletionsFile(t, f.dir)
+	if len(tombs) != 0 {
+		t.Fatalf("after reset: deletions.json still has %d entries", len(tombs))
+	}
+
+	// The undo history is gone: the old token must be refused.
+	if err := f.s.UndoDelete(undoToken); err == nil {
+		t.Fatal("an undo token from before the reset must no longer work")
+	}
+
+	// And the disk file is the fresh vault (not just the in-memory one).
+	var onDisk map[string]any
+	if err := json.Unmarshal([]byte(readDataFile(t, f.dir)), &onDisk); err != nil {
+		t.Fatalf("disk parse: %v", err)
+	}
+	if items, ok := onDisk["items"].([]any); !ok || len(items) != 0 {
+		t.Fatal("the persisted vault must have no items")
+	}
+
+	// Reopening keeps the clean slate (no recovery, no tombstone fights).
+	f.s.Close()
+	s2, err := New(f.dir, "1.7.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer s2.Close()
+	st2 := s2.State()
+	if len(st2.Data.Items) != 0 || len(st2.Backups) != 0 || st2.RecoveredNotice != nil {
+		t.Fatal("the clean slate must survive a reopen")
+	}
+}
+
+func TestResetAllDataKillsEveryResurrectionPath(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Old credential", "v")
+	// The reported mechanism, verbatim: a stale copy rewrites the data file
+	// with the deleted-era entry LIVE, and daily backups carrying the old
+	// world sit in backups/.
+	resurrectEntry(t, f.dir, a.ID)
+	if len(f.s.State().Backups) == 0 {
+		t.Fatal("precondition: daily backups exist")
+	}
+	f.s.Close()
+	s2, err := New(f.dir, "1.7.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	// The user hits "Erase all data".
+	if err := s2.ResetAllData(true); err != nil {
+		t.Fatalf("ResetAllData: %v", err)
+	}
+	s2.Close()
+
+	// Path 1: the damage-recovery used to restore the newest backup. There
+	// are no backups anymore, so a damaged file must START FRESH — the old
+	// world can never come back through recovery.
+	writeDataFile(t, f.dir, "not json at all")
+	s3, err := New(f.dir, "1.7.0")
+	if err != nil {
+		t.Fatalf("reopen after damage: %v", err)
+	}
+	defer s3.Close()
+	st3 := s3.State()
+	if len(st3.Data.Items) != 0 || len(st3.Data.Groups) != 0 {
+		t.Fatal("recovery must not bring the old world back after a reset")
+	}
+	for _, it := range st3.Data.Items {
+		if it.ID == a.ID {
+			t.Fatal("the pre-reset entry must not exist after recovery")
+		}
+	}
+	if st3.RecoveredNotice == nil {
+		t.Fatal("the fresh-start recovery must explain itself with a banner")
+	}
+
+	// Path 2: the restore-backup list is empty — nothing to click back.
+	if len(st3.Backups) != 0 {
+		t.Fatal("the backups list must be empty after a reset")
+	}
+
+	// Path 3: an explicit import of a pre-reset export CAN still bring old
+	// entries back (that is the user's own action) — but the deleted memory
+	// no longer fights it, because the reset wiped that too. Nothing in the
+	// data folder contradicts the clean slate.
+	if tombs := readDeletionsFile(t, f.dir); len(tombs) != 0 {
+		t.Fatalf("deletions.json must be empty after a reset, has %d", len(tombs))
+	}
+}
+
+func TestResetAllDataSettingsFlag(t *testing.T) {
+	f := newFixture(t)
+	mustItem(t, f.s, "A", "1") // forces a daily backup + a real save
+	if err := f.s.UpdateSettings(SettingsPatch{Shortcut: strp("Ctrl+Alt+K"), SolidMode: boolp(true), StartWithWindows: boolp(false)}); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+
+	// keepSettings=true keeps the whole block (window bounds included).
+	if err := f.s.ResetAllData(true); err != nil {
+		t.Fatalf("ResetAllData(true): %v", err)
+	}
+	s := f.s.State().Data.Settings
+	if s.Shortcut != "Ctrl+Alt+K" || !s.SolidMode || s.StartWithWindows {
+		t.Fatal("keepSettings must keep the current settings block")
+	}
+
+	// keepSettings=false restores the first-run defaults…
+	if err := f.s.ResetAllData(false); err != nil {
+		t.Fatalf("ResetAllData(false): %v", err)
+	}
+	def := DefaultSettings()
+	s = f.s.State().Data.Settings
+	if s.Shortcut != def.Shortcut || s.SolidMode != def.SolidMode || s.StartWithWindows != def.StartWithWindows {
+		t.Fatal("reset without keepSettings must restore the default settings")
+	}
+	// …and persists them (not just in memory).
+	var onDisk map[string]any
+	if err := json.Unmarshal([]byte(readDataFile(t, f.dir)), &onDisk); err != nil {
+		t.Fatalf("disk parse: %v", err)
+	}
+	settings, ok := onDisk["settings"].(map[string]any)
+	if !ok {
+		t.Fatal("settings block missing on disk")
+	}
+	if settings["shortcut"] != def.Shortcut {
+		t.Fatal("the default shortcut must be persisted")
+	}
+}
+
+func TestResetAllDataRefusesReadOnly(t *testing.T) {
+	f := newFixture(t)
+	mustItem(t, f.s, "A", "1")
+	before := readDataFile(t, f.dir)
+	var v map[string]any
+	json.Unmarshal([]byte(before), &v)
+	v["schemaVersion"] = float64(99)
+	b, _ := json.Marshal(v)
+	writeDataFile(t, f.dir, string(b))
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer s2.Close()
+	if err := s2.ResetAllData(true); err == nil {
+		t.Fatal("reset must refuse in read-only mode")
+	}
+	// The file is untouched — the reset never happened.
+	if after := readDataFile(t, f.dir); after != string(b) {
+		t.Fatal("a refused reset must not touch the data file")
+	}
+	// And the backups survived the refusal.
+	if len(s2.State().Backups) == 0 {
+		t.Fatal("a refused reset must not have erased the backups")
+	}
+}
+
+// readDeletionsFile parses deletions.json (missing → empty: the reset wrote
+// an empty log, so it exists).
+func readDeletionsFile(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	text, err := os.ReadFile(filepath.Join(dir, "deletions.json"))
+	if err != nil {
+		t.Fatalf("read deletions.json: %v", err)
+	}
+	var parsed struct {
+		Deleted map[string]string `json:"deleted"`
+	}
+	if err := json.Unmarshal(text, &parsed); err != nil || parsed.Deleted == nil {
+		t.Fatalf("deletions.json is not valid: %v", err)
+	}
+	return parsed.Deleted
+}

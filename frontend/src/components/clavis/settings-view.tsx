@@ -38,6 +38,7 @@ import { Btn, FieldLabel, SectionHeader, Toggle } from "./ui-bits";
 import { formatDateTime } from "./derive";
 import { UpdateCard } from "./settings/update-card";
 import { ImportFlows } from "./settings/import-flows";
+import { StartFromScratchCard } from "./settings/reset-data";
 
 export interface SettingsViewProps {
   state: ClavisState;
@@ -263,6 +264,9 @@ export function SettingsView({ state, call, readOnly }: SettingsViewProps) {
           )}
         </div>
       </div>
+
+      {/* ---------------- Start from scratch (v1.7.0, DECISIONS §47) ---------------- */}
+      <StartFromScratchCard state={state} call={call} readOnly={readOnly} />
 
       {/* ---------------- About ---------------- */}
       <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>

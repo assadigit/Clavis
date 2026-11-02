@@ -2015,6 +2015,79 @@ func (s *Store) RestoreBackup(name string) error {
 	return s.writeAtomicLocked()
 }
 
+/*
+ResetAllData wipes the vault back to the first-run state (v1.7.0,
+
+	DECISIONS.md §47) — the "clean slate" the user asked for after the
+	resurrection reports ("I think there is a config file in my system which
+	restores the previous-version made credentials"). There is no config
+	file; the two places old data could still live after v1.4.1/§46 are the
+	backups folder and the user's own exports. This resets both in-app
+	ones: every item, group and category, the Trash, the deletion memory
+	AND every automatic backup are erased. After it, no file in the data
+	folder can bring a previous-version credential back: the
+	damage-recovery path finds a fresh vault (or none at all — it starts
+	fresh rather than fail), the restore-backup list is empty, and the
+	only way old data returns is an explicit import, which §46 tombstones
+	no longer fight (the memory itself was wiped with everything else).
+
+	keepSettings keeps the current settings block (shortcut, dark mode,
+	Start with Windows, window bounds); false restores the first-run
+	defaults. No pre-reset backup is taken: a reset that quietly kept a
+	copy of everything would defeat its own purpose — the user confirms a
+	destructive action, exactly like EmptyTrash.
+*/
+func (s *Store) ResetAllData(keepSettings bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.assertWritable(); err != nil {
+		return err
+	}
+	/* Erase the backups FIRST and loudly: it is the one step that can
+	   fail (a file held by something), and until it succeeds the store is
+	   still completely untouched — a failed reset must not leave a fresh
+	   vault with the old backups still on disk, nor a half-wiped state. */
+	if err := s.eraseBackupsLocked(); err != nil {
+		return err
+	}
+	fresh := StarterVault(s.appVersion, s.newID, s.now())
+	if keepSettings {
+		fresh.Settings = s.data.Settings
+	}
+	s.data = fresh
+	/* The deletion memory goes too: nothing it remembers exists anymore,
+	   and a clean slate means no file left carrying the old world. */
+	s.saveTombsLocked(map[string]string{})
+	/* Undo tokens and any pending banner reference a world that no
+	   longer exists. */
+	s.undoRing = map[string]undoRecord{}
+	s.undoOrder = nil
+	s.recoveredNotice = nil
+	return s.writeAtomicLocked()
+}
+
+// eraseBackupsLocked removes every file inside backups/ (v1.7.0 §47).
+// The folder itself stays (a later daily backup rebuilds the index); on
+// any error the reset aborts with the store still untouched.
+func (s *Store) eraseBackupsLocked() error {
+	entries, err := os.ReadDir(s.backupsDir())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("cannot read the backups folder: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if err := os.Remove(filepath.Join(s.backupsDir(), e.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("cannot erase the backup %s: %w", e.Name(), err)
+		}
+	}
+	return nil
+}
+
 // Reopen re-reads the data file from disk (used after external restore).
 func (s *Store) Reopen() error {
 	s.mu.Lock()

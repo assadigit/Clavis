@@ -502,3 +502,64 @@ func TestSharedFlagThroughDispatch(t *testing.T) {
 		t.Fatalf("shared items in state = %d, want 2", sharedCount)
 	}
 }
+
+func TestResetAllDataThroughDispatch(t *testing.T) {
+	s := newTestService(t)
+	id := mustCreateItem(t, s, "GitHub token", "ghp_x", true)
+	_ = mustCreateGroup(t, s, "Hibana", id)
+
+	// Custom, non-default settings.
+	if res := dispatchJSON(t, s, "updateSettings", `{"patch":{"shortcut":"Ctrl+Alt+K","startWithWindows":false}}`); res["ok"] != true {
+		t.Fatalf("updateSettings failed: %v", res["error"])
+	}
+
+	// The shell seams record what the hooks are asked to do.
+	var combos []string
+	var autostarts []bool
+	s.RegisterShortcut = func(combo string) error { combos = append(combos, combo); return nil }
+	s.SyncAutostart = func(enabled bool) error { autostarts = append(autostarts, enabled); return nil }
+
+	// keepSettings: true — the data goes, the preferences stay, no churn.
+	res := dispatchJSON(t, s, "resetAllData", `{"keepSettings":true}`)
+	if res["ok"] != true {
+		t.Fatalf("resetAllData failed: %v", res["error"])
+	}
+	st := s.GetState()
+	if len(st.UIState.Items) != 0 || len(st.UIState.Groups) != 0 {
+		t.Fatal("the reset state must be empty of items and groups")
+	}
+	if len(st.Backups) != 0 {
+		t.Fatal("the backups list must be empty after a reset")
+	}
+	if st.UIState.Settings.Shortcut != "Ctrl+Alt+K" || st.UIState.Settings.StartWithWindows {
+		t.Fatal("keepSettings=true must keep the current settings")
+	}
+	if len(autostarts) != 0 {
+		t.Fatal("keepSettings=true must not touch the autostart hook")
+	}
+
+	// A hand-written call without the flag → full factory reset: the
+	// default combo and the default autostart are pushed through the hooks.
+	res = dispatchJSON(t, s, "resetAllData", `{}`)
+	if res["ok"] != true {
+		t.Fatalf("resetAllData(full) failed: %v", res["error"])
+	}
+	st = s.GetState()
+	if st.UIState.Settings.Shortcut != "Ctrl+Shift+Space" {
+		t.Fatalf("full reset shortcut = %q, want the default", st.UIState.Settings.Shortcut)
+	}
+	if !st.UIState.Settings.StartWithWindows {
+		t.Fatal("full reset must restore the default Start with Windows (true)")
+	}
+	if len(combos) == 0 || combos[len(combos)-1] != "Ctrl+Shift+Space" {
+		t.Fatalf("the default combo must be re-registered, got %v", combos)
+	}
+	if len(autostarts) == 0 || autostarts[len(autostarts)-1] != true {
+		t.Fatalf("the default autostart must be synced, got %v", autostarts)
+	}
+	// The redacted state in the response carries the empty vault (the
+	// frontend refreshes from res.state).
+	if !strings.Contains(stateJSON(t, s), `"items":[]`) {
+		t.Fatal("the state snapshot must show the empty vault")
+	}
+}

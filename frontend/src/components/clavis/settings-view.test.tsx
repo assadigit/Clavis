@@ -193,3 +193,51 @@ describe("SettingsView smoke", () => {
     }
   });
 });
+
+describe("Start from scratch (v1.7.0 §47)", () => {
+  it("renders the section; the button is disabled in read-only mode", () => {
+    setup();
+    expect(screen.getByText("Start from scratch")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Erase all data…" })).toBeTruthy();
+    cleanup();
+    const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+    render(<SettingsView state={state()} call={call} readOnly={true} />);
+    const btn = screen.getByRole("button", { name: "Erase all data…" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it("opens the modal, lists what is erased, and Cancel closes it", async () => {
+    setup();
+    const userEvent = (await import("@testing-library/user-event")).default;
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole("button", { name: "Erase all data…" }));
+    const dialog = await screen.findByRole("dialog");
+    const text = dialog.textContent ?? "";
+    expect(text).toContain("This erases, permanently:");
+    expect(text).toContain("Every credential, group and category");
+    expect(text).toContain("All 3 automatic backups");
+    expect(text).toContain("Your app settings stay");
+    expect(text).toContain("This cannot be undone.");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("confirm (default) calls resetAllData with keepSettings: true", async () => {
+    const { call } = setup();
+    const userEvent = (await import("@testing-library/user-event")).default;
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole("button", { name: "Erase all data…" }));
+    await user.click(await screen.findByRole("button", { name: "Erase everything" }));
+    expect(call).toHaveBeenCalledWith("resetAllData", { keepSettings: true });
+  });
+
+  it("checking the settings box sends keepSettings: false", async () => {
+    const { call } = setup();
+    const userEvent = (await import("@testing-library/user-event")).default;
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByRole("button", { name: "Erase all data…" }));
+    await user.click(await screen.findByRole("checkbox", { name: /Also reset app settings/ }));
+    await user.click(screen.getByRole("button", { name: "Erase everything" }));
+    expect(call).toHaveBeenCalledWith("resetAllData", { keepSettings: false });
+  });
+});

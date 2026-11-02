@@ -709,6 +709,44 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			}
 			return s.done(nil)
 		}
+	case "resetAllData":
+		{
+			/* v1.7.0 (DECISIONS.md §47): "start from scratch" — wipe the
+			   vault, the deletion memory AND every automatic backup back to
+			   the first-run state. keepSettings (default false for hand-
+			   written calls) keeps the app preferences; the confirmation
+			   dialog sends it explicitly either way. */
+			keep := false
+			if b := getBool(p, "keepSettings"); b != nil {
+				keep = *b
+			}
+			before := s.Store.State().Data.Settings
+			if err := s.Store.ResetAllData(keep); err != nil {
+				return FailErr(err)
+			}
+			if !keep {
+				/* The hotkey and the autostart registry must follow the
+				   fresh settings — the same hooks updateSettings uses. A
+				   failure rolls the one setting back; the data reset itself
+				   is already done and safe, and main() re-syncs the registry
+				   on the next launch either way. */
+				after := s.Store.State().Data.Settings
+				if after.Shortcut != before.Shortcut {
+					if err := s.registerShortcut(after.Shortcut); err != nil {
+						old := before.Shortcut
+						_ = s.Store.UpdateSettings(store.SettingsPatch{Shortcut: &old})
+						_ = s.registerShortcut(old)
+					}
+				}
+				if after.StartWithWindows != before.StartWithWindows {
+					if err := s.syncAutostartHook(after.StartWithWindows); err != nil {
+						old := before.StartWithWindows
+						_ = s.Store.UpdateSettings(store.SettingsPatch{StartWithWindows: &old})
+					}
+				}
+			}
+			return s.done(nil)
+		}
 	case "clearRecoveredNotice":
 		{
 			s.Store.ClearRecoveredNotice()
