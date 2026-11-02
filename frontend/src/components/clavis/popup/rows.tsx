@@ -3,6 +3,11 @@
  * the copied-row feedback state and the empty states. Moved move-only from
  * popup.tsx in UI-audit round 1 Phase 11 (F-026); popup.tsx stays the
  * palette controller (state, search, keyboard, copy orchestration).
+ *
+ * v1.9.0 compact palette (DECISIONS.md §49): rows are SINGLE-LINE — name
+ * and category/tags share one baseline, the masked preview stays on the
+ * right — so the mini window reads like a launcher palette (ueli/PowerToys
+ * Run) instead of a vault table. Row height 48 → 28, window 640 → 440.
  */
 "use client";
 
@@ -147,9 +152,9 @@ export function PopupRows({
           aria-selected="true"
           data-selected="true"
           className="glass-row flex items-center justify-center clavis-copied"
-          style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)" }}
+          style={{ gap: "var(--space-2)", padding: "var(--space-1) var(--space-2)", minHeight: "var(--clavis-row-h)" }}
         >
-          <Ix icon={Check} size="md" />
+          <Ix icon={Check} size="sm" />
           <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>{copied?.label}</span>
         </div>
       );
@@ -162,21 +167,23 @@ export function PopupRows({
         aria-selected={i === selIdx}
         data-selected={i === selIdx ? "true" : "false"}
         className="glass-row flex cursor-pointer items-center"
-        style={{ gap: "var(--space-3)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)" }}
+        style={{ gap: "var(--space-2)", padding: "var(--space-1) var(--space-2)", minHeight: "var(--clavis-row-h)" }}
         onMouseEnter={() => onHover(i)}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onActivate(i)}
       >
-        <EntryTypeIcon kind={row.kind} isSecret={row.isSecret} size="md" />
-        <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)" }}>
+        <EntryTypeIcon kind={row.kind} isSecret={row.isSecret} size="sm" />
+        {/* v1.9.0: name + meta on ONE baseline (was a two-line stack) — the
+            meta shrinks after the name, the preview stays right-aligned. */}
+        <span className="flex min-w-0 flex-1 items-baseline" style={{ gap: "var(--space-2)" }}>
           <span
             className="truncate"
-            style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}
+            style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)", flex: "0 1 auto", minWidth: 0 }}
           >
             {row.name}
           </span>
           {row.meta !== "" ? (
-            <span className="truncate t-muted" style={{ fontSize: "var(--text-xs)" }}>
+            <span className="truncate t-muted" style={{ fontSize: "var(--text-xs)", flex: "0 1 auto", minWidth: 0 }}>
               {row.meta}
             </span>
           ) : null}
@@ -184,7 +191,7 @@ export function PopupRows({
         <span
           className="t-mono t-muted truncate"
           dir="auto"
-          style={{ fontSize: "var(--text-xs)", maxWidth: "calc(var(--space-6) * 8)" }}
+          style={{ fontSize: "var(--text-xs)", maxWidth: "calc(var(--space-6) * 5)" }}
         >
           {row.preview}
         </span>
@@ -203,7 +210,7 @@ export function PopupRows({
       role="listbox"
       aria-label="Results"
       className="clavis-popup-rows clavis-scroll flex flex-col"
-      style={{ gap: "var(--space-1)", padding: "0 var(--space-2) var(--space-2)" }}
+      style={{ gap: 0, padding: "0 var(--space-2) calc(var(--space-1) / 2)" }}
     >
       {rows.map((row, i) => (
         <Fragment key={rowKeyOf(row)}>
@@ -220,17 +227,17 @@ export function PopupRows({
           <button
             type="button"
             className="glass-row flex items-center"
-            style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)", cursor: "pointer" }}
+            style={{ gap: "var(--space-2)", padding: "var(--space-1) var(--space-2)", minHeight: "var(--clavis-row-h)", cursor: "pointer" }}
             onClick={() => onCreateItem()}
           >
-            <Ix icon={Search} size="md" style={{ color: "var(--color-accent-text)" }} />
+            <Ix icon={Search} size="sm" style={{ color: "var(--color-accent-text)" }} />
             <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
               Nothing here yet. Press Ctrl+N to add your first item.
             </span>
           </button>
         ) : inGroup ? (
-          <div className="flex items-center" style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)" }}>
-            <Ix icon={Search} size="md" />
+          <div className="flex items-center" style={{ gap: "var(--space-2)", padding: "var(--space-1) var(--space-2)", minHeight: "var(--clavis-row-h)" }}>
+            <Ix icon={Search} size="sm" />
             <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
               Nothing found.
             </span>
@@ -239,10 +246,10 @@ export function PopupRows({
           <button
             type="button"
             className="glass-row flex items-center"
-            style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)", minHeight: "var(--clavis-row-h)", cursor: "pointer" }}
+            style={{ gap: "var(--space-2)", padding: "var(--space-1) var(--space-2)", minHeight: "var(--clavis-row-h)", cursor: "pointer" }}
             onClick={() => onCreateItem(query.trim())}
           >
-            <Ix icon={Search} size="md" style={{ color: "var(--color-accent-text)" }} />
+            <Ix icon={Search} size="sm" style={{ color: "var(--color-accent-text)" }} />
             <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
               Nothing found. Press Enter to create “{query.trim()}”.
             </span>

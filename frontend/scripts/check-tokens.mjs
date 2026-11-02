@@ -30,7 +30,7 @@ const ALLOWED_PATTERNS = [
   /min-width: 20px/, // globals.css scrollbar thumb
   /min\(\d+px/, // modal & popup width caps (440/560/640/720px) — window geometry
   /minmax\(170px, 1fr\)/, // the editor's Secret/Pinned responsive grid floor
-  /calc\(640px/, // the popup window's design width (matches Go popupWidth)
+  /calc\(440px/, // the popup window's compact design width (matches Go popupWidth, v1.9.0)
 ];
 
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/;

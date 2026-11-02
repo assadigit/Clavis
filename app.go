@@ -33,7 +33,7 @@ import (
 )
 
 // AppVersion is embedded in the exe and written into the data file.
-const AppVersion = "1.8.0"
+const AppVersion = "1.9.0"
 
 // shortcutTakenMessage is the §3.3 conflict message.
 const shortcutTakenMessage = "This shortcut is used by another app. Choose a different one."
@@ -322,7 +322,7 @@ func (c *Clavis) positionPopup() {
 	pw, ph := c.popupSize[0], c.popupSize[1]
 	c.popupMu.Unlock()
 	if pw <= 0 {
-		pw = 640 // the window IS the panel (solid window, no pad)
+		pw = popupWidthDefault // the window IS the panel (solid window, no pad; v1.9.0 compact width)
 	}
 	if ph <= 0 {
 		ph = popupHeightDefault // F-022 (UI-audit round 1 Phase 10): one constant, was a 200 drift

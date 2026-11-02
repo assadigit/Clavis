@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"clavis/internal/store"
 )
@@ -601,9 +602,18 @@ func TestDetectSharedDuplicatesThroughDispatch(t *testing.T) {
 // in the response; a stale merge is refused loudly.
 func TestMergeSharedDuplicatesThroughDispatch(t *testing.T) {
 	s := newTestService(t)
+	/* The merge picks the OLDEST copy, but three back-to-back creates can
+	   share one NowISO millisecond and fall to the random uuid tie-break —
+	   the test was flaky by clock luck. Advance a fake clock between the
+	   creates so `a` is strictly the oldest, every run. */
+	now := time.Now()
+	s.Store.SetClock(func() time.Time { return now })
 	a := mustCreateItem(t, s, "GitHub token", "ghp_shared_secret_1234", true)
+	now = now.Add(time.Second)
 	b := mustCreateItem(t, s, "GH_PAT", "ghp_shared_secret_1234", true)
+	now = now.Add(time.Second)
 	c := mustCreateItem(t, s, "repo C token", "ghp_shared_secret_1234", true)
+	now = now.Add(time.Second)
 	mustCreateGroup(t, s, "Repo A", a)
 	mustCreateGroup(t, s, "Repo B", b)
 	mustCreateGroup(t, s, "Repo C", c)

@@ -114,6 +114,13 @@ describe("Popup golden path", () => {
     expect(screen.getByText("••••••••tOKn")).toBeTruthy();
   });
 
+  it("Open Clavis is the primary CTA (v1.9.0: brand-blue button, not a ghost link)", () => {
+    setup();
+    const cta = screen.getByRole("button", { name: /Open Clavis/i });
+    expect(cta.className).toContain("clavis-btn-primary");
+    expect(cta.className).not.toContain("clavis-btn-ghost");
+  });
+
   it("type letters → Enter dispatches the copy and hides the popup", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const { call, onHide } = setup();

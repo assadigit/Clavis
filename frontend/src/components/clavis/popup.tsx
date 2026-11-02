@@ -8,6 +8,12 @@
  * (items AND groups; copying a whole group counts) — topped up to 10 rows
  * with pinned/most-used entries. Every open starts fresh: query cleared,
  * selection at the top, copy state cleared.
+ *
+ * v1.9.0 compact palette (DECISIONS.md §49, user request "make it 30–50%
+ * smaller"): the window is 440 DIP wide (was 640), rows are single-line on
+ * a 28px rhythm (was 48px two-line), and every chrome surface — search bar,
+ * drill-down header, footer keycaps — tightened around the token scale.
+ * "Open Clavis" is the primary CTA (Bitwarden brand blue).
  */
 "use client";
 
@@ -240,7 +246,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
             : {
                 position: "absolute",
                 top: "18vh",
-                width: "min(calc(640px + var(--window-shadow-pad) * 2), calc(100vw - var(--space-4)))",
+                width: "min(calc(440px + var(--window-shadow-pad) * 2), calc(100vw - var(--space-4)))",
                 padding: "var(--window-shadow-pad)",
                 pointerEvents: "none",
               }
@@ -254,7 +260,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 className="flex items-center"
                 style={{
                   gap: "var(--space-2)",
-                  padding: "var(--space-2) var(--space-3)",
+                  padding: "var(--space-1) var(--space-2)",
                   borderBottom: "1px solid var(--glass-border)",
                 }}
               >
@@ -278,7 +284,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 </span>
               </div>
             ) : null}
-            <div style={{ padding: "var(--space-3) var(--space-4)", borderBottom: "1px solid var(--glass-border)" }}>
+            <div style={{ padding: "var(--space-2) var(--space-3)", borderBottom: "1px solid var(--glass-border)" }}>
               <input
                 ref={inputRef}
                 autoFocus
@@ -297,10 +303,10 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 className="glass-input"
                 style={{
                   fontFamily: "var(--font-ui)",
-                  fontSize: "var(--text-lg)",
+                  fontSize: "var(--text-md)",
                   color: "var(--text)",
                   width: "100%",
-                  padding: "var(--space-2) var(--space-3)",
+                  padding: "var(--space-1) var(--space-2)",
                 }}
               />
             </div>
@@ -320,8 +326,8 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
               className="flex items-center"
               style={{
                 borderTop: "1px solid var(--glass-border)",
-                padding: "var(--space-2) var(--space-4)",
-                gap: "var(--space-4)",
+                padding: "var(--space-1) var(--space-3)",
+                gap: "var(--space-3)",
               }}
             >
               <span className="flex items-center" style={{ gap: "var(--space-1)" }}>
@@ -336,6 +342,8 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 <kbd className="clavis-keycap">Esc</kbd>
                 <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>Close</span>
               </span>
+              {/* v1.9.0 (user request): the popup's one affirmative action is
+                  the CTA — Bitwarden brand blue, white text, hover darkens. */}
               <button
                 type="button"
                 onClick={() => {
@@ -343,11 +351,11 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                   onOpenManager();
                 }}
                 title="Open the full Clavis window (Esc closes the popup)"
-                className="clavis-btn clavis-btn-ghost clavis-focusable ml-auto flex items-center"
-                style={{ gap: "var(--space-1)", padding: "var(--space-1) var(--space-2)", flexShrink: 0 }}
+                className="clavis-btn clavis-btn-primary clavis-focusable ml-auto flex items-center"
+                style={{ gap: "var(--space-1)", padding: "var(--space-1) var(--space-3)", flexShrink: 0 }}
               >
                 <Ix icon={AppWindow} size="sm" />
-                <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)" }}>
+                <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-semibold)" }}>
                   Open Clavis
                 </span>
               </button>

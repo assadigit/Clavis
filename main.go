@@ -30,8 +30,11 @@ var appIcon []byte
 var trayIcon []byte
 
 const (
-	popupWidthDefault  = 640 // the window IS the panel (solid window, no pad)
-	popupHeightDefault = 208
+	/* v1.9.0 compact palette (DECISIONS.md §49): 440 DIP wide (was 640) —
+	   the frontend's popup.tsx and check-tokens.mjs allowlist mirror this
+	   number, and app.go's positionPopup fallback uses the constant. */
+	popupWidthDefault  = 440 // the window IS the panel (solid window, no pad)
+	popupHeightDefault = 148 // compact chrome (search + footer + ~2 rows); the webview re-measures on show
 )
 
 func dataDir() string {
