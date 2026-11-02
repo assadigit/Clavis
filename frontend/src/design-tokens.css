@@ -102,10 +102,13 @@
   --tracking-label: 0.05em;  /* uppercase section labels */
   --tracking-input: 0.02em;  /* small field labels */
 
-  /* ---- Spacing / shape (8px rhythm) ---- */
+  /* ---- Spacing / shape (8px rhythm) ----
+     v1.10.0 "rounded and modern": panel 8→12, row 6→8 — softer cards,
+     dialogs and controls; the WINDOW edges are rounded natively by the
+     Windows 11 DWM (main.go), not by these tokens. */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
-  --radius-panel: 8px;    /* cards, dialogs, the window frame */
-  --radius-row: 6px;      /* buttons, inputs, rows, menus */
+  --radius-panel: 12px;   /* cards, dialogs, floating panels */
+  --radius-row: 8px;      /* buttons, inputs, rows, menus */
   --radius-chip: 999px;
   --window-shadow-pad: 32px; /* transparent margin around a panel so the CSS shadow is not clipped */
 

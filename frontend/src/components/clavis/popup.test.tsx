@@ -82,7 +82,7 @@ function setup(overrides: Partial<Parameters<typeof Popup>[0]> = {}) {
   const onOpenManagerNewItem = vi.fn();
   const onOpenManager = vi.fn();
   const onReportSelection = vi.fn();
-  render(
+  const view = render(
     <Popup
       open
       onHide={onHide}
@@ -96,7 +96,7 @@ function setup(overrides: Partial<Parameters<typeof Popup>[0]> = {}) {
     />,
   );
   const input = screen.getByLabelText("Search Clavis");
-  return { call, onHide, onOpenManagerNewItem, input };
+  return { call, onHide, onOpenManagerNewItem, input, container: view.container };
 }
 
 beforeEach(() => {
@@ -119,6 +119,14 @@ describe("Popup golden path", () => {
     const cta = screen.getByRole("button", { name: /Open Clavis/i });
     expect(cta.className).toContain("clavis-btn-primary");
     expect(cta.className).not.toContain("clavis-btn-ghost");
+  });
+
+  it("web edition: the panel floats at the vertical middle (v1.10.0: center + middle aligned, like the desktop)", () => {
+    const { container } = setup({ fill: undefined });
+    const holder = container.querySelector<HTMLElement>(".clavis-pop-in")?.parentElement;
+    expect(holder).toBeTruthy();
+    expect(holder?.style.top).toBe("50%");
+    expect(holder?.style.transform).toBe("translateY(-50%)");
   });
 
   it("type letters → Enter dispatches the copy and hides the popup", async () => {

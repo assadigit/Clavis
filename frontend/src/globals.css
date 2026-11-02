@@ -460,16 +460,29 @@ html.solid .clavis-keycap { background: var(--solid-surface-raised); }
 /* ==========================================================================
    Desktop window recipes (Wails edition).
    The windows are solid + frameless; the app draws its own surfaces.
+   v1.10.0 "modern edges": the DWM frame decorations are ON (main.go), so
+   Windows 11 rounds both windows' corners natively and draws the Aero
+   shadow — the panels themselves must reach the window edge SQUARE (any
+   CSS radius here would cut inside the OS arc and, in dark mode, flash
+   the white window background as corner wedges).
    ========================================================================== */
 
-/* Popup window: the scrim only catches clicks on the transparent margin —
-   it must stay invisible so the shadow margin stays truly transparent. */
+/* Popup window: the panel IS the window — no CSS rounding, the OS owns the
+   corners. The scrim only catches clicks on the transparent margin — it
+   must stay invisible so the margin stays truly transparent. */
+.clavis-desk-popup .glass-panel {
+  border-radius: 0;
+}
 .clavis-desk-popup .clavis-scrim {
   background: transparent;
 }
+.clavis-desk-popup .clavis-backdrop-layer {
+  border-radius: 0;
+}
 
 /* Manager window: the window is solid + frameless and this wrapper
-   fills it edge to edge (§3.4). The old transparent-margin "floating frame"
+   fills it edge to edge (§3.4) — the DWM owns the rounded corners and the
+   shadow (v1.10.0). The old transparent-margin "floating frame"
    showed a gray slab on some Windows 10 setups — removed. */
 .clavis-desk-manager,
 .clavis-desk-manager.is-max {

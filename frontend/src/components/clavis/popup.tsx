@@ -14,6 +14,11 @@
  * a 28px rhythm (was 48px two-line), and every chrome surface — search bar,
  * drill-down header, footer keycaps — tightened around the token scale.
  * "Open Clavis" is the primary CTA (Bitwarden brand blue).
+ *
+ * v1.10.0 (DECISIONS.md §50): the desktop window is CENTERED on screen both
+ * ways (Go popupmath — Spotlight style), the OS rounds its corners (DWM
+ * frame), and the web edition mirrors the placement: the floating panel
+ * sits at the vertical middle instead of 18vh.
  */
 "use client";
 
@@ -244,8 +249,12 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 inset: 0,
               }
             : {
+                /* Web edition: mirrors the desktop placement (v1.10.0) —
+                   horizontally centered by the flex parent, vertically at the
+                   middle of the viewport (was 18vh). */
                 position: "absolute",
-                top: "18vh",
+                top: "50%",
+                transform: "translateY(-50%)",
                 width: "min(calc(440px + var(--window-shadow-pad) * 2), calc(100vw - var(--space-4)))",
                 padding: "var(--window-shadow-pad)",
                 pointerEvents: "none",

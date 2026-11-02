@@ -65,16 +65,16 @@ Companion file: `frontend/src/design-tokens.css` (all colors, glass, type, spaci
 - Pressing the shortcut while the popup is open hides it (toggle).
 
 ### 3.3b Popup window behavior
-- Frameless, transparent webview, always on top, no taskbar entry, skips the taskbar and Alt-Tab.
-- Centered horizontally, positioned in the upper third of the screen the mouse cursor is on.
+- Frameless, solid webview, always on top, no taskbar entry, skips the taskbar and Alt-Tab.
+- Centered on the screen the mouse cursor is on — horizontally AND vertically (v1.10.0: the Spotlight/PowerToys-Run "Centered" placement; was the upper third). The window re-centers itself whenever its height changes, so the palette grows and shrinks symmetrically around the middle while you type.
 - Hides when it loses focus, and on Esc.
 - Opens with the search box focused and the previous query cleared; every open starts from a clean state (query, selection, drill position and copy feedback are reset — a leftover copy state must never block typing).
-- Size: 640 px wide panel (plus the shadow margin, see tokens). Height grows with the number of rows, up to 10 rows visible, then scrolls.
+- Size: 440 px wide panel (v1.9.0 compact). Height grows with the number of rows, up to 10 rows visible, then scrolls.
 - The footer carries a clear **Open Clavis** button that closes the popup and shows the Manager window.
 - The popup **never** shows secret values in full. See 5.2.
 
 ### 3.4 Manager window
-- Normal resizable window, default 1000×680, minimum 760×520, frameless with a custom title bar drawn by the app (minimize, maximize, close), transparent webview, self-drawn rounded corners (Windows 10 frameless windows are square otherwise).
+- Normal resizable window, default 1000×680, minimum 760×520, frameless with a custom title bar drawn by the app (minimize, maximize, close), solid webview. The DWM frame decorations stay on (v1.10.0) so Windows 11 rounds the window's corners and draws its shadow natively; Windows 10 falls back to square corners.
 - Remembers its size and position.
 
 ---

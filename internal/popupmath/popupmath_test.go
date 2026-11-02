@@ -22,21 +22,21 @@ func TestOrigin(t *testing.T) {
 		panelW, panelH int
 		wantX, wantY   int
 	}{
-		/* 100%: DIP == physical; centered, upper third. */
-		{"100% primary", 0, 0, 1920, 1040, 1.0, 640, 360, 640, 187},
+		/* 100%: DIP == physical; dead-center both ways (v1.10.0). */
+		{"100% primary", 0, 0, 1920, 1040, 1.0, 640, 360, 640, 340},
 		/* 150%: 2880x1560 physical is the same 1920x1040 DIP geometry —
 		   the panel must land exactly where it does at 100%. */
-		{"150% primary", 0, 0, 2880, 1560, 1.5, 640, 360, 640, 187},
+		{"150% primary", 0, 0, 2880, 1560, 1.5, 640, 360, 640, 340},
 		/* 125% secondary monitor placed left of the primary (negative
 		   physical origin) — the origin must convert before centering. */
-		{"125% secondary left of primary", -3840, 0, 3840, 2080, 1.25, 640, 360, -1856, 299},
+		{"125% secondary left of primary", -3840, 0, 3840, 2080, 1.25, 640, 360, -1856, 652},
 		/* Panel taller than the work area clamps to the top edge. */
 		{"taller panel clamps to top", 0, 0, 800, 400, 1.0, 640, 900, 80, 0},
 		/* Panel wider than the work area clamps to the left edge. */
-		{"wider panel clamps to left", 0, 0, 600, 1040, 1.0, 640, 360, 0, 187},
+		{"wider panel clamps to left", 0, 0, 600, 1040, 1.0, 640, 360, 0, 340},
 		/* A zero scale (unpopulated by the screen service) must not
 		   divide by zero — it degrades to 100%. */
-		{"zero scale guarded", 0, 0, 1920, 1040, 0, 640, 360, 640, 187},
+		{"zero scale guarded", 0, 0, 1920, 1040, 0, 640, 360, 640, 340},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

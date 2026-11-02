@@ -109,8 +109,11 @@ func main() {
 		mgrW, mgrH, mgrX, mgrY = b.W, b.H, b.X, b.Y
 	}
 
-	// The Popup (§3.3b): frameless, transparent, always on top, no taskbar
-	// entry, hidden until the shortcut/tray shows it.
+	// The Popup (§3.3b): frameless, always on top, no taskbar entry,
+	// hidden until the shortcut/tray shows it. v1.10.0: the DWM frame
+	// decorations stay ON (no DisableFramelessWindowDecorations) so
+	// Windows 11 rounds the corners and draws the Aero shadow — the
+	// "modern edges" look, native; Windows 10 falls back to square.
 	popup := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "popup",
 		Title:            "Clavis",
@@ -126,9 +129,8 @@ func main() {
 		BackgroundColour: application.NewRGBA(0xFF, 0xFF, 0xFF, 0xFF), /* popup panel: white (Bitwarden light) */
 		HideOnFocusLost:  true,                                        // §3.3b: hides when it loses focus
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar:                   true,       // no taskbar entry
-			ExStyle:                           0x00000080, // WS_EX_TOOLWINDOW — skip Alt-Tab
-			DisableFramelessWindowDecorations: true,
+			HiddenOnTaskbar: true,       // no taskbar entry
+			ExStyle:         0x00000080, // WS_EX_TOOLWINDOW — skip Alt-Tab
 		},
 	})
 	popup.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
@@ -137,7 +139,9 @@ func main() {
 	})
 
 	// The Manager (§3.4): normal resizable window, frameless with the app's
-	// own title bar, remembers its bounds.
+	// own title bar, remembers its bounds. v1.10.0: DWM frame decorations
+	// stay ON — native Windows 11 rounded corners + shadow (square on
+	// Windows 10, the OS standard there).
 	managerOpts := application.WebviewWindowOptions{
 		Name:             "manager",
 		Title:            "Clavis",
@@ -150,9 +154,6 @@ func main() {
 		BackgroundType:   application.BackgroundTypeSolid,
 		BackgroundColour: application.NewRGBA(0xF3, 0xF6, 0xF9, 0xFF), /* --backdrop-base (Bitwarden canvas) */
 		Hidden:           hidden,                                      // --hidden (autostart): tray only (§3.1)
-		Windows: application.WindowsWindow{
-			DisableFramelessWindowDecorations: true,
-		},
 	}
 	if mgrX >= 0 || mgrY >= 0 {
 		managerOpts.X = mgrX

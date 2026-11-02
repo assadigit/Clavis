@@ -13,10 +13,12 @@ package popupmath
 
 import "math"
 
-// Origin returns the popup origin in DIP: horizontally centered on the
-// work area, in the upper third (§3.3b), clamped so the whole panel stays
-// inside. A non-positive scale (unpopulated by the screen service) degrades
-// to 100%.
+// Origin returns the popup origin in DIP: centered BOTH ways on the work
+// area (v1.10.0: the user asked for "center and middle aligned, horizontal
+// and vertical" — the macOS-Spotlight / PowerToys-Run "Centered" look,
+// replacing the old upper-third placement), clamped so the whole panel
+// stays inside. A non-positive scale (unpopulated by the screen service)
+// degrades to 100%.
 func Origin(waX, waY, waW, waH int, scale float64, panelW, panelH int) (x, y int) {
 	if scale <= 0 {
 		scale = 1
@@ -25,7 +27,7 @@ func Origin(waX, waY, waW, waH int, scale float64, panelW, panelH int) (x, y int
 	x0, y0 := toDIP(waX), toDIP(waY)
 	aw, ah := toDIP(waW), toDIP(waH)
 	x = x0 + (aw-panelW)/2
-	y = y0 + int(float64(ah)*0.18)
+	y = y0 + (ah-panelH)/2
 	// Keep the whole panel inside the work area.
 	if x < x0 {
 		x = x0

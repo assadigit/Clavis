@@ -311,8 +311,9 @@ function ManagerRoot() {
 
   return (
     <>
-      {/* The floating glass frame: the window is transparent and frameless;
-          the app draws its rounded surface + shadow inside the pad (§7). */}
+      {/* The app surface fills the frameless window edge to edge; since
+          v1.10.0 the Windows 11 DWM rounds the window's corners and draws
+          its shadow natively (main.go keeps the frame decorations on). */}
       <div className={maximized ? "clavis-desk-manager is-max" : "clavis-desk-manager"}>
         <div className="clavis-window-frame clavis-desk-frame">{body}</div>
       </div>

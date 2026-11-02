@@ -33,7 +33,7 @@ import (
 )
 
 // AppVersion is embedded in the exe and written into the data file.
-const AppVersion = "1.9.0"
+const AppVersion = "1.10.0"
 
 // shortcutTakenMessage is the §3.3 conflict message.
 const shortcutTakenMessage = "This shortcut is used by another app. Choose a different one."
@@ -110,13 +110,21 @@ func (c *Clavis) HidePopup() {
 }
 
 // SetPopupSize is driven by the popup content (the window IS the panel;
-// height grows with rows, §3.3b).
+// height grows with rows, §3.3b). v1.10.0: the palette is centered on the
+// work area, so a height change must RE-CENTER the window while it is
+// visible — otherwise the panel grows downward from its old origin and the
+// "middle" drifts every time rows come and go. (The hidden window is
+// positioned fresh on every show anyway.)
 func (c *Clavis) SetPopupSize(w, h int) {
 	c.popupMu.Lock()
 	c.popupSize = [2]int{w, h}
 	c.popupMu.Unlock()
-	if c.popup != nil {
-		c.popup.SetSize(w, h)
+	if c.popup == nil {
+		return
+	}
+	c.popup.SetSize(w, h)
+	if c.popup.IsVisible() {
+		c.positionPopup()
 	}
 }
 
@@ -290,11 +298,11 @@ func (c *Clavis) hidePopup() {
 	}
 }
 
-// positionPopup centers the panel horizontally and places it in the upper
-// third of the screen the mouse cursor is on (§3.3b). All coordinates are
-// converted explicitly: the screen pick compares the PHYSICAL cursor point
-// against PhysicalBounds, and the final origin is DIP — the unit
-// SetPosition expects.
+// positionPopup centers the panel on the screen the mouse cursor is on,
+// BOTH axes (v1.10.0: "center and middle aligned, horizontal and vertical"
+// — the Spotlight look; was the upper third). All coordinates are converted
+// explicitly: the screen pick compares the PHYSICAL cursor point against
+// PhysicalBounds, and the final origin is DIP — the unit SetPosition expects.
 func (c *Clavis) positionPopup() {
 	if c.app == nil {
 		return
