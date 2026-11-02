@@ -15,12 +15,21 @@ Copied secrets are automatically kept out of the Windows clipboard history
 - **Keyboard-first quick search** — fuzzy matching, `#tag` and `@category`
   filters, groups open with `→`, whole-group copy as `KEY=value` lines with
   dotenv quoting.
+- **Shared credentials** — define a token once (e.g. your GitHub token),
+  mark it *Shared*, then add it to any project group with one click from the
+  Manage items screen; the sidebar's Shared view lists them all.
 - **Two group modes** — "Add items one by one" (named credentials, each with
   its own Copy button, added inside the open group) or "Paste whole document"
   (an entire markdown/text file stored byte-exact, one prominent Copy button
-  that hands back the identical bytes, re-paste to replace it later). Classic
-  groups can still be built by pasting a whole project's `.env`; "Copy all as
-  markdown" exports any group.
+  that hands back the identical bytes, re-paste to replace it later). The
+  bulk paste accepts more than strict `.env`: `KEY=value`, spaced
+  `KEY = value`, `Name: value` and markdown bullets all become items, and a
+  paste that parses to nothing is rejected loudly instead of vanishing into
+  an empty group. "Copy all as markdown" exports any group.
+- **Deletions are final** — every delete is remembered in a tombstone log;
+  imports, fragments, backups and stale copies can never bring a deleted
+  credential back live. Deleted-on-purpose things (restore, undo, restoring
+  a backup that held the entry live) are never fought.
 - **Safe by design** — atomic writes, automatic daily backups (plus backups
   before every import/migration), corrupt-file auto-recovery, a read-only
   guard for files from newer versions.

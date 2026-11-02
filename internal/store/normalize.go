@@ -123,6 +123,7 @@ func NormalizeVault(parsed any, appVersion string, nowISO string, newID func() s
 			CategoryID: normStrPtr(i["categoryId"]),
 			Tags:       normStrArr(i["tags"]),
 			IsSecret:   normBool(i["isSecret"], true),
+			Shared:     normBool(i["shared"], false),
 			Pinned:     normBool(i["pinned"], false),
 			UseCount:   num(i["useCount"]),
 			LastUsedAt: normStrPtr(i["lastUsedAt"]),

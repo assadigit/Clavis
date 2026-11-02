@@ -1,18 +1,25 @@
 /**
- * CLAVIS — deletion tombstones (v1.4.1, DECISIONS.md §42).
+ * CLAVIS — deletion tombstones (v1.4.1, DECISIONS.md §42; hardened v1.6.0,
+ * DECISIONS.md §46).
  *
  * The user report: deleted entries kept coming back — a stale copy of the
  * app or a backup-recovery had re-written them into the data file as live.
  * The tombstone log is the guarantee that cannot happen silently anymore:
  * every delete is remembered in deletions.json, and whenever the vault is
- * loaded (start, recovery, reopen), any entry the file shows as LIVE but
- * that carries a tombstone is moved straight back to the Trash — with a
- * banner explaining what happened. Intentional un-deletes (Restore from
- * Trash, Undo, Restore backup) clear the tombstone, so nothing the user
- * does on purpose is ever fought.
+ * loaded (start, recovery, reopen) — or changed by an IMPORT (v1.6.0) — any
+ * entry the file shows as LIVE but that carries a tombstone is moved
+ * straight back to the Trash, with a banner explaining what happened.
+ * Intentional un-deletes (Restore from Trash, Undo, Restore backup) clear
+ * the tombstone, so nothing the user does on purpose is ever fought.
  *
- * Retention: tombstones older than 90 days are pruned on write — far beyond
- * the 10-daily-backup window that could ever resurrect an entry.
+ * v1.6.0 retention: tombstones no longer age out. The ten newest DAILY
+ * backups are kept FOREVER, so a tombstone that expired while such a backup
+ * still held the entry live could be defeated by a damage-recovery — the
+ * 90-day prune of v1.4.1 was shorter-sighted than the backup policy it
+ * guarded against. The log is bounded by count instead (newest 10000
+ * tombstones): even a maximal log is a few hundred KB, and 10000 deletions
+ * is years of use. Hard purges (delete forever, empty trash, the 30-day
+ * trash purge) now WRITE tombstones too, so "gone" stays gone.
  */
 package store
 
@@ -23,9 +30,6 @@ import (
 	"strconv"
 	"time"
 )
-
-// tombstoneKeepDays bounds how long a deletion is remembered.
-const tombstoneKeepDays = 90
 
 // tombstoneMax bounds the log size (newest kept).
 const tombstoneMax = 10000
@@ -53,25 +57,18 @@ func (s *Store) loadTombsLocked() map[string]string {
 	return parsed.Deleted
 }
 
-// saveTombsLocked prunes, stores in memory and writes the log atomically.
-// Best-effort by design: the primary delete already persisted; the log is
-// the safety net, and its failure must never fail the user's action.
+// saveTombsLocked stores the log in memory and writes it atomically, keeping
+// only the newest tombstoneMax entries. Best-effort by design: the primary
+// delete already persisted; the log is the safety net, and its failure must
+// never fail the user's action.
 func (s *Store) saveTombsLocked(m map[string]string) {
-	cutoff := s.now().AddDate(0, 0, -tombstoneKeepDays)
-	pruned := make(map[string]string, len(m))
-	for id, iso := range m {
-		if t := parseISO(iso); !t.IsZero() && t.Before(cutoff) {
-			continue
-		}
-		pruned[id] = iso
-	}
-	if len(pruned) > tombstoneMax {
+	if len(m) > tombstoneMax {
 		type kv struct {
 			k string
 			t time.Time
 		}
-		all := make([]kv, 0, len(pruned))
-		for id, iso := range pruned {
+		all := make([]kv, 0, len(m))
+		for id, iso := range m {
 			all = append(all, kv{id, parseISO(iso)})
 		}
 		for i := 1; i < len(all); i++ {
@@ -81,12 +78,12 @@ func (s *Store) saveTombsLocked(m map[string]string) {
 		}
 		keep := make(map[string]string, tombstoneMax)
 		for _, e := range all[len(all)-tombstoneMax:] {
-			keep[e.k] = pruned[e.k]
+			keep[e.k] = m[e.k]
 		}
-		pruned = keep
+		m = keep
 	}
-	s.tombs = pruned
-	jsonBytes, err := json.MarshalIndent(tombstoneFile{Version: 1, Deleted: pruned}, "", "  ")
+	s.tombs = m
+	jsonBytes, err := json.MarshalIndent(tombstoneFile{Version: 1, Deleted: m}, "", "  ")
 	if err != nil {
 		return
 	}
@@ -104,6 +101,23 @@ func (s *Store) addTombLocked(id, iso string) {
 		m[k] = v
 	}
 	m[id] = iso
+	s.saveTombsLocked(m)
+}
+
+// addTombsLocked remembers several deletions at once (hard purges: delete
+// forever, empty trash, the 30-day trash purge — v1.6.0: a purged entry can
+// never be resurrected live by an import, a fragment merge or a backup).
+func (s *Store) addTombsLocked(ids []string, iso string) {
+	if len(ids) == 0 {
+		return
+	}
+	m := make(map[string]string, len(s.tombs)+len(ids))
+	for k, v := range s.tombs {
+		m[k] = v
+	}
+	for _, id := range ids {
+		m[id] = iso
+	}
 	s.saveTombsLocked(m)
 }
 
@@ -133,15 +147,13 @@ func (s *Store) removeTombLocked(ids ...string) {
 	s.saveTombsLocked(m)
 }
 
-// clearTombsLocked forgets every deletion (Restore backup: the user has
-// explicitly chosen a past state).
-func (s *Store) clearTombsLocked() {
-	s.saveTombsLocked(map[string]string{})
-}
-
 // applyTombsLocked moves every LIVE entry that carries a tombstone back to
 // the Trash (deletedAt = the original delete time). Returns how many were
 // re-deleted. Caller holds s.mu; the caller persists and notifies when > 0.
+//
+// v1.6.0 (DECISIONS.md §46): also used by the IMPORT paths — an imported
+// backup/fragment that carries a tombstoned entry back as live is corrected
+// in the SAME action, not at the next app start.
 func (s *Store) applyTombsLocked() int {
 	if len(s.tombs) == 0 || s.readOnly {
 		return 0
@@ -168,6 +180,22 @@ func (s *Store) applyTombsLocked() int {
 		}
 	}
 	return n
+}
+
+// enforceTombsLocked applies the tombstone log to the CURRENT in-memory
+// vault and sets the banner when anything was corrected. It is the
+// import-time twin of finishLoadLocked's apply step (v1.6.0, DECISIONS §46):
+// an imported backup or fragment that carries a tombstoned entry back as
+// LIVE is moved to the Trash in the SAME action — never shown live, never
+// left for the next app start. Caller holds s.mu and persists afterwards.
+func (s *Store) enforceTombsLocked() {
+	if n := s.applyTombsLocked(); n > 0 {
+		notice := tombstoneNotice(n)
+		if s.recoveredNotice != nil {
+			notice = *s.recoveredNotice + " " + notice
+		}
+		s.recoveredNotice = &notice
+	}
 }
 
 // tombstoneNotice is the banner shown after tombstones were re-applied.

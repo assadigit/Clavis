@@ -70,6 +70,11 @@ export function EntryList({
     } else if (filter.view === "recent") {
       items = items.filter((i) => i.lastUsedAt !== null);
       groups = groups.filter((g) => g.lastUsedAt !== null);
+    } else if (filter.view === "shared") {
+      /* v1.6.0 (DECISIONS §44): the Shared view lists shared credentials —
+       *  items only; groups can't be shared. */
+      items = items.filter((i) => i.shared === true);
+      groups = [];
     } else if (filter.view === "category") {
       /* v1.4.0: a category view includes every descendant category's
        * entries (DECISIONS.md §41) — “Projects” shows Hibana's keys too. */
@@ -128,6 +133,7 @@ export function EntryList({
         isSecret: it?.isSecret ?? false,
         pinned: e.pinned,
         shared: shared.get(e.id) ?? 0,
+        isShared: it?.shared === true,
       };
     });
   }, [data, entries, filter, query]);
@@ -302,7 +308,9 @@ export function EntryList({
               <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
                 {filter.view === "recent" && query.trim() === ""
                   ? "Nothing used yet — copy an entry and it shows up here."
-                  : "Nothing found."}
+                  : filter.view === "shared" && query.trim() === ""
+                    ? "No shared credentials yet — open an item and turn on Shared to define one."
+                    : "Nothing found."}
               </span>
             </div>
           ) : null}

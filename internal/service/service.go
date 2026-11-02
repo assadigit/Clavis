@@ -178,6 +178,14 @@ func (s *Service) writeToClipboard(text string, containsSecret bool) bool {
 	return clipboard.WriteText(text, containsSecret)
 }
 
+// SetClipboardSeam exposes the clipboard test seam for the e2e browser
+// bridge (tools/e2e-bridge): the real Win32 writer is Windows-only, so the
+// bridge simulates a working clipboard to verify the copy flows end-to-end.
+// Production code leaves it unset.
+func (s *Service) SetClipboardSeam(f func(text string, secret bool) bool) {
+	s.writeClipboard = f
+}
+
 // GetState returns the full snapshot for the frontend.
 func (s *Service) GetState() StateEnvelope {
 	return redactState(s.Store.State(), osTransparency())
@@ -310,6 +318,7 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 				CategoryID: getStrPtr(input, "categoryId"),
 				Tags:       getStrArr(input, "tags"),
 				IsSecret:   getBool(input, "isSecret"),
+				Shared:     deref(getBool(input, "shared")), // v1.6.0 §44
 				Pinned:     deref(getBool(input, "pinned")),
 			})
 			if err != nil {
@@ -328,6 +337,7 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 				CategoryID: catPtrOf(patch),
 				Tags:       tagsPtrOf(patch),
 				IsSecret:   getBool(patch, "isSecret"),
+				Shared:     getBool(patch, "shared"), // v1.6.0 §44
 				Pinned:     getBool(patch, "pinned"),
 			})
 			if err != nil {
@@ -346,6 +356,7 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 				CategoryID: catPtrOf(patch),
 				Tags:       tagsPtrOf(patch),
 				IsSecret:   getBool(patch, "isSecret"),
+				Shared:     getBool(patch, "shared"), // v1.6.0 §44
 				Pinned:     getBool(patch, "pinned"),
 			})
 			if err != nil {
@@ -439,6 +450,7 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 				CategoryID: getStrPtr(input, "categoryId"),
 				Tags:       getStrArr(input, "tags"),
 				IsSecret:   getBool(input, "isSecret"),
+				Shared:     deref(getBool(input, "shared")), // v1.6.0 §44
 			})
 			if err != nil {
 				return FailErr(err)

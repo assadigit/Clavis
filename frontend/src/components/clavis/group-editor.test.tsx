@@ -153,3 +153,56 @@ describe("GroupEditor smoke", () => {
     expect(downloadExport).toHaveBeenCalledWith("group-json", "fake-group-1");
   });
 });
+
+/* -------- v1.6.0 (DECISIONS §45): tolerant paste in create mode -------- */
+
+describe("GroupEditor tolerant paste (v1.6.0)", () => {
+  function setupCreate() {
+    const call = vi.fn(async (action: string, _payload?: { input?: { text?: string } }) => {
+      if (action === "createGroupFromEnv") return { ok: true, status: 200, id: "fake-new-group" };
+      return { ok: true, status: 200 };
+    }) as unknown as CallFn;
+    render(
+      <GroupEditor
+        mode="create"
+        state={state()}
+        call={call}
+        readOnly={false}
+        onDone={vi.fn()}
+        onSelectEntry={vi.fn()}
+        deleteEntry={vi.fn()}
+        onCancelCreate={vi.fn()}
+      />,
+    );
+    return { call };
+  }
+
+  it("colon-style pastes preview their keys and save through createGroupFromEnv (the empty-group bug)", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { call } = setupCreate();
+    /* A paste that the old strict KEY=value parser rejected outright. */
+    await user.type(screen.getByLabelText(/Paste your credentials/i), "GitHub token: ghp_abc\nOpenAI key: sk-xyz");
+    /* Live preview recognizes both credentials (name → autoKey). */
+    expect(await screen.findByText("2 credentials:")).toBeTruthy();
+    expect(screen.getByText("GITHUB_TOKEN")).toBeTruthy();
+    expect(screen.getByText("OPENAI_KEY")).toBeTruthy();
+    /* Name + Save → createGroupFromEnv carries the pasted text. */
+    await user.type(screen.getByLabelText("Name", { selector: "input" }), "FAKE Project");
+    await user.click(screen.getByRole("button", { name: /Create group \+ 2 credentials/i }));
+    const createCall = vi.mocked(call).mock.calls.find(([a]) => a === "createGroupFromEnv");
+    expect(createCall).toBeTruthy();
+    expect((createCall?.[1] as { input: { text: string } }).input.text).toContain("ghp_abc");
+  });
+
+  it("blocks saving when pasted text has no parsable credentials (no silent empty group)", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { call } = setupCreate();
+    await user.type(screen.getByLabelText(/Paste your credentials/i), "just prose with no separator");
+    expect(await screen.findByText(/No credentials recognized yet/i)).toBeTruthy();
+    await user.type(screen.getByLabelText("Name", { selector: "input" }), "FAKE Oops");
+    await user.click(screen.getByRole("button", { name: "Create group" }));
+    /* The unparsable paste must NOT be discarded into an empty group. */
+    expect(vi.mocked(call).mock.calls.find(([a]) => a === "createGroupFromEnv")).toBeUndefined();
+    expect(vi.mocked(call).mock.calls.find(([a]) => a === "createGroup")).toBeUndefined();
+  });
+});

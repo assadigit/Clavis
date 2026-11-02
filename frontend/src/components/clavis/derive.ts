@@ -43,6 +43,14 @@ export function groupsContaining(data: VaultData, itemId: string): Group[] {
   return liveGroups(data).filter((g) => g.itemIds.includes(itemId));
 }
 
+/** Shared credentials (v1.6.0, DECISIONS §44): live items flagged shared —
+ *  defined once (e.g. a GitHub token for every repo), added to any number of
+ *  project groups. Shown in the sidebar's Shared view and offered as
+ *  quick-add chips in the Manage items modal. */
+export function sharedItems(data: VaultData): Item[] {
+  return liveItems(data).filter((i) => i.shared === true);
+}
+
 /** itemId → number of live groups referencing it. */
 export function sharedCountMap(data: VaultData): Map<string, number> {
   const map = new Map<string, number>();

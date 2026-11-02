@@ -6,7 +6,7 @@
 
 export const CURRENT_SCHEMA_VERSION = 1;
 // Bumped by the release workflow (release.yml compares the tag with this).
-export const APP_VERSION = "1.5.0";
+export const APP_VERSION = "1.6.0";
 
 export type EntryKind = "item" | "group";
 
@@ -36,6 +36,10 @@ export interface Item {
   categoryId: string | null;
   tags: string[];
   isSecret: boolean;
+  /** Shared credential (v1.6.0, DECISIONS §44): defined once — e.g. a
+   *  GitHub token that works for every repo — then added to any number of
+   *  project groups via Manage items. Mirrors Go's omitempty (absent = false). */
+  shared?: boolean;
   pinned: boolean;
   useCount: number;
   lastUsedAt: string | null;

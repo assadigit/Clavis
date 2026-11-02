@@ -1313,3 +1313,338 @@ func TestTmpFilesUniqueAndSwept(t *testing.T) {
 		t.Fatal("a leftover tmp file from a dead writer must be swept on open")
 	}
 }
+
+/* ---------------- v1.6.0: tombstones are final (DECISIONS.md §46) ---------------- */
+
+// Delete forever is FINAL: even a backup that still carries the entry (or a
+// stale file rewrite) can never bring it back live.
+func TestPurgeEntryIsFinalAgainstImports(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "GitHub token", "v")
+	backup, err := f.s.ExportBackupString()
+	if err != nil {
+		t.Fatalf("ExportBackupString: %v", err)
+	}
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if err := f.s.PurgeEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("PurgeEntry: %v", err)
+	}
+
+	// The old backup still carries the entry live — importing it back must
+	// NOT resurrect it into the live list.
+	if _, err := f.s.ImportBackup("replace", backup); err != nil {
+		t.Fatalf("ImportBackup replace: %v", err)
+	}
+	st := f.s.State()
+	if !isDeleted(st, KindItem, a.ID) {
+		t.Fatal("a purged entry that an import brings back must land in the Trash, never live")
+	}
+	if st.RecoveredNotice == nil {
+		t.Fatal("the correction must be explained by a banner")
+	}
+}
+
+func TestImportMergeEnforcesTombstones(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Shared API key", "v")
+	backup, err := f.s.ExportBackupString()
+	if err != nil {
+		t.Fatalf("ExportBackupString: %v", err)
+	}
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if _, err := f.s.ImportBackup("merge", backup); err != nil {
+		t.Fatalf("ImportBackup merge: %v", err)
+	}
+	if !isDeleted(f.s.State(), KindItem, a.ID) {
+		t.Fatal("merge import must not resurrect a deleted entry as live")
+	}
+}
+
+// A fragment (per-entry JSON export) is not an intentional un-delete either.
+func TestFragmentImportEnforcesTombstones(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Fragment key", "v")
+	frag, err := f.s.ExportEntryFragment(KindItem, a.ID)
+	if err != nil {
+		t.Fatalf("ExportEntryFragment: %v", err)
+	}
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	if err := f.s.PurgeEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("PurgeEntry: %v", err)
+	}
+	if _, err := f.s.ImportBackup("merge", frag.Body); err != nil {
+		t.Fatalf("ImportBackup(fragment) merge: %v", err)
+	}
+	if !isDeleted(f.s.State(), KindItem, a.ID) {
+		t.Fatal("a fragment that carries a purged entry back must see it go to the Trash")
+	}
+}
+
+// Restoring a backup forgets tombstones ONLY for entries the backup itself
+// contains — older deletions (entries absent from the backup) keep their
+// tombstones and cannot sneak back live through a later resurrection.
+func TestRestoreBackupKeepsAbsentTombstones(t *testing.T) {
+	f := newFixture(t)
+	old := mustItem(t, f.s, "Deleted before backup", "v")
+	if _, err := f.s.DeleteEntry(KindItem, old.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	f.advance(24 * time.Hour)
+	keep := mustItem(t, f.s, "Alive in backup", "v")
+	backup, err := f.s.ExportBackupString()
+	if err != nil {
+		t.Fatalf("ExportBackupString: %v", err)
+	}
+	// The backup contains: old (deleted, absent-from-live) + keep (live).
+	if err := f.s.RestoreBackup(writeTempBackup(t, f.dir, backup)); err != nil {
+		t.Fatalf("RestoreBackup: %v", err)
+	}
+	// The user chose this past state: "keep" is live, "old" follows the file.
+	st := f.s.State()
+	if isDeleted(st, KindItem, keep.ID) {
+		t.Fatal("an entry the backup holds live must stay live after restore")
+	}
+	// But the tombstone for "old" (deleted before the backup was taken) must
+	// survive the restore, so a later file rewrite cannot resurrect it.
+	resurrectEntry(t, f.dir, old.ID)
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if !isDeleted(s2.State(), KindItem, old.ID) {
+		t.Fatal("a pre-backup deletion must stay deleted — the restore cleared only the backup's own tombstones")
+	}
+}
+
+// The 30-day trash purge now writes tombstones: a purged-by-age entry can
+// never come back live through an old backup or a stale file rewrite.
+func TestAutoPurgeWritesTombstones(t *testing.T) {
+	f := newFixture(t)
+	a := mustItem(t, f.s, "Auto-purged", "v")
+	backup, err := f.s.ExportBackupString()
+	if err != nil {
+		t.Fatalf("ExportBackupString: %v", err)
+	}
+	if _, err := f.s.DeleteEntry(KindItem, a.ID); err != nil {
+		t.Fatalf("DeleteEntry: %v", err)
+	}
+	// Backdate the deletion 40 days in the file (the reopen below runs on the
+	// real clock, so the fixture's advanced clock would never be seen).
+	old := time.Now().Add(-40 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	backdateDeletedAt(t, f.dir, a.ID, old)
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	st := s2.State()
+	for _, it := range st.Data.Items {
+		if it.ID == a.ID {
+			t.Fatal("the 40-day-old trash entry must have been purged on load")
+		}
+	}
+	// The old backup still carries it live — importing must not resurrect it.
+	if _, err := s2.ImportBackup("merge", backup); err != nil {
+		t.Fatalf("ImportBackup merge: %v", err)
+	}
+	if !isDeleted(s2.State(), KindItem, a.ID) {
+		t.Fatal("an auto-purged entry that an import brings back must land in the Trash")
+	}
+}
+
+// backdateDeletedAt rewrites an entry's deletedAt in the data file (the
+// load-time purge then sees it as older than the 30-day window).
+func backdateDeletedAt(t *testing.T, dir, id, iso string) {
+	t.Helper()
+	var v map[string]any
+	if err := json.Unmarshal([]byte(readDataFile(t, dir)), &v); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	list, ok := v["items"].([]any)
+	if !ok {
+		t.Fatal("items missing")
+	}
+	for _, e := range list {
+		if m := e.(map[string]any); m["id"] == id {
+			m["deletedAt"] = iso
+		}
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	writeDataFile(t, dir, string(b))
+}
+
+/* ---------------- v1.6.0: tolerant group paste (DECISIONS.md §45) ---------------- */
+
+// The user-reported bug: pasting colon-style / markdown / spaced credential
+// lines into the new-group form silently produced an EMPTY group. The store
+// parser is now tolerant — all common formats become member items.
+func TestCreateGroupFromEnvTolerantPaste(t *testing.T) {
+	f := newFixture(t)
+	text := "# my project\n" +
+		"GitHub token: ghp_abc123\n" +
+		"- DATABASE_URL = postgres://localhost/app\n" +
+		"3. OpenAI key: sk-xyz\n" +
+		"not a credential\n"
+	g, err := f.s.CreateGroupFromEnv(NewGroup{Name: "Hibana"}, text)
+	if err != nil {
+		t.Fatalf("CreateGroupFromEnv: %v", err)
+	}
+	st := f.s.State()
+	var group *Group
+	for i := range st.Data.Groups {
+		if st.Data.Groups[i].ID == g.ID {
+			group = &st.Data.Groups[i]
+		}
+	}
+	if group == nil {
+		t.Fatal("group missing from state")
+	}
+	if len(group.ItemIDs) != 3 {
+		t.Fatalf("group members = %d, want 3 (comment + prose skipped)", len(group.ItemIDs))
+	}
+	want := []struct{ name, key string }{
+		{"GitHub token", "GITHUB_TOKEN"},
+		{"DATABASE_URL", "DATABASE_URL"},
+		{"OpenAI key", "OPENAI_KEY"},
+	}
+	for i, w := range want {
+		var it *Item
+		for j := range st.Data.Items {
+			if st.Data.Items[j].ID == group.ItemIDs[i] {
+				it = &st.Data.Items[j]
+			}
+		}
+		if it == nil {
+			t.Fatalf("member %d missing", i)
+		}
+		if it.Name != w.name || it.Key != w.key {
+			t.Errorf("member %d = {%s %s}, want {%s %s}", i, it.Name, it.Key, w.name, w.key)
+		}
+		if !it.IsSecret {
+			t.Errorf("member %d must default to secret (never under-mask)", i)
+		}
+	}
+}
+
+// A paste with zero parsable credentials must fail loudly instead of
+// creating an empty group that silently throws the text away.
+func TestCreateGroupFromEnvRejectsEmptyParse(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.s.CreateGroupFromEnv(NewGroup{Name: "Empty"}, "just some prose\nwith no credentials"); err == nil {
+		t.Fatal("a paste with no credentials must be rejected, not turned into an empty group")
+	}
+	st := f.s.State()
+	if len(st.Data.Groups) != 0 {
+		t.Fatal("no group should have been created")
+	}
+}
+
+/* ---------------- v1.6.0: shared credentials (DECISIONS.md §44) ---------------- */
+
+func TestSharedFlagRoundTrip(t *testing.T) {
+	f := newFixture(t)
+	a, err := f.s.CreateItem(NewItem{Name: "GitHub token", Value: "ghp_x", IsSecret: boolp(true), Shared: true})
+	if err != nil {
+		t.Fatalf("CreateItem: %v", err)
+	}
+	st := f.s.State()
+	var got *Item
+	for i := range st.Data.Items {
+		if st.Data.Items[i].ID == a.ID {
+			got = &st.Data.Items[i]
+		}
+	}
+	if got == nil || !got.Shared {
+		t.Fatal("created shared item must carry shared=true in state")
+	}
+	// The flag is persisted (omitempty: true writes, false stays absent).
+	if !strings.Contains(readDataFile(t, f.dir), `"shared": true`) {
+		t.Fatal("shared flag must be persisted to disk")
+	}
+	// Patch it off, then on again.
+	if err := f.s.UpdateItem(a.ID, ItemPatch{Shared: boolp(false)}); err != nil {
+		t.Fatalf("UpdateItem off: %v", err)
+	}
+	st = f.s.State()
+	for _, it := range st.Data.Items {
+		if it.ID == a.ID && it.Shared {
+			t.Fatal("shared=false patch must stick")
+		}
+	}
+	if strings.Contains(readDataFile(t, f.dir), `"shared"`) {
+		t.Fatal("shared=false must be omitted (omitempty) so legacy vaults stay byte-identical")
+	}
+	if err := f.s.UpdateItem(a.ID, ItemPatch{Shared: boolp(true)}); err != nil {
+		t.Fatalf("UpdateItem on: %v", err)
+	}
+	st = f.s.State()
+	for _, it := range st.Data.Items {
+		if it.ID == a.ID && !it.Shared {
+			t.Fatal("shared=true patch must stick")
+		}
+	}
+	// A vault file written without the key normalizes to shared=false.
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	st = s2.State()
+	for _, it := range st.Data.Items {
+		if it.ID == a.ID && !it.Shared {
+			t.Fatal("shared flag must survive reload")
+		}
+	}
+}
+
+// Shared items are ordinary members: add the same shared item to several
+// groups and every group copies it with the same key.
+func TestSharedItemAcrossGroups(t *testing.T) {
+	f := newFixture(t)
+	a, err := f.s.CreateItem(NewItem{Name: "GitHub token", Value: "ghp_x", Key: "GITHUB_TOKEN", Shared: true})
+	if err != nil {
+		t.Fatalf("CreateItem: %v", err)
+	}
+	if _, err := f.s.CreateGroup(NewGroup{Name: "Repo A", ItemIDs: []string{a.ID}}); err != nil {
+		t.Fatalf("CreateGroup A: %v", err)
+	}
+	if _, err := f.s.CreateGroup(NewGroup{Name: "Repo B", ItemIDs: []string{a.ID}}); err != nil {
+		t.Fatalf("CreateGroup B: %v", err)
+	}
+	st := f.s.State()
+	using := 0
+	for _, g := range st.Data.Groups {
+		for _, id := range g.ItemIDs {
+			if id == a.ID {
+				using++
+			}
+		}
+	}
+	if using != 2 {
+		t.Fatalf("shared item used in %d groups, want 2", using)
+	}
+}
+
+// writeTempBackup stores a vault JSON as a named backup in the backups dir
+// and returns its file name (for RestoreBackup).
+func writeTempBackup(t *testing.T, dir, vault string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "backups"), 0o755); err != nil {
+		t.Fatalf("backups dir: %v", err)
+	}
+	name := "clavis-data-20260101-120000.json"
+	if err := os.WriteFile(filepath.Join(dir, "backups", name), []byte(vault), 0o644); err != nil {
+		t.Fatalf("write backup: %v", err)
+	}
+	return name
+}

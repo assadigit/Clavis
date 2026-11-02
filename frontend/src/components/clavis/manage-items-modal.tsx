@@ -24,10 +24,10 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Check, Layers, Plus } from "lucide-react";
+import { Check, Layers, Link2, Plus } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState, Group } from "@/lib/clavis/types";
-import { groupMemberKeys, rowPreview, sharedCountMap } from "./derive";
+import { groupMemberKeys, rowPreview, sharedCountMap, sharedItems } from "./derive";
 import { EntryTypeIcon, Ix } from "./icons";
 import { Btn, FieldHint, FieldLabel, Modal, SearchField } from "./ui-bits";
 import { SortableMemberRow } from "./manage-items/sortable-member-row";
@@ -50,6 +50,13 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
   const members = useMemo(() => groupMemberKeys(group, state.data), [group, state.data]);
   const memberIds = useMemo(() => members.map((m) => m.item.id), [members]);
   const shared = useMemo(() => sharedCountMap(state.data), [state.data]);
+
+  /* v1.6.0 (DECISIONS §44): shared credentials not yet in this group — the
+   *  define-once, add-to-each-project flow. One click adds the chip. */
+  const sharedCandidates = useMemo(() => {
+    const inGroup = new Set(memberIds);
+    return sharedItems(state.data).filter((i) => !inGroup.has(i.id));
+  }, [state.data, memberIds]);
 
   const candidates = useMemo(() => {
     const existing = new Set(memberIds);
@@ -94,6 +101,13 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
       setPicked(new Set());
       setAddQuery("");
     }
+  }
+
+  /* One shared credential, one click — the quick-add chip (v1.6.0 §44). */
+  async function addSharedNow(itemId: string, name: string) {
+    if (readOnly) return;
+    const res = await call("addItemsToGroup", { groupId: group.id, itemIds: [itemId] });
+    if (res.ok) toast.success(`Added “${name}” to “${group.name}”.`);
   }
 
   function createHere() {
@@ -171,6 +185,28 @@ export function ManageItemsModal(props: ManageItemsModalProps) {
 
         {!readOnly ? (
           <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
+            {sharedCandidates.length > 0 ? (
+              <div className="flex flex-col" style={{ gap: "var(--space-1)", minWidth: 0 }}>
+                <FieldLabel>Shared credentials — one click adds them</FieldLabel>
+                <div className="flex flex-wrap" style={{ gap: "var(--space-2)", minWidth: 0 }}>
+                  {sharedCandidates.map((i) => (
+                    <button
+                      key={i.id}
+                      type="button"
+                      className="glass-chip clavis-focusable inline-flex items-center"
+                      style={{ gap: "var(--space-1)", padding: "calc(var(--space-1) / 2) var(--space-2)", fontSize: "var(--text-xs)", cursor: "pointer", color: "var(--color-accent-text)", maxWidth: "100%" }}
+                      title={`Add the shared credential “${i.name}” to this group`}
+                      aria-label={`Add shared credential ${i.name} to this group`}
+                      onClick={() => void addSharedNow(i.id, i.name)}
+                    >
+                      <Ix icon={Link2} size="sm" style={{ width: "var(--text-xs)", height: "var(--text-xs)", flexShrink: 0 }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.name}</span>
+                      <Ix icon={Plus} size="sm" style={{ width: "var(--text-xs)", height: "var(--text-xs)", flexShrink: 0 }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <FieldLabel>Add items</FieldLabel>
             <div className="flex items-center" style={{ gap: "var(--space-2)" }}>
               {/* F-027 (UI-audit round 1 Phase 10): shared SearchField. */}

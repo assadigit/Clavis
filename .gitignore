@@ -9,3 +9,4 @@ build/png/
 # Local dev
 *.log
 .DS_Store
+frontend/dist-e2e/

@@ -38,6 +38,9 @@ interface ItemDraft {
   categoryId: string | null;
   tags: string[];
   isSecret: boolean | undefined;
+  /** v1.6.0 (DECISIONS §44): a shared credential — defined once, added to
+   *  any number of project groups via Manage items. */
+  shared: boolean;
   pinned: boolean;
 }
 
@@ -67,6 +70,7 @@ function draftFromItem(item: Item): ItemDraft {
     categoryId: item.categoryId,
     tags: item.tags,
     isSecret: item.isSecret,
+    shared: item.shared === true,
     pinned: item.pinned,
   };
 }
@@ -80,7 +84,7 @@ export function ItemEditor(props: ItemEditorProps) {
   const [loadedValue, setLoadedValue] = useState<string | null>(mode === "edit" ? null : "");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ItemDraft>(() =>
-    item ? draftFromItem(item) : { name: prefillName ?? "", key: "", value: "", note: "", categoryId: null, tags: [], isSecret: undefined, pinned: false }
+    item ? draftFromItem(item) : { name: prefillName ?? "", key: "", value: "", note: "", categoryId: null, tags: [], isSecret: undefined, shared: false, pinned: false }
   );
 
   useEffect(() => {
@@ -129,6 +133,7 @@ export function ItemEditor(props: ItemEditorProps) {
       o.note !== draft.note ||
       o.categoryId !== draft.categoryId ||
       o.isSecret !== draft.isSecret ||
+      o.shared !== draft.shared ||
       o.pinned !== draft.pinned ||
       o.tags.join("\u0000") !== draft.tags.join("\u0000")
     );
@@ -176,6 +181,7 @@ export function ItemEditor(props: ItemEditorProps) {
       note: draft.note,
       categoryId: draft.categoryId,
       tags: draft.tags,
+      shared: draft.shared,
       pinned: draft.pinned,
     };
 
@@ -411,6 +417,13 @@ export function ItemEditor(props: ItemEditorProps) {
           onChange={(v) => setDraft((d) => ({ ...d, isSecret: v }))}
           label="Secret"
           note="Masked everywhere"
+          disabled={readOnly}
+        />
+        <Toggle
+          checked={draft.shared}
+          onChange={(v) => setDraft((d) => ({ ...d, shared: v }))}
+          label="Shared"
+          note="Define once, add to any project"
           disabled={readOnly}
         />
         <Toggle

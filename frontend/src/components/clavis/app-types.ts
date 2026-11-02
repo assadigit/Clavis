@@ -6,6 +6,7 @@ export type ListFilter =
   | { view: "all" }
   | { view: "recent" }
   | { view: "pinned" }
+  | { view: "shared" }
   | { view: "category"; categoryId: string }
   | { view: "tag"; tag: string }
   | { view: "trash" }

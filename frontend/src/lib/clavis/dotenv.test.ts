@@ -9,6 +9,8 @@ import {
   formatDotenvLine,
   looksLikeDotenv,
   needsDotenvQuoting,
+  parseCredentialBlock,
+  parseCredentialLine,
   parseDotenvLine,
 } from "./dotenv";
 
@@ -71,5 +73,96 @@ describe("autoKey", () => {
     expect(autoKey("  spaced  --  name ")).toBe("SPACED_NAME");
     expect(autoKey("!!!")).toBe("KEY"); // nothing survives → KEY
     expect(autoKey("databáze 2")).toBe("DATAB_ZE_2"); // non-ASCII → separator
+  });
+});
+
+/* ------------- tolerant paste parsing (v1.6.0, DECISIONS §45) ------------- */
+
+describe("parseCredentialLine (tolerant)", () => {
+  it("parses classic KEY=value", () => {
+    expect(parseCredentialLine("DATABASE_URL=postgres://db")).toEqual({
+      name: "DATABASE_URL",
+      key: "DATABASE_URL",
+      value: "postgres://db",
+    });
+  });
+
+  it("parses spaced KEY = value", () => {
+    expect(parseCredentialLine("KEY = value")).toEqual({
+      name: "KEY",
+      key: "KEY",
+      value: "value",
+    });
+  });
+
+  it("turns 'Name: value' into name + autoKey, keeping var-name keys", () => {
+    expect(parseCredentialLine("GitHub token: ghp_123")).toEqual({
+      name: "GitHub token",
+      key: "GITHUB_TOKEN",
+      value: "ghp_123",
+    });
+    expect(parseCredentialLine("DATABASE_URL: postgres://db")).toEqual({
+      name: "DATABASE_URL",
+      key: "DATABASE_URL",
+      value: "postgres://db",
+    });
+  });
+
+  it("strips markdown bullets and numbered lists", () => {
+    expect(parseCredentialLine("- API_KEY=secret")).toEqual({
+      name: "API_KEY",
+      key: "API_KEY",
+      value: "secret",
+    });
+    expect(parseCredentialLine("* GitHub token: ghp_x")).toEqual({
+      name: "GitHub token",
+      key: "GITHUB_TOKEN",
+      value: "ghp_x",
+    });
+    expect(parseCredentialLine("3. PORT=8080")?.key).toBe("PORT");
+    expect(parseCredentialLine("1) HOST=localhost")?.key).toBe("HOST");
+  });
+
+  it("unquotes dotenv-quoted values", () => {
+    expect(parseCredentialLine('TOKEN="abc def"')?.value).toBe("abc def");
+  });
+
+  it("rejects prose, comments, URLs and empty sides", () => {
+    expect(parseCredentialLine("# comment")).toBeNull();
+    expect(parseCredentialLine("just prose")).toBeNull();
+    expect(parseCredentialLine("My credentials:")).toBeNull(); // empty colon value
+    expect(parseCredentialLine("https://api.example.com")).toBeNull(); // scheme, not separator
+    expect(parseCredentialLine("=value")).toBeNull();
+    expect(parseCredentialLine("   ")).toBeNull();
+  });
+});
+
+describe("parseCredentialBlock (the empty-group bug fix)", () => {
+  it("finds credentials in every common paste style", () => {
+    const { creds, bad } = parseCredentialBlock(
+      "# project\n" +
+        "\n" +
+        "DATABASE_URL=postgres://localhost/app\n" +
+        "GitHub token: ghp_abc123\n" +
+        "- STRIPE_KEY = sk_test_456\n" +
+        "not a credential line\n" +
+        "GitHub token: ghp_dup\n",
+    );
+    expect(bad).toBe(1);
+    expect(creds.map((c) => c.key)).toEqual([
+      "DATABASE_URL",
+      "GITHUB_TOKEN",
+      "STRIPE_KEY",
+      "GITHUB_TOKEN_2", // deduped like group copies
+    ]);
+  });
+
+  it("never returns zero credentials for a real credentials paste", () => {
+    // The user-reported bug: colon-style pastes parsed to ZERO items and the
+    // group was created empty, silently discarding the pasted text.
+    const { creds } = parseCredentialBlock(
+      "GitHub token: ghp_abc\nOpenAI key: sk-xyz",
+    );
+    expect(creds.length).toBe(2);
   });
 });

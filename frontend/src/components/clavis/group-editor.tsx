@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { Check, ClipboardPaste, Copy, FileJson, FileText, FilePlus2, KeyRound, Layers, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { downloadExport } from "@/lib/clavis/client";
-import { dedupeKeys, parseDotenvLine } from "@/lib/clavis/dotenv";
+import { parseCredentialBlock } from "@/lib/clavis/dotenv";
 import { messages } from "@/lib/clavis/messages";
 import type { ClavisState, Group } from "@/lib/clavis/types";
 import { isDocumentGroup } from "@/lib/clavis/types";
@@ -85,19 +85,14 @@ export function GroupEditor(props: GroupEditorProps) {
     );
   }, [group, draft]);
 
-  /* Live parse of the pasted block: keys preview + bad-line detection,
-     exactly what will be created (deduped like the store will dedupe). */
+  /* Live parse of the pasted block (v1.6.0 §45): the TOLERANT parser —
+     exactly what the store will create (classic KEY=value, spaced KEY = value,
+     "Name: value" and markdown bullets all count), with the preview keys
+     deduped like the store dedupes them. */
   const envPreview = useMemo(() => {
     if (mode !== "create" || createMode !== "items") return null;
-    const keys: string[] = [];
-    let bad = 0;
-    for (const line of envText.split(/\r?\n/)) {
-      if (line.trim() === "") continue;
-      const parsed = parseDotenvLine(line);
-      if (parsed) keys.push(parsed.key);
-      else bad++;
-    }
-    return { keys: dedupeKeys(keys), bad };
+    const { creds, bad } = parseCredentialBlock(envText);
+    return { creds, bad };
   }, [mode, createMode, envText]);
 
   /* Live size preview of the pasted document (byte-exact storage, so the
@@ -150,15 +145,26 @@ export function GroupEditor(props: GroupEditorProps) {
         }
         return;
       }
-      /* MODE 2 — items: with a pasted KEY=value block, group + all member
-         items in one shot; otherwise an empty group to fill one-by-one. */
+      /* MODE 2 — items: with a pasted credentials block, group + all member
+         items in one shot; otherwise an empty group to fill one-by-one. The
+         gate is the TOLERANT parse (v1.6.0 §45) — the old strict KEY=value
+         gate silently threw away "GitHub token: ghp_…" style pastes and
+         created an empty group. */
       const text = envText.trim();
-      if (text !== "" && envPreview && envPreview.keys.length > 0) {
+      const credsFound = envPreview ? envPreview.creds.length : 0;
+      if (text !== "" && credsFound === 0) {
+        /* Pasted text that parses to ZERO credentials must never be silently
+           discarded into an empty group — make the user fix or clear it. */
+        setSaving(false);
+        toast.error("No credentials recognized in the pasted text — each line needs a “=” or “:” separator, like DATABASE_URL=… or GitHub token: ghp_…. Clear the box to save an empty group.");
+        return;
+      }
+      if (text !== "" && credsFound > 0) {
         const res = await call("createGroupFromEnv", {
           input: { name, categoryId: draft.categoryId, tags: draft.tags, pinned: draft.pinned, text },
         });
         if (res.ok && res.id) {
-          toast.success(`Group “${name}” added with ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}.`);
+          toast.success(`Group “${name}” added with ${credsFound} credential${credsFound === 1 ? "" : "s"}.`);
           onDone({ kind: "group", id: res.id });
         }
       } else {
@@ -382,35 +388,35 @@ export function GroupEditor(props: GroupEditorProps) {
                 mono
                 rows={6}
                 id="clavis-group-env"
-                placeholder={"DATABASE_URL=postgres://…\nAPI_KEY=sk-live-…\nSTRIPE_SECRET=…"}
-                aria-label="Paste KEY=value lines — one credential per line"
+                placeholder={"DATABASE_URL=postgres://…\nGitHub token: ghp_…\n- STRIPE_KEY = sk-live-…"}
+                aria-label="Paste your credentials — one per line (KEY=value, Name: value, bullets — all fine)"
                 spellCheck={false}
                 dir="auto"
                 style={{ fontSize: "var(--text-sm)" }}
               />
               <FieldHint>
-                One <span className="t-mono">KEY=value</span> per line (.env format). Saving creates the group and an item for every line — each masked as a secret, ready to copy together or one by one.
+                One credential per line — <span className="t-mono">KEY=value</span>, spaced <span className="t-mono">KEY = value</span>, <span className="t-mono">Name: value</span> or markdown bullets all work; <span className="t-mono">#</span> comments are skipped. Saving creates the group and an item for every line — each masked as a secret, ready to copy together or one by one.
               </FieldHint>
               {envPreview && envText.trim() !== "" ? (
                 <div className="glass-row flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", padding: "var(--space-2) var(--space-3)", border: "1px solid var(--glass-border)" }} aria-live="polite">
                   <Ix icon={Layers} size="sm" style={{ color: "var(--color-accent-text)" }} />
-                  {envPreview.keys.length === 0 ? (
-                    <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
-                      No KEY=value lines yet — keep typing or paste your project's .env.
+                  {envPreview.creds.length === 0 ? (
+                    <span className="t-warning" style={{ fontSize: "var(--text-xs)" }}>
+                      No credentials recognized yet — each line needs a “=” or “:” separator (like DATABASE_URL=… or GitHub token: …). Saving is blocked until the box is fixed or cleared.
                     </span>
                   ) : (
                     <span className="flex flex-wrap items-center" style={{ gap: "calc(var(--space-1) / 2)", minWidth: 0 }}>
                       <span style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-medium)" }}>
-                        {envPreview.keys.length} credential{envPreview.keys.length === 1 ? "" : "s"}:
+                        {envPreview.creds.length} credential{envPreview.creds.length === 1 ? "" : "s"}:
                       </span>
-                      {envPreview.keys.map((k) => (
-                        <span key={k} className="t-mono glass-chip" style={{ fontSize: "var(--text-xs)", padding: "calc(var(--space-1) / 2) var(--space-2)", maxWidth: "calc(var(--space-6) * 6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {k}
+                      {envPreview.creds.map((c) => (
+                        <span key={c.key} className="t-mono glass-chip" title={`${c.name} → ${c.key}`} style={{ fontSize: "var(--text-xs)", padding: "calc(var(--space-1) / 2) var(--space-2)", maxWidth: "calc(var(--space-6) * 6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {c.key}
                         </span>
                       ))}
                       {envPreview.bad > 0 ? (
                         <span className="t-warning" style={{ fontSize: "var(--text-xs)" }}>
-                          {envPreview.bad} line{envPreview.bad === 1 ? "" : "s"} without KEY=value will be skipped
+                          {envPreview.bad} line{envPreview.bad === 1 ? "" : "s"} without a separator will be skipped
                         </span>
                       ) : null}
                     </span>
@@ -480,8 +486,8 @@ export function GroupEditor(props: GroupEditorProps) {
                       ? docText === ""
                         ? "Create group with document"
                         : `Create group with document`
-                      : mode === "create" && envPreview && envPreview.keys.length > 0
-                        ? `Create group + ${envPreview.keys.length} credential${envPreview.keys.length === 1 ? "" : "s"}`
+                      : mode === "create" && envPreview && envPreview.creds.length > 0
+                        ? `Create group + ${envPreview.creds.length} credential${envPreview.creds.length === 1 ? "" : "s"}`
                         : mode === "create"
                           ? "Create group"
                           : "Save"

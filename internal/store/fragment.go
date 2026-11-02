@@ -207,5 +207,9 @@ func (s *Store) importFragmentLocked(f Fragment) (ImportSummary, error) {
 			summary.Skipped++
 		}
 	}
+	/* v1.6.0 (DECISIONS.md §46): a fragment is not an intentional un-delete
+	   either — a tombstoned entry it merges back as live goes straight to
+	   the Trash, same as the full-backup import. */
+	s.enforceTombsLocked()
 	return summary, s.writeAtomicLocked()
 }

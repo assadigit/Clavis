@@ -75,12 +75,21 @@ type Item struct {
 	CategoryID *string  `json:"categoryId"`
 	Tags       []string `json:"tags"`
 	IsSecret   bool     `json:"isSecret"`
-	Pinned     bool     `json:"pinned"`
-	UseCount   int      `json:"useCount"`
-	LastUsedAt *string  `json:"lastUsedAt"`
-	CreatedAt  string   `json:"createdAt"`
-	UpdatedAt  string   `json:"updatedAt"`
-	DeletedAt  *string  `json:"deletedAt"`
+	// Shared marks a shared credential (v1.6.0, DECISIONS.md §44): defined
+	// once — e.g. a GitHub token that works for every repo — then added to
+	// any number of project groups. It is a normal item in every other way
+	// (same copy path, same secret masking); the flag only drives the Shared
+	// view in the sidebar and the quick-add chips in the Manage items modal.
+	// omitempty keeps vaults written by older versions byte-identical, and
+	// older Clavis builds simply ignore the unknown key (§4.2 lenient
+	// loading).
+	Shared     bool    `json:"shared,omitempty"`
+	Pinned     bool    `json:"pinned"`
+	UseCount   int     `json:"useCount"`
+	LastUsedAt *string `json:"lastUsedAt"`
+	CreatedAt  string  `json:"createdAt"`
+	UpdatedAt  string  `json:"updatedAt"`
+	DeletedAt  *string `json:"deletedAt"`
 }
 
 // Group stores references to items (shared items), in group order — or, in

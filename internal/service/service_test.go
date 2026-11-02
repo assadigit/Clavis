@@ -448,3 +448,57 @@ func TestStateMapMemoizedUntilTheStoreChanges(t *testing.T) {
 		}
 	})
 }
+
+/* -------- v1.6.0 (DECISIONS.md §44): shared credentials through dispatch -------- */
+
+func TestSharedFlagThroughDispatch(t *testing.T) {
+	s := newTestService(t)
+
+	// Create with shared: true — the flag must reach the store and the
+	// redacted state alike.
+	res := dispatchJSON(t, s, "createItem",
+		`{"input":{"name":"GitHub token","value":"ghp_x","isSecret":true,"shared":true}}`)
+	id, _ := res["id"].(string)
+	if res["ok"] != true || id == "" {
+		t.Fatalf("createItem failed: %v", res["error"])
+	}
+	if !strings.Contains(stateJSON(t, s), `"shared":true`) {
+		t.Fatal("shared=true must be visible in the redacted state (v1.6.0 §44)")
+	}
+
+	// Patch it off via updateItem.
+	if res := dispatchJSON(t, s, "updateItem",
+		fmt.Sprintf(`{"id":%q,"patch":{"shared":false}}`, id)); res["ok"] != true {
+		t.Fatalf("updateItem failed: %v", res["error"])
+	}
+	if strings.Contains(stateJSON(t, s), `"shared":true`) {
+		t.Fatal("shared=false patch must reach the store")
+	}
+
+	// And back on.
+	if res := dispatchJSON(t, s, "updateItem",
+		fmt.Sprintf(`{"id":%q,"patch":{"shared":true}}`, id)); res["ok"] != true {
+		t.Fatalf("updateItem failed: %v", res["error"])
+	}
+	if !strings.Contains(stateJSON(t, s), `"shared":true`) {
+		t.Fatal("shared=true patch must reach the store")
+	}
+
+	// createItemInGroup accepts the flag too (the group quick-add form).
+	gid := mustCreateGroup(t, s, "Repo A")
+	res = dispatchJSON(t, s, "createItemInGroup",
+		fmt.Sprintf(`{"groupId":%q,"input":{"name":"NPM token","value":"npm_x","isSecret":true,"shared":true}}`, gid))
+	if res["ok"] != true {
+		t.Fatalf("createItemInGroup failed: %v", res["error"])
+	}
+	st := s.GetState()
+	sharedCount := 0
+	for _, it := range st.UIState.Items {
+		if it.Shared {
+			sharedCount++
+		}
+	}
+	if sharedCount != 2 {
+		t.Fatalf("shared items in state = %d, want 2", sharedCount)
+	}
+}

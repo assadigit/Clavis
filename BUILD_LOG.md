@@ -128,3 +128,22 @@ Short running entries. (Newest last.)
   - "Copy all as markdown" menu item (backend-side clipboard write); manual-copy fallback (`ManualCopyModal`) wired to group copy, markdown copy and member copy.
   - List rows + popup show `document · N chars` for document groups; versions bumped to 1.5.0 (types.ts, app.go, winres info, NSIS).
 - Verification: `go vet` + all Go tests green; frontend `tsc` clean, 98/98 vitest green (2 group-editor tests updated to the new row names/menu order); production Windows exe cross-builds (13.3 MB) with regenerated version resource; interactive verification of both modes performed in the sandbox web edition (byte-identical round-trip diff, atomic add-to-group, sidebar counts, fallback dialog).
+
+## v1.6.0 — shared credentials, tolerant paste, deletions final (user reports ×3)
+
+- **User reports**: (1) "when downloading new versions, the older credentials which was deleted restore themselves" — deletions had to survive every import/backup/purge path; (2) "a place to define some shared credentials, which work across different projects… define once, then only add them to each project"; (3) "there is an option to create a new group and copy paste all credentials and data all at once, but actually when you paste credentials, the group doesn't save that and shows empty."
+- **Backend (Go)**:
+  - `Item.Shared` (`omitempty`; normalize absent→false) + the flag through `NewItem`/`ItemPatch` → `createItem`, `updateItem`, `splitItemForGroup`, `createItemInGroup` (service dispatch included).
+  - Tolerant paste parser `exchange.ParseCredentialLine`/`ParseCredentialBlock`: KEY=value, spaced, `Name: value` (autoKey), var-name-before-colon, markdown bullets/numbering, `#` comments skipped; first separator wins; empty colon values/URL schemes rejected; keys deduped like group copies. `CreateGroupFromEnv` uses it and now ERRORS loudly on zero credentials instead of creating an empty group.
+  - Tombstones final (DECISIONS §46): no more 90-day prune (count-bounded 10,000); PurgeEntry/EmptyTrash/30-day purge write tombstones; import replace+merge and fragment merges enforce tombstones in-action (banner included); RestoreBackup clears only the backup's LIVE entries' tombstones.
+- **Frontend (TS)**:
+  - `types.ts` `shared?: boolean` + APP_VERSION 1.6.0; `dotenv.ts` gains the lockstep mirror of the tolerant parser.
+  - Group create form: tolerant preview (name→key chips, bad-line count, warning state), save gated on the tolerant parse, unparsable paste BLOCKS saving with an error (the silent-discard path is gone), button labels count parsed credentials.
+  - Shared UI: item editor **Shared** toggle ("Define once, add to any project"); sidebar **Shared** view (Link2, count); list rows show a `shared` chip; Manage items modal opens with one-click shared-credential chips.
+- **Docs**: DECISIONS.md §44–46; versions bumped (app.go, winres info.json, clavis.nsi, types.ts).
+- **Verification**: all Go suites green (store +14, exchange +4, service +2 tests); frontend `tsc` clean, 110/110 vitest green (12 new: tolerant parser 10, group-editor paste 2, sidebar shared 2 → net new +12 incl. renumbered suites); Windows production exe cross-builds.
+- **E2E verification (browser harness)**: new dev-only bridge (`tools/e2e-bridge` + `frontend/vite.e2e.config.ts` + `frontend/e2e-shim.ts`, all gitignored-output) serves the production frontend bundle against the REAL Go store + dispatcher on :8093. Verified live, zero console/page errors:
+  - *Paste bug*: creating "Hibana project" with `GitHub token: ghp_…` / `- STRIPE_KEY = sk_test_…` / `DATABASE_URL: postgres://…` / `OpenAI key: sk-…` → live preview chips (GITHUB_TOKEN, STRIPE_KEY, DATABASE_URL, OPENAI_KEY) → "Create group + 4 credentials" → group saved with all 4 members (the exact paste that used to produce an empty group).
+  - *Shared credentials*: item editor's Shared toggle → sidebar "Shared 1" → Shared view lists it → "shared" chip on the list row → second group's Manage items modal shows the one-click chip → click adds it as a member ("used in 1 group" badge).
+  - *Resurrection*: created "Resurrect me" → deleted → Delete forever → imported a crafted old backup carrying it LIVE → after the import it is NOT live (All 0), sits in the Trash (Trash 1) with the banner "Clavis noticed 1 deleted entry that had reappeared… moved back to the Trash"; intentional restore stays available.
+  - *Copy flows*: item copy through the bridge's clipboard seam returns `copied: true, containsSecret: true` (the §5.2 verdict applied by the backend).

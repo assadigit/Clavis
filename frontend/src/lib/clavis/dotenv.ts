@@ -118,3 +118,104 @@ export function autoKey(name: string): string {
     .replace(/^_+|_+$/g, "");
   return key === "" ? "KEY" : key;
 }
+
+/* ------------- tolerant paste parsing (v1.6.0, DECISIONS §45) -------------
+ *
+ * Mirrors the Go reference implementation (internal/exchange/dotenv.go) line
+ * for line — the create-group paste box and its live preview must agree with
+ * exactly what the store will create:
+ *
+ *   KEY=value        → name=KEY, key=KEY          (classic .env)
+ *   KEY = value      → spaces around the separator are fine
+ *   Name: value      → name=Name, key=AutoKey(Name)
+ *   DATABASE_URL: x  → a valid var name before ":" keeps itself as the key
+ *   - KEY=value / * x / 3. x → markdown bullets and numbering are fine
+ *   # comment / blank → skipped cleanly, never counted as bad lines
+ *
+ * A colon line with an EMPTY value is NOT a credential ("My credentials:"
+ * is prose, not a key); a bare URL's "https:" is a scheme, not a separator.
+ */
+
+/** Markdown list prefixes ("- ", "* ", "• ", "+ ", "3. ", "2) "). */
+const BULLET_RE = /^\s*(?:[-*•+]|\d+[.)])\s+/;
+/** A plain dotenv variable name before a separator. */
+const VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** True for a blank line or a # comment (skipped, never an error). */
+export function isSkippablePasteLine(line: string): boolean {
+  const l = line.endsWith("\r") ? line.slice(0, -1) : line;
+  const t = l.trim();
+  return t === "" || t.startsWith("#");
+}
+
+/** One line of a pasted credentials block. */
+export interface ParsedCredential {
+  /** Human item name ("GitHub token"). */
+  name: string;
+  /** Dotenv key (GITHUB_TOKEN); autoKey applied when needed. */
+  key: string;
+  value: string;
+}
+
+/** Parse one pasted line tolerantly; null = not a credential (skip). */
+export function parseCredentialLine(line: string): ParsedCredential | null {
+  let l = line.endsWith("\r") ? line.slice(0, -1) : line;
+  l = l.replace(BULLET_RE, "");
+  if (isSkippablePasteLine(l)) return null;
+  l = l.trim();
+  if (l === "") return null;
+  // Separator: the FIRST "=" or ":" wins, whichever comes first (a value may
+  // itself contain colons — "URL: https://…" must keep them).
+  const eq = l.indexOf("=");
+  const co = l.indexOf(":");
+  let sep = eq;
+  let isColon = false;
+  if (co >= 0 && (eq < 0 || co < eq)) {
+    sep = co;
+    isColon = true;
+  }
+  if (sep <= 0) return null;
+  const rawName = l.slice(0, sep).trim();
+  const value = parseDotenvValue(l.slice(sep + 1).trim());
+  if (rawName === "") return null;
+  if (isColon) {
+    // "Name: value" needs a non-empty value — "My credentials:" is prose.
+    if (value === "") return null;
+    // "https://api.example.com" is not "https" = "//api…": a scheme, not a
+    // separator.
+    if (value.startsWith("//")) return null;
+    if (VAR_NAME_RE.test(rawName)) return { name: rawName, key: rawName, value };
+    return { name: rawName, key: autoKey(rawName), value };
+  }
+  // "KEY = value": a valid var name keeps itself; a free-form left side
+  // ("GitHub token = x") becomes the name with an autoKey key.
+  if (VAR_NAME_RE.test(rawName)) return { name: rawName, key: rawName, value };
+  return { name: rawName, key: autoKey(rawName), value };
+}
+
+/**
+ * Parse a whole pasted block: the credentials (in paste order) and the number
+ * of non-blank, non-comment lines that did not parse. Keys are deduped
+ * exactly like group copies (§4.2) so the block round-trips.
+ */
+export function parseCredentialBlock(text: string): {
+  creds: ParsedCredential[];
+  bad: number;
+} {
+  const pairs: ParsedCredential[] = [];
+  let bad = 0;
+  for (const raw of text.split("\n")) {
+    if (isSkippablePasteLine(raw)) continue;
+    const c = parseCredentialLine(raw);
+    if (!c) {
+      bad++;
+      continue;
+    }
+    pairs.push(c);
+  }
+  const keys = dedupeKeys(pairs.map((p) => p.key));
+  return {
+    creds: pairs.map((p, i) => ({ ...p, key: keys[i] })),
+    bad,
+  };
+}

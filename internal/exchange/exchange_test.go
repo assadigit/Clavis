@@ -319,3 +319,126 @@ func TestDedupeKeysCollisionWithExistingSuffix(t *testing.T) {
 		}
 	}
 }
+
+/* ------------------- tolerant paste parsing (v1.6.0 §45) ------------------- */
+
+func TestIsSkippablePasteLine(t *testing.T) {
+	cases := map[string]bool{
+		"":                 true,
+		"   ":              true,
+		"\t":               true,
+		"# comment":        true,
+		"  # indented #2":  true,
+		"#tag not comment": true, // any # prefix is a comment, like .env
+		"KEY=value":        false,
+		"GitHub token: x":  false,
+		"  - KEY=value":    false,
+		"line\r":           false, // CR-stripped, still text
+	}
+	for line, want := range cases {
+		if got := IsSkippablePasteLine(line); got != want {
+			t.Errorf("IsSkippablePasteLine(%q) = %v, want %v", line, got, want)
+		}
+	}
+}
+
+func TestParseCredentialLine(t *testing.T) {
+	type want struct {
+		ok   bool
+		name string
+		key  string
+		val  string
+	}
+	cases := map[string]want{
+		// Classic dotenv.
+		"DATABASE_URL=postgres://db": {true, "DATABASE_URL", "DATABASE_URL", "postgres://db"},
+		// Spaced separator.
+		"KEY = value": {true, "KEY", "KEY", "value"},
+		// Free-form left side with "=" becomes the name; key is auto.
+		"GitHub token = ghp_123": {true, "GitHub token", "GITHUB_TOKEN", "ghp_123"},
+		// Colon lines: valid var name keeps itself…
+		"DATABASE_URL: postgres://db": {true, "DATABASE_URL", "DATABASE_URL", "postgres://db"},
+		// …free-form becomes name + AutoKey.
+		"GitHub token: ghp_123": {true, "GitHub token", "GITHUB_TOKEN", "ghp_123"},
+		// Markdown bullets and numbered lists.
+		"- API_KEY=secret":     {true, "API_KEY", "API_KEY", "secret"},
+		"* GitHub token: ghp_": {true, "GitHub token", "GITHUB_TOKEN", "ghp_"},
+		"• spacing = loose":    {true, "spacing", "spacing", "loose"},
+		"3. PORT=8080":         {true, "PORT", "PORT", "8080"},
+		"1) HOST=localhost":    {true, "HOST", "HOST", "localhost"},
+		// Quoted values round-trip through the dotenv unescaper.
+		`TOKEN="abc def"`: {true, "TOKEN", "TOKEN", "abc def"},
+		// Not credentials.
+		"# comment":               {false, "", "", ""},
+		"just prose":              {false, "", "", ""},
+		"My credentials:":         {false, "", "", ""}, // empty colon value = prose
+		"https://api.example.com": {false, "", "", ""}, // URL scheme is not a separator
+		"=value":                  {false, "", "", ""}, // empty name
+		": value":                 {false, "", "", ""},
+		"no separator":            {false, "", "", ""},
+		"":                        {false, "", "", ""},
+		"   \t  ":                 {false, "", "", ""},
+	}
+	for line, w := range cases {
+		c, ok := ParseCredentialLine(line)
+		if ok != w.ok {
+			t.Errorf("ParseCredentialLine(%q) ok = %v, want %v", line, ok, w.ok)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if c.Name != w.name || c.Key != w.key || c.Value != w.val {
+			t.Errorf("ParseCredentialLine(%q) = {%s %s %s}, want {%s %s %s}",
+				line, c.Name, c.Key, c.Value, w.name, w.key, w.val)
+		}
+	}
+}
+
+func TestParseCredentialBlock(t *testing.T) {
+	text := "# project credentials\n" +
+		"\n" +
+		"DATABASE_URL=postgres://localhost/app\n" +
+		"GitHub token: ghp_abc123\n" +
+		"- STRIPE_KEY = sk_test_456\n" +
+		"not a credential line\n" +
+		"GitHub token: ghp_dup\n" +
+		"1. PORT=8080\n"
+	creds, bad := ParseCredentialBlock(text)
+	if bad != 1 {
+		t.Errorf("bad = %d, want 1 (only the prose line)", bad)
+	}
+	if len(creds) != 5 {
+		t.Fatalf("creds = %d, want 5", len(creds))
+	}
+	want := []struct{ name, key, val string }{
+		{"DATABASE_URL", "DATABASE_URL", "postgres://localhost/app"},
+		{"GitHub token", "GITHUB_TOKEN", "ghp_abc123"},
+		{"STRIPE_KEY", "STRIPE_KEY", "sk_test_456"},
+		{"GitHub token", "GITHUB_TOKEN_2", "ghp_dup"}, // deduped
+		{"PORT", "PORT", "8080"},
+	}
+	for i, w := range want {
+		if creds[i].Name != w.name || creds[i].Key != w.key || creds[i].Value != w.val {
+			t.Errorf("creds[%d] = {%s %s %s}, want {%s %s %s}",
+				i, creds[i].Name, creds[i].Key, creds[i].Value, w.name, w.key, w.val)
+		}
+	}
+}
+
+// The user-reported bug (v1.6.0 §45): a paste of colon-style credentials used
+// to parse to ZERO items — the block parser must never produce an empty group
+// out of non-empty input that carries credentials.
+func TestParseCredentialBlockNeverEmptyForRealPastes(t *testing.T) {
+	blocks := []string{
+		"GitHub token: ghp_abc\nOpenAI key: sk-xyz",
+		"- GitHub token: ghp_abc\n- Notion token: secret_x",
+		"API_KEY = value with spaces\nANOTHER=1",
+	}
+	for _, b := range blocks {
+		creds, _ := ParseCredentialBlock(b)
+		if len(creds) == 0 {
+			t.Errorf("ParseCredentialBlock(%q) found no credentials — this is the empty-group bug", b)
+		}
+	}
+}

@@ -62,7 +62,10 @@ type NewItem struct {
 	CategoryID *string
 	Tags       []string
 	IsSecret   *bool // nil → derive from the category (§4.2)
-	Pinned     bool
+	// Shared marks a shared credential (v1.6.0 §44) — define once, add to
+	// any project group.
+	Shared bool
+	Pinned bool
 }
 
 // ItemPatch is a partial item update; nil fields keep the current value.
@@ -74,6 +77,7 @@ type ItemPatch struct {
 	CategoryID *string
 	Tags       *[]string
 	IsSecret   *bool
+	Shared     *bool
 	Pinned     *bool
 }
 
@@ -621,6 +625,8 @@ func (s *Store) listBackups() []BackupInfo {
 }
 
 // purgeTrashLocked removes entries deleted more than 30 days ago (§4.4).
+// v1.6.0 (DECISIONS.md §46): every auto-purged entry gets a tombstone, so
+// the purge is final — an old backup or import can never bring it back live.
 func (s *Store) purgeTrashLocked() error {
 	if s.readOnly {
 		return nil
@@ -641,6 +647,20 @@ func (s *Store) purgeTrashLocked() error {
 	if len(deadItems) == 0 && len(deadGroups) == 0 {
 		return nil
 	}
+	/* v1.6.0: remember the purge. The timestamp is the entry's own
+	   deletedAt (its real deletion moment), so a tombstone added here can
+	   never be older than the delete itself. Entries deleted by pre-1.4.1
+	   versions (no tombstone of their own) become final at this moment —
+	   the one-time retroactive healing for the reported bug. */
+	nowISO := NowISO(s.now())
+	purgedIDs := make([]string, 0, len(deadItems)+len(deadGroups))
+	for id := range deadItems {
+		purgedIDs = append(purgedIDs, id)
+	}
+	for id := range deadGroups {
+		purgedIDs = append(purgedIDs, id)
+	}
+	s.addTombsLocked(purgedIDs, nowISO)
 	items := s.data.Items[:0]
 	for _, it := range s.data.Items {
 		if !deadItems[it.ID] {
@@ -809,6 +829,7 @@ func (s *Store) CreateItem(input NewItem) (Item, error) {
 		CategoryID: categoryID,
 		Tags:       cleanTags(input.Tags),
 		IsSecret:   isSecret,
+		Shared:     input.Shared,
 		Pinned:     input.Pinned,
 		UseCount:   0,
 		LastUsedAt: nil,
@@ -873,6 +894,7 @@ func (s *Store) CreateItemInGroup(groupID string, input NewItem) (Item, error) {
 		CategoryID: categoryID,
 		Tags:       cleanTags(input.Tags),
 		IsSecret:   isSecret,
+		Shared:     input.Shared,
 		Pinned:     input.Pinned,
 		UseCount:   0,
 		LastUsedAt: nil,
@@ -940,6 +962,9 @@ func applyItemPatch(item *Item, patch ItemPatch) {
 	}
 	if patch.IsSecret != nil {
 		item.IsSecret = *patch.IsSecret
+	}
+	if patch.Shared != nil {
+		item.Shared = *patch.Shared
 	}
 	if patch.Pinned != nil {
 		item.Pinned = *patch.Pinned
@@ -1025,10 +1050,12 @@ func (s *Store) DuplicateItem(id string) (Item, error) {
 }
 
 // CreateGroupFromEnv creates a group AND its member items in one shot from
-// pasted KEY=value lines (the "credentials for a whole project" flow). Each
-// line becomes an item (name = key, key = key, IsSecret = true — never
-// under-mask; the user can relax it per item). Keys are deduped (KEY_2, …)
-// so the group block round-trips (§10).
+// pasted credential lines (the "credentials for a whole project" flow).
+// v1.6.0 (DECISIONS.md §45): parsing is TOLERANT — classic KEY=value lines,
+// spaced KEY = value, "Name: value" lines and markdown bullets all work, and
+// # comment / blank lines are skipped. Each line becomes an item (IsSecret =
+// true — never under-mask; the user can relax it per item). Keys are deduped
+// (KEY_2, …) so the group block round-trips (§10).
 func (s *Store) CreateGroupFromEnv(input NewGroup, text string) (Group, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1039,39 +1066,22 @@ func (s *Store) CreateGroupFromEnv(input NewGroup, text string) (Group, error) {
 	if name == "" {
 		return Group{}, errors.New("give the group a name first")
 	}
-	type line struct{ key, value string }
-	var lines []line
-	for _, raw := range strings.Split(text, "\n") {
-		l := strings.TrimSuffix(raw, "\r") // tolerate CRLF pastes
-		if strings.TrimSpace(l) == "" {
-			continue
-		}
-		if k, v, ok := exchange.ParseDotenvLine(l); ok {
-			lines = append(lines, line{key: k, value: v})
-		}
+	creds, _ := exchange.ParseCredentialBlock(text)
+	if len(creds) == 0 {
+		return Group{}, errors.New("no credentials found in the pasted text; paste one per line, like DATABASE_URL=postgres://… or GitHub token: ghp_…")
 	}
-	if len(lines) == 0 {
-		return Group{}, errors.New("no KEY=value lines found; paste one credential per line, like DATABASE_URL=postgres://…")
-	}
-	keys := exchange.DedupeKeys(func() []string {
-		ks := make([]string, len(lines))
-		for i, l := range lines {
-			ks[i] = l.key
-		}
-		return ks
-	}())
 	var categoryID *string
 	if input.CategoryID != nil && *input.CategoryID != "" {
 		categoryID = input.CategoryID
 	}
 	now := NowISO(s.now())
-	itemIDs := make([]string, 0, len(lines))
-	for i, l := range lines {
+	itemIDs := make([]string, 0, len(creds))
+	for _, c := range creds {
 		item := Item{
 			ID:         s.newID(),
-			Name:       keys[i],
-			Key:        keys[i],
-			Value:      l.value,
+			Name:       c.Name,
+			Key:        c.Key,
+			Value:      c.Value,
 			Note:       "",
 			CategoryID: categoryID,
 			Tags:       []string{},
@@ -1479,7 +1489,9 @@ func (s *Store) RestoreEntry(kind EntryKind, id string) error {
 	return nil
 }
 
-// PurgeEntry removes an entry forever.
+// PurgeEntry removes an entry forever. v1.6.0 (DECISIONS.md §46): the purge
+// writes a tombstone, so "Delete forever" is FINAL — no import, fragment or
+// backup can ever bring the entry back live.
 func (s *Store) PurgeEntry(kind EntryKind, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1513,10 +1525,16 @@ func (s *Store) PurgeEntry(kind EntryKind, id string) error {
 		}
 		s.data.Groups = groups
 	}
-	return s.saveLocked(kindDaily)
+	if err := s.saveLocked(kindDaily); err != nil {
+		return err
+	}
+	s.addTombLocked(id, NowISO(s.now()))
+	return nil
 }
 
-// EmptyTrash purges everything that is soft-deleted.
+// EmptyTrash purges everything that is soft-deleted. v1.6.0: like
+// PurgeEntry, every purged entry gets a tombstone — emptying the trash is
+// final too.
 func (s *Store) EmptyTrash() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1537,9 +1555,12 @@ func (s *Store) EmptyTrash() error {
 	}
 	s.data.Items = items
 	groups := s.data.Groups[:0]
+	purgedGroups := []string{}
 	for _, g := range s.data.Groups {
 		if g.DeletedAt == nil {
 			groups = append(groups, g)
+		} else {
+			purgedGroups = append(purgedGroups, g.ID)
 		}
 	}
 	s.data.Groups = groups
@@ -1553,7 +1574,16 @@ func (s *Store) EmptyTrash() error {
 		}
 		g.ItemIDs = kept
 	}
-	return s.saveLocked(kindDaily)
+	if err := s.saveLocked(kindDaily); err != nil {
+		return err
+	}
+	purged := make([]string, 0, len(deadItems)+len(purgedGroups))
+	for id := range deadItems {
+		purged = append(purged, id)
+	}
+	purged = append(purged, purgedGroups...)
+	s.addTombsLocked(purged, NowISO(s.now()))
+	return nil
 }
 
 // CreateCategory adds a category at the end, optionally nested under
@@ -1938,6 +1968,10 @@ func (s *Store) ClearRecoveredNotice() {
 }
 
 // RestoreBackup replaces the data with a named backup (§5.9 Data list).
+// v1.6.0 (DECISIONS.md §46): tombstones are cleared ONLY for entries the
+// backup itself contains (their fate follows the user's explicit choice of
+// this past state); tombstones for entries ABSENT from the backup stay, so
+// older deletions cannot sneak back live through a later import or recovery.
 func (s *Store) RestoreBackup(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1961,10 +1995,23 @@ func (s *Store) RestoreBackup(name string) error {
 	}
 	s.data = parsed
 	s.data.AppVersion = s.appVersion
-	/* v1.4.1 (DECISIONS.md §42): restoring a backup is the user
-	   explicitly choosing a past state — every tombstone is forgotten,
-	   so whatever the backup brings back stays. */
-	s.clearTombsLocked()
+	/* v1.6.0: the backup's own LIVE entries follow the user's explicit
+	   choice — forget exactly their tombstones, nothing else. Entries the
+	   backup holds TRASHED keep their tombstone (their fate in the chosen
+	   past state is "deleted"), so a stale rewrite can never resurrect them
+	   as live afterwards. */
+	resentried := make([]string, 0, len(parsed.Items)+len(parsed.Groups))
+	for _, it := range parsed.Items {
+		if it.DeletedAt == nil {
+			resentried = append(resentried, it.ID)
+		}
+	}
+	for _, g := range parsed.Groups {
+		if g.DeletedAt == nil {
+			resentried = append(resentried, g.ID)
+		}
+	}
+	s.removeTombLocked(resentried...)
 	return s.writeAtomicLocked()
 }
 

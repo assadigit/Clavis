@@ -21,6 +21,7 @@ import {
   History,
   Inbox,
   Key,
+  Link2,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -35,6 +36,7 @@ import {
   deletedEntries,
   liveGroups,
   liveItems,
+  sharedItems,
   subtreeCounts,
   tagCounts,
   type CatNode,
@@ -115,6 +117,9 @@ export function Sidebar({ state, call, readOnly, filter, setFilter }: SidebarPro
     liveGroups(data).filter((g) => g.lastUsedAt !== null).length;
   const pinnedCount =
     liveItems(data).filter((i) => i.pinned).length + liveGroups(data).filter((g) => g.pinned).length;
+  /* v1.6.0 (DECISIONS §44): shared credentials — define once, add to any
+   *  number of project groups. Only items can be shared. */
+  const sharedCount = sharedItems(data).length;
   const trashCount = deletedEntries(data).length;
   const tree = categoryTree(data);
   const sCounts = subtreeCounts(data);
@@ -262,6 +267,7 @@ export function Sidebar({ state, call, readOnly, filter, setFilter }: SidebarPro
       <NavRow icon={Inbox} label="All" count={liveCount} active={filter.view === "all"} onClick={() => pick({ view: "all" })} />
       <NavRow icon={History} label="Recent" count={recentCount} active={filter.view === "recent"} onClick={() => pick({ view: "recent" })} />
       <NavRow icon={Pin} label="Pinned" count={pinnedCount} active={filter.view === "pinned"} onClick={() => pick({ view: "pinned" })} />
+      <NavRow icon={Link2} label="Shared" count={sharedCount} active={filter.view === "shared"} onClick={() => pick({ view: "shared" })} />
 
       <div style={{ height: "var(--space-2)" }} />
       <SectionTitle

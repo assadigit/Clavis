@@ -157,3 +157,33 @@ describe("Sidebar category tree", () => {
     expect(call).toHaveBeenCalledWith("deleteCategory", { id: "p" });
   });
 });
+
+/* -------- v1.6.0 (DECISIONS §44): the Shared view row -------- */
+
+describe("Sidebar shared credentials view (v1.6.0)", () => {
+  function sharedState(): ClavisState {
+    const s = state();
+    s.data.items[0].shared = true;
+    return s;
+  }
+
+  it("shows the Shared row with the shared-item count", () => {
+    const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+    render(
+      <Sidebar state={sharedState()} call={call} readOnly={false} filter={{ view: "all" }} setFilter={vi.fn()} />,
+    );
+    const row = screen.getByText("Shared").closest("button");
+    expect(row?.textContent).toContain("1");
+  });
+
+  it("clicking Shared filters the list to the shared view", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+    const setFilter = vi.fn();
+    render(
+      <Sidebar state={sharedState()} call={call} readOnly={false} filter={{ view: "all" }} setFilter={setFilter} />,
+    );
+    await user.click(screen.getByText("Shared"));
+    expect(setFilter).toHaveBeenCalledWith({ view: "shared" });
+  });
+});

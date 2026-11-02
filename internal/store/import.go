@@ -228,6 +228,10 @@ func (s *Store) ImportBackup(mode, jsonText string) (ImportSummary, error) {
 	if mode == "replace" {
 		s.data = parsed
 		s.data.AppVersion = s.appVersion
+		/* v1.6.0 (DECISIONS.md §46): an imported backup is not an intentional
+		   un-delete — anything it brings back that the user had deleted goes
+		   straight to the Trash, in this same action, banner included. */
+		s.enforceTombsLocked()
 		if err := s.writeAtomicLocked(); err != nil {
 			return ImportSummary{}, err
 		}
@@ -263,6 +267,9 @@ func (s *Store) ImportBackup(mode, jsonText string) (ImportSummary, error) {
 			summary.Skipped++
 		}
 	}
+	/* v1.6.0: same guarantee on merge — a purged entry the backup still
+	   carries comes back to the Trash, not to the live list. */
+	s.enforceTombsLocked()
 	return summary, s.writeAtomicLocked()
 }
 

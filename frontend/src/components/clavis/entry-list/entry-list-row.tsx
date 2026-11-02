@@ -19,6 +19,10 @@ export interface EntryRowData {
   isSecret: boolean;
   pinned: boolean;
   shared: number;
+  /** v1.6.0 (DECISIONS §44): a shared credential — defined once, added to
+   *  any number of project groups (distinct from `shared`, the group-usage
+   *  count). */
+  isShared?: boolean;
   memberCount?: number;
   /** Document groups (§40) show their size instead of a member count. */
   isDocument?: boolean;
@@ -68,9 +72,21 @@ export function EntryListRow({
       onClick={() => onSelect({ kind: row.kind, id: row.id })}
     >
       <EntryTile kind={row.kind} isSecret={row.isSecret} />
-      <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)" }}>
-        <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>
-          {row.name}
+      <span className="flex min-w-0 flex-1 flex-col" style={{ gap: "calc(var(--space-1) / 2)", minWidth: 0 }}>
+        <span className="flex items-center" style={{ gap: "var(--space-1)", minWidth: 0 }}>
+          <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)" }}>
+            {row.name}
+          </span>
+          {row.isShared ? (
+            <span
+              className="glass-chip inline-flex items-center"
+              title="Shared credential — defined once, added to any project"
+              style={{ gap: "calc(var(--space-1) / 2)", padding: "calc(var(--space-1) / 2) var(--space-2)", fontSize: "var(--text-xs)", color: "var(--color-accent-text)", flexShrink: 0, lineHeight: 1.2 }}
+            >
+              <Ix icon={Link2} size="sm" style={{ width: "var(--text-xs)", height: "var(--text-xs)" }} />
+              shared
+            </span>
+          ) : null}
         </span>
         {row.meta !== "" ? (
           <span className="truncate t-muted" style={{ fontSize: "var(--text-xs)" }}>
