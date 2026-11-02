@@ -21,12 +21,16 @@
 import type { VaultData } from "./types";
 
 export interface SearchEntry {
-  kind: "item" | "group";
+  kind: "item" | "group" | "category";
   id: string;
   name: string;
-  key: string; // "" for groups
-  note: string; // "" for groups
-  categoryName: string; // "" when no category
+  key: string; // "" for groups and categories
+  note: string; // "" for groups and categories
+  categoryName: string; // "" when no category (folders are not "in" one)
+  /** Parent category id for kind "category" ("" = top level); "" for
+   *  items and groups. Read by the palette's folder navigation (v1.11.0,
+   *  DECISIONS.md §51) — see buildLocationRows. */
+  parentId: string;
   tags: string[];
   pinned: boolean;
   useCount: number;
@@ -45,6 +49,7 @@ export function buildSearchEntries(data: VaultData): SearchEntry[] {
       key: it.key,
       note: it.note,
       categoryName: it.categoryId ? catNames.get(it.categoryId) ?? "" : "",
+      parentId: "",
       tags: it.tags,
       pinned: it.pinned,
       useCount: it.useCount,
@@ -60,13 +65,45 @@ export function buildSearchEntries(data: VaultData): SearchEntry[] {
       key: "",
       note: "",
       categoryName: g.categoryId ? catNames.get(g.categoryId) ?? "" : "",
+      parentId: "",
       tags: g.tags,
       pinned: g.pinned,
       useCount: g.useCount,
       lastUsedAt: g.lastUsedAt ? Date.parse(g.lastUsedAt) || 0 : 0,
     });
   }
+  /* v1.11.0 (DECISIONS.md §51): folders are searchable by name — typing
+   * "pro" finds the Prompts folder so you can drill into its subtree.
+   * Folders have no category of their own and no usage tracking, so
+   * @category and #tag restrictions exclude them, and ranking treats them
+   * as never-used entries (pinning is what puts one on the home list). */
+  for (const c of data.categories) {
+    entries.push({
+      kind: "category",
+      id: c.id,
+      name: c.name,
+      key: "",
+      note: "",
+      categoryName: "",
+      parentId: c.parentId ?? "",
+      tags: [],
+      pinned: c.pinned ?? false,
+      useCount: 0,
+      lastUsedAt: 0,
+    });
+  }
   return entries;
+}
+
+/**
+ * The palette's default-list pool (v1.11.0 §51): every live item and group
+ * plus the PINNED folders. Unpinned folders stay out of the default palette
+ * — they are still found by typing their name (searchEntries), but the home
+ * list stays curated: recents plus pinned/most-used, never a wall of every
+ * folder the user ever made.
+ */
+export function homeEntries(entries: SearchEntry[]): SearchEntry[] {
+  return entries.filter((e) => e.kind !== "category" || e.pinned);
 }
 
 interface ParsedQuery {

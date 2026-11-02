@@ -559,6 +559,19 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			}
 			return s.done(nil)
 		}
+	case "setCategoryPinned":
+		{
+			// v1.11.0 (DECISIONS.md §51): pin a folder so it rides the
+			// mini palette's top list and drills into its subtree.
+			pin := getBool(p, "pinned")
+			if pin == nil {
+				return Fail("setCategoryPinned needs 'pinned'", 400)
+			}
+			if err := s.Store.SetCategoryPinned(getStr(p, "id"), *pin); err != nil {
+				return FailErr(err)
+			}
+			return s.done(nil)
+		}
 	case "deleteCategory":
 		{
 			if err := s.Store.DeleteCategory(getStr(p, "id")); err != nil {

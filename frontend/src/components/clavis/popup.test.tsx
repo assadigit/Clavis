@@ -96,7 +96,7 @@ function setup(overrides: Partial<Parameters<typeof Popup>[0]> = {}) {
     />,
   );
   const input = screen.getByLabelText("Search Clavis");
-  return { call, onHide, onOpenManagerNewItem, input, container: view.container };
+  return { call, onHide, onOpenManagerNewItem, onOpenManager, onReportSelection, input, container: view.container };
 }
 
 beforeEach(() => {
@@ -172,5 +172,115 @@ describe("Popup golden path", () => {
     await user.keyboard("{ArrowRight}");
     await user.keyboard("{Control>}{Enter}{/Control}");
     expect(call).toHaveBeenCalledWith("copy", { kind: "group", id: "g1" });
+  });
+});
+
+/* -------- v1.11.0 (DECISIONS.md §51): nested folder navigation -------- */
+
+/** The user's exact tree: Prompts → Image generation → Artistic Picture
+ *  Prompt, with "Prompts" the pinned folder that rides the default list. */
+function folderState(): ClavisState {
+  const s = state();
+  s.data.categories.push(
+    { id: "prompts", name: "Prompts", sortOrder: 1, pinned: true },
+    { id: "imagegen", name: "Image generation", sortOrder: 2, parentId: "prompts" },
+  );
+  s.data.items.push({
+    id: "i3", name: "Artistic seed", key: "", value: "", valueLast4: "",
+    note: "", categoryId: "imagegen", tags: [], isSecret: false, pinned: false,
+    useCount: 0, lastUsedAt: null,
+    createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
+  });
+  s.data.groups.push({
+    id: "gpp", name: "Artistic Picture Prompt", categoryId: "imagegen", tags: [],
+    itemIds: ["i3"], pinned: false, useCount: 0, lastUsedAt: null,
+    createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
+  });
+  return s;
+}
+
+describe("Popup nested folder navigation (v1.11.0 §51)", () => {
+  it("a pinned folder rides the default list; unpinned folders don't", () => {
+    setup({ state: folderState() });
+    /* The pinned Prompts folder is on the home list (preview = its subtree
+       count, "2 entries": the group + the standalone item inside). */
+    expect(screen.getByText("Prompts")).toBeTruthy();
+    expect(screen.getByText("2 entries")).toBeTruthy();
+    /* The unpinned Credentials folder is NOT on the home list — its row
+       would carry the "3 entries" preview (i1, i2 and the group). */
+    expect(screen.queryByText("3 entries")).toBeNull();
+  });
+
+  it("typing finds unpinned folders by name, and → drills into them", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setup({ state: folderState() });
+    await user.type(screen.getByLabelText("Search Clavis"), "cred");
+    /* The Credentials folder row appears in the search results. */
+    expect(screen.getByText("3 entries")).toBeTruthy();
+    await user.keyboard("{ArrowRight}");
+    /* Drilled in: the back button and the folder view appear. */
+    expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+    await user.keyboard("{Backspace}");
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+  });
+
+  it("the user's path: Prompts → Image generation → Artistic Picture Prompt → copy", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { call } = setup({ state: folderState() });
+    await user.type(screen.getByLabelText("Search Clavis"), "prom");
+    /* Enter on a folder row drills (folders navigate, never copy). */
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Image generation")).toBeTruthy();
+    /* Clicking a subfolder row drills too (the mouse path). */
+    await user.click(screen.getByText("Image generation"));
+    expect(screen.getByText("Artistic Picture Prompt")).toBeTruthy();
+    /* → opens the group's member list (the classic §3.3b view). */
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByText("Artistic seed")).toBeTruthy();
+    /* Enter copies the member item through the backend. */
+    await user.keyboard("{Enter}");
+    expect(call).toHaveBeenCalledWith("copy", { kind: "item", id: "i3" });
+  });
+
+  it("Backspace pops one level at a time, landing the selection on the row you left", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { onHide } = setup({ state: folderState() });
+    await user.type(screen.getByLabelText("Search Clavis"), "prom");
+    await user.keyboard("{Enter}"); // inside Prompts
+    await user.keyboard("{Enter}"); // inside Image generation
+    /* Backspace (query empty) pops ONE level — back inside Prompts, with
+       the selection landed on the row we left (the subfolder). */
+    await user.keyboard("{Backspace}");
+    const selRow = screen.getAllByRole("option").find((o) => o.getAttribute("aria-selected") === "true");
+    expect(selRow?.textContent).toContain("Image generation");
+    /* And again — back at the home list, landed on the Prompts row. */
+    await user.keyboard("{Backspace}");
+    const selRow2 = screen.getAllByRole("option").find((o) => o.getAttribute("aria-selected") === "true");
+    expect(selRow2?.textContent).toContain("Prompts");
+    /* Esc at the top level hides (Esc inside pops, as ever). */
+    await user.keyboard("{Escape}");
+    expect(onHide).toHaveBeenCalled();
+  });
+
+  it("the header shows the whole path, not just the leaf", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setup({ state: folderState() });
+    await user.type(screen.getByLabelText("Search Clavis"), "prom");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByText("Image generation"));
+    await user.keyboard("{ArrowRight}");
+    expect(
+      screen.getByText("Prompts › Image generation › Artistic Picture Prompt"),
+    ).toBeTruthy();
+  });
+
+  it("a folder selection reports null to Ctrl+E (folders have no editor)", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { onReportSelection } = setup({ state: folderState() });
+    await user.type(screen.getByLabelText("Search Clavis"), "prom");
+    await user.keyboard("{ArrowRight}");
+    /* Inside Prompts the selected row is the SUBFOLDER — nothing Ctrl+E
+       could open, so the selection reports null (v1.11.0 §51). */
+    expect(onReportSelection).toHaveBeenLastCalledWith(null);
   });
 });

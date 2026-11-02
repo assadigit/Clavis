@@ -1,8 +1,8 @@
 /**
  * CLAVIS — the popup quick palette (SPEC §3.3b, §5.1, §5.2).
  * Keyboard-first: Up/Down move selection (wrap), Enter copies, Right drills
- * into a group, Left/Backspace-on-empty/Esc go back, Esc at top hides.
- * Never shows secret values — only masked previews.
+ * into a group or folder, Left/Backspace-on-empty/Esc go back one level,
+ * Esc at the top hides. Never shows secret values — only masked previews.
  *
  * Empty query (§5.1): "Recent" — the 10 most recently used/copied entries
  * (items AND groups; copying a whole group counts) — topped up to 10 rows
@@ -19,22 +19,41 @@
  * ways (Go popupmath — Spotlight style), the OS rounds its corners (DWM
  * frame), and the web edition mirrors the placement: the floating panel
  * sits at the vertical middle instead of 18vh.
+ *
+ * v1.11.0 (DECISIONS.md §51): nested selection — the drill-down became a
+ * navigation STACK (the old single drillId → NavLoc[]). "I pin some
+ * folders (which appear in clavis mini), then they have hierarchical and
+ * nested access": Prompts → Image generation → Artistic Picture Prompt.
+ * Pinned folders ride the default list (homeEntries); every folder is
+ * findable by typing its name; Enter/→ on a folder row pushes it, Esc/←/
+ * Backspace-on-empty pops one level, and the header shows the whole path.
+ * Every show still starts fresh (the palette unmounts on hide).
  */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AppWindow, ChevronLeft, Layers } from "lucide-react";
+import { AppWindow, ChevronLeft, Folder, Layers } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
-import { buildSearchEntries, compareRecent } from "@/lib/clavis/search";
+import { buildSearchEntries, compareRecent, homeEntries } from "@/lib/clavis/search";
 import type { ClavisState } from "@/lib/clavis/types";
 import { messages } from "@/lib/clavis/messages";
 import type { Selection } from "./app-types";
-import { groupById, liveGroups, liveItems } from "./derive";
+import { groupById, liveGroups, liveItems, subtreeCounts } from "./derive";
 import { Ix } from "./icons";
-import { PopupRows, RECENT_LIMIT, rowKeyOf, useMemberRows, useTopRows, type CopiedState } from "./popup/rows";
+import {
+  PopupRows,
+  RECENT_LIMIT,
+  buildLocationRows,
+  buildTopRows,
+  rowKeyOf,
+  useLocationRows,
+  useTopRows,
+  type CopiedState,
+  type NavLoc,
+} from "./popup/rows";
 
-/** The drill-down view has no section headers. */
+/** The drill-down views have no section headers. */
 const NO_HEADERS = new Map<number, string>();
 
 export interface PopupProps {
@@ -55,7 +74,10 @@ export interface PopupProps {
 export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenManager, onReportSelection, fill }: PopupProps) {
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
-  const [drillId, setDrillId] = useState<string | null>(null);
+  /* v1.11.0 §51: the drill-down path as a stack — [Prompts, Image
+   * generation, Artistic Picture Prompt] renders three levels deep with
+   * one level of state per step. [] = the home list. */
+  const [nav, setNav] = useState<NavLoc[]>([]);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<CopiedState>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -79,8 +101,11 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
     () => new Map(state.data.groups.filter((g) => g.deletedAt === null).map((g) => [g.id, g])),
     [state.data.groups]
   );
+  /* Subtree entry counts per folder — the sidebar's numbers, reused for
+     the folder rows' "N entries" preview and the header count. */
+  const catCounts = useMemo(() => subtreeCounts(state.data), [state.data]);
 
-  const topRows = useTopRows(query, entries, itemMap, groupMap);
+  const topRows = useTopRows(query, entries, itemMap, groupMap, catCounts);
 
   /* Section labels for the default list: "Recent" over the recent block,
      "Pinned & frequent" over the fill. Headers are presentation-only —
@@ -88,33 +113,60 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
   const topHeaders = useMemo(() => {
     const map = new Map<number, string>();
     if (query.trim() !== "") return map;
-    /* Must mirror topRows: recent = used entries, most-recent-first. */
-    const used = entries.filter((e) => e.lastUsedAt > 0).sort(compareRecent);
+    /* Must mirror topRows: the same pinned-folders-ride pool (v1.11.0 §51),
+       then recent = used entries, most-recent-first. */
+    const pool = homeEntries(entries);
+    const used = pool.filter((e) => e.lastUsedAt > 0).sort(compareRecent);
     const recentCount = Math.min(used.length, RECENT_LIMIT);
     if (recentCount > 0) map.set(0, "Recent");
     const fillCount = Math.min(
-      entries.length - used.length,
+      pool.length - used.length,
       Math.max(0, RECENT_LIMIT - recentCount)
     );
     if (fillCount > 0) map.set(recentCount, "Pinned & frequent");
     return map;
   }, [query, entries]);
 
-  const drillGroup = drillId ? groupById(state.data, drillId) : null;
+  /* The current drill-down location (top of the stack). */
+  const loc: NavLoc | null = nav.length > 0 ? nav[nav.length - 1] : null;
+  const locGroup = loc?.kind === "group" ? groupById(state.data, loc.id) : null;
+  const locCat = loc?.kind === "category" ? state.data.categories.find((c) => c.id === loc.id) ?? null : null;
+  const drilling = loc !== null;
 
-  const memberRows = useMemberRows(drillGroup, query, entries, itemMap, state.data);
+  const locRows = useLocationRows(loc, query, entries, itemMap, groupMap, state.data);
 
-  const rows = drillGroup ? memberRows : topRows;
-  const headers = drillGroup ? NO_HEADERS : topHeaders;
+  const rows = drilling ? locRows : topRows;
+  const headers = drilling ? NO_HEADERS : topHeaders;
+
+  /* A data-changed refetch (v1.3.2 sync) can delete the drilled folder or
+     group out from under the palette — prune dead levels off the stack
+     instead of stranding the view on an empty list. */
+  useEffect(() => {
+    setNav((n) => {
+      let cut = n.length;
+      while (cut > 0) {
+        const l = n[cut - 1];
+        const alive =
+          l.kind === "group"
+            ? groupById(state.data, l.id) !== null
+            : state.data.categories.some((c) => c.id === l.id);
+        if (alive) break;
+        cut--;
+      }
+      return cut === n.length ? n : n.slice(0, cut);
+    });
+  }, [state.data]);
 
   /* Selection is kept inside the list by deriving a clamped index (no
      setState-in-effect): rows shrink → the index rides along. */
   const selIdx = rows.length === 0 ? 0 : Math.min(sel, rows.length - 1);
 
-  /* Report the selected row to the app (global Ctrl+E). */
+  /* Report the selected row to the app (global Ctrl+E). Folders have no
+     editor — a category selection reports null so Ctrl+E stays an entry
+     action (v1.11.0 §51). */
   useEffect(() => {
     const row = rows[selIdx];
-    onReportSelection(row ? { kind: row.kind, id: row.id } : null);
+    onReportSelection(row && row.kind !== "category" ? { kind: row.kind, id: row.id } : null);
   }, [rows, selIdx, onReportSelection]);
 
   async function doCopy(kind: "item" | "group", id: string, rowKey: string) {
@@ -140,12 +192,25 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
     setBusy(false);
   }
 
+  /* Push one drill-down level (Enter/→/click on a folder or group row). */
+  function enter(next: NavLoc) {
+    setNav((n) => [...n, next]);
+    /* SPEC §3.3b: the query that found the container must not filter (and
+       empty) the inside list; it is cleared, typing then searches within. */
+    setQuery("");
+    setSel(0);
+  }
+
   function activate(index: number) {
     if (copied || busy) return;
     const row = rows[index];
     if (!row) return;
-    if (drillGroup) doCopy("item", row.id, rowKeyOf(row));
-    else doCopy(row.kind, row.id, rowKeyOf(row));
+    /* v1.11.0 §51: a folder row navigates — there is nothing to copy. */
+    if (row.kind === "category") {
+      enter({ kind: "category", id: row.id });
+      return;
+    }
+    doCopy(row.kind, row.id, rowKeyOf(row));
   }
 
   function move(dir: 1 | -1) {
@@ -154,11 +219,18 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
   }
 
   function back() {
-    if (!drillGroup) return;
-    const gid = drillGroup.id;
-    setDrillId(null);
+    if (!loc) return;
+    const popped = loc;
+    const rest = nav.slice(0, -1);
+    setNav(rest);
     setQuery("");
-    const idx = topRows.findIndex((r) => r.kind === "group" && r.id === gid);
+    /* Land the selection back on the row you left — computed from the same
+       pure builders the view uses, at the post-back query (""). */
+    const parent = rest.length > 0 ? rest[rest.length - 1] : null;
+    const parentRows = parent
+      ? buildLocationRows(parent, "", entries, itemMap, groupMap, state.data)
+      : buildTopRows("", entries, itemMap, groupMap, catCounts);
+    const idx = parentRows.findIndex((r) => r.kind === popped.kind && r.id === popped.id);
     setSel(idx >= 0 ? idx : 0);
   }
 
@@ -170,7 +242,8 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key === "Enter") {
       e.preventDefault();
-      if (drillGroup) doCopy("group", drillGroup.id, `group:${drillGroup.id}`);
+      /* Inside a group view, Ctrl+Enter copies the whole group (§3.3b). */
+      if (locGroup) doCopy("group", locGroup.id, `group:${locGroup.id}`);
       else activate(selIdx);
       return;
     }
@@ -186,35 +259,30 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
       case "Enter": {
         e.preventDefault();
         if (rows.length === 0) {
-          if (!drillGroup && query.trim() !== "") onOpenManagerNewItem(query.trim());
+          if (!drilling && query.trim() !== "") onOpenManagerNewItem(query.trim());
           return;
         }
         activate(selIdx);
         return;
       }
       case "ArrowRight": {
-        if (!drillGroup) {
-          const row = rows[selIdx];
-          if (row && row.kind === "group") {
-            e.preventDefault();
-            // SPEC §3.3b: "open a group and list its members" — the query
-            // that found the group must not filter (and empty) the member
-            // list; it is cleared, typing then searches within the group.
-            setDrillId(row.id);
-            setQuery("");
-            setSel(0);
-          }
+        /* v1.11.0 §51: → drills at ANY level — a group row opens its
+           members, a folder row opens its subfolders and entries. */
+        const row = rows[selIdx];
+        if (row && (row.kind === "group" || row.kind === "category")) {
+          e.preventDefault();
+          enter({ kind: row.kind, id: row.id });
         }
         return;
       }
       case "ArrowLeft":
-        if (drillGroup) {
+        if (drilling) {
           e.preventDefault();
           back();
         }
         return;
       case "Backspace":
-        if (query === "" && drillGroup) {
+        if (query === "" && drilling) {
           e.preventDefault();
           back();
         }
@@ -222,7 +290,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
       case "Escape":
         e.preventDefault();
         e.stopPropagation();
-        if (drillGroup) back();
+        if (drilling) back();
         else onHide();
         return;
       default:
@@ -231,6 +299,24 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
   }
 
   if (!open) return null;
+
+  /* The drill-down header: back button, the FULL path ("Prompts › Image
+     generation › Artistic Picture Prompt"), and the size hint. */
+  const pathLabel = nav
+    .map((l) =>
+      l.kind === "group"
+        ? groupMap.get(l.id)?.name ?? ""
+        : state.data.categories.find((c) => c.id === l.id)?.name ?? ""
+    )
+    .filter((n) => n !== "")
+    .join(" › ");
+  const countLabel = locGroup
+    ? locGroup.mode === "document"
+      ? `document · ${(locGroup.docChars ?? 0).toLocaleString()} chars`
+      : `${locGroup.itemIds.filter((id) => itemMap.has(id)).length} items`
+    : locCat
+      ? `${catCounts.get(locCat.id) ?? 0} entries`
+      : "";
 
   return (
     <div
@@ -264,7 +350,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
         <div className="clavis-pop-in relative" style={{ pointerEvents: "auto" }}>
           <div className="clavis-backdrop-layer" aria-hidden />
           <div className="glass-panel relative flex flex-col" style={{ overflow: "hidden", boxShadow: fill ? undefined : "var(--overlay-shadow)" }}>
-            {drillGroup ? (
+            {drilling ? (
               <div
                 className="flex items-center"
                 style={{
@@ -276,20 +362,25 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 <button
                   type="button"
                   onClick={back}
-                  aria-label="Back to results"
+                  aria-label="Back"
+                  title="Back one level (Esc at the top closes)"
                   className="clavis-btn clavis-btn-ghost"
                   style={{ padding: "var(--space-1)" }}
                 >
                   <Ix icon={ChevronLeft} size="sm" />
                 </button>
-                <Ix icon={Layers} size="sm" style={{ color: "var(--color-accent-text)" }} />
+                <Ix
+                  icon={locGroup ? Layers : Folder}
+                  size="sm"
+                  style={{ color: "var(--color-accent-text)", flexShrink: 0 }}
+                />
+                {/* v1.11.0 §51: the whole path, not just the leaf — deep
+                    stacks stay orientable at 440 DIP. */}
                 <span className="truncate" style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>
-                  {drillGroup.name}
+                  {pathLabel}
                 </span>
                 <span className="t-muted" style={{ fontSize: "var(--text-xs)", flexShrink: 0 }}>
-                  {drillGroup.mode === "document"
-                    ? `document · ${(drillGroup.docChars ?? 0).toLocaleString()} chars`
-                    : `${drillGroup.itemIds.filter((id) => itemMap.has(id)).length} items`}
+                  {countLabel}
                 </span>
               </div>
             ) : null}
@@ -325,7 +416,7 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
               selIdx={selIdx}
               copied={copied}
               noData={noData}
-              inGroup={drillGroup !== null}
+              drilling={drilling}
               query={query}
               onHover={setSel}
               onActivate={activate}
@@ -344,8 +435,9 @@ export function Popup({ open, onHide, state, call, onOpenManagerNewItem, onOpenM
                 <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>Copy</span>
               </span>
               <span className="flex items-center" style={{ gap: "var(--space-1)" }}>
+                {/* v1.11.0 §51: → opens groups AND folders now. */}
                 <kbd className="clavis-keycap">→</kbd>
-                <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>Open group</span>
+                <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>Open</span>
               </span>
               <span className="flex items-center" style={{ gap: "var(--space-1)" }}>
                 <kbd className="clavis-keycap">Esc</kbd>

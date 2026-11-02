@@ -184,6 +184,7 @@ func NormalizeVault(parsed any, appVersion string, nowISO string, newID func() s
 			Name:      normStr(cat["name"]),
 			SortOrder: num(cat["sortOrder"]),
 			ParentID:  normStrPtr(cat["parentId"]),
+			Pinned:    normBool(cat["pinned"], false),
 		})
 	}
 	sanitizeCategoryTree(categories)

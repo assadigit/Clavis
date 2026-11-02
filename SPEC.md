@@ -70,6 +70,7 @@ Companion file: `frontend/src/design-tokens.css` (all colors, glass, type, spaci
 - Hides when it loses focus, and on Esc.
 - Opens with the search box focused and the previous query cleared; every open starts from a clean state (query, selection, drill position and copy feedback are reset — a leftover copy state must never block typing).
 - Size: 440 px wide panel (v1.9.0 compact). Height grows with the number of rows, up to 10 rows visible, then scrolls.
+- The drill-down is a stack, not a single level (v1.11.0): a **pinned folder** rides the default list (pin it with the toggle next to each folder in the sidebar), every folder is findable by typing its name, and Enter/→/click walks the tree — inside a folder the subfolders list first, then the groups and standalone items filed directly in it; a group still opens its classic member list. The header carries the whole path ("Prompts › Image generation › Artistic Picture Prompt"), and Back/Esc pops one level at a time, landing the selection on the row you left.
 - The footer carries a clear **Open Clavis** button that closes the popup and shows the Manager window.
 - The popup **never** shows secret values in full. See 5.2.
 
@@ -148,19 +149,20 @@ Create three categories: **Credentials**, **Prompts**, **Notes**. No sample item
   - Plain words match **name**, **key**, **note**, **category name** and **tag names** (case-insensitive, prefix and fuzzy-subsequence match; for example "ghtk" finds "GitHub token").
   - `#word` restricts to items/groups whose tags match.
   - `@word` restricts to a category.
-- Ranking: exact/prefix name match first, then pinned, then most-used (`useCount`, then `lastUsedAt`).
+  - Folders (categories) are searchable by name too (v1.11.0): typing "prom" finds the Prompts folder so you can walk into the tree. `@word` and `#word` restrictions exclude folder rows (a folder is not "in" a category and carries no tags).
+- Ranking: exact/prefix name match first, then pinned, then most-used (`useCount`, then `lastUsedAt`). Folders have no usage tracking — ranking treats them as never-used entries; pinning is what puts one on the default list.
 - Search never looks inside **secret values**.
-- With an empty query, the popup shows a **Recent** section first — the **10 most recently used/copied entries** (items AND groups; copying a whole group counts as using it), most recent first. When fewer than 10 entries have ever been used, the list is topped up with a **Pinned & frequent** section (pinned first, then most-used) so the palette always offers up to 10 rows.
+- With an empty query, the popup shows a **Recent** section first — the **10 most recently used/copied entries** (items AND groups; copying a whole group counts as using it), most recent first. When fewer than 10 entries have ever been used, the list is topped up with a **Pinned & frequent** section (pinned first, then most-used; **pinned folders ride this list too**, v1.11.0 — unpinned folders stay off the default palette and stay findable by name) so the palette always offers up to 10 rows.
 - The Manager sidebar has a matching **Recent** view: the same 10 most recently used/copied entries, most recent first.
 - If nothing matches: show "Nothing found. Press Enter to create '<query>'", and Enter opens the Manager's new-item form with the name prefilled.
 
 ### 5.2 Popup rows and copy behavior
-Each row shows: type icon (key = secret item, lines = note or prompt, stack = group), bold name, muted "category · tags", and on the right either the masked preview (`••••••••3f9a`, last 4 characters when `showLast4` is on and the value is at least 12 characters, otherwise fully masked) or "12 items" for groups.
+Each row shows: type icon (key = secret item, lines = note or prompt, stack = group, folder = category, v1.11.0), bold name, muted "category · tags", and on the right either the masked preview (`••••••••3f9a`, last 4 characters when `showLast4` is on and the value is at least 12 characters, otherwise fully masked), "12 items" for groups, or the subtree entry count ("12 entries") for folders.
 
 Keyboard (the popup is keyboard-first):
 - Up/Down: move selection. Mouse hover also selects; click = Enter.
-- **Enter:** copy the selected row. Single item → the value exactly as stored. Group → every member as `KEY=value`, one per line, in group order.
-- **Right arrow:** open a group and list its members. **Enter** on a member copies only that member. **Ctrl+Enter** copies the whole group. **Left arrow / Backspace on empty query / Esc** goes back one level. Esc at top level hides the popup.
+- **Enter:** copy the selected row. Single item → the value exactly as stored. Group → every member as `KEY=value`, one per line, in group order. A folder row has nothing to copy — Enter/→ on it drills into it instead.
+- **Right arrow:** open a group and list its members, or open a folder and list its subfolders first, then the groups and standalone items filed directly in it (v1.11.0). **Enter** on a member copies only that member. **Ctrl+Enter** copies the whole group. **Left arrow / Backspace on empty query / Esc** goes back one level — from several levels deep, one press each, landing the selection on the row you left. Esc at top level hides the popup.
 - **Ctrl+N:** open the Manager with a new item form. **Ctrl+E:** open the Manager on the selected row.
 - Dotenv quoting for group copy: if a value contains a newline, a double quote, a backslash, or leading/trailing spaces, write it as `KEY="…"` with `\n`, `\"` and `\\` escapes. Otherwise write it plain.
 

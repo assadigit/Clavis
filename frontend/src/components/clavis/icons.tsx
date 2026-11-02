@@ -6,7 +6,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { AlignLeft, Key, Layers } from "lucide-react";
+import { AlignLeft, Folder, Key, Layers } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type IconSize = "sm" | "md" | "lg" | "xl";
@@ -35,18 +35,20 @@ export function Ix({ icon: Icon, size = "md", style, className }: IxProps) {
   );
 }
 
-/** Type icon: key = secret item, lines = note/prompt item, stack = group. */
+/** Type icon: key = secret item, lines = note/prompt item, stack = group,
+ *  folder = category (v1.11.0 §51 — the palette's folder rows). */
 export function EntryTypeIcon({
   kind,
   isSecret,
   size = "md",
   style,
 }: {
-  kind: "item" | "group";
+  kind: "item" | "group" | "category";
   isSecret: boolean;
   size?: IconSize;
   style?: CSSProperties;
 }) {
+  if (kind === "category") return <Ix icon={Folder} size={size} style={style} />;
   if (kind === "group") return <Ix icon={Layers} size={size} style={style} />;
   if (isSecret) return <Ix icon={Key} size={size} style={style} />;
   return <Ix icon={AlignLeft} size={size} style={style} />;

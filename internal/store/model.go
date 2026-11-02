@@ -63,6 +63,13 @@ type Category struct {
 	Name      string  `json:"name"`
 	SortOrder int     `json:"sortOrder"`
 	ParentID  *string `json:"parentId,omitempty"`
+	// Pinned marks a folder the user wants in the mini palette (v1.11.0,
+	// DECISIONS.md §51): a pinned folder rides the palette's top list and
+	// drills into its whole subtree. omitempty keeps vaults written by
+	// older versions byte-identical, and older Clavis builds simply ignore
+	// the unknown key (§4.2 lenient loading); NormalizeVault defaults
+	// absent → false.
+	Pinned bool `json:"pinned,omitempty"`
 }
 
 // Item is a stored secret / prompt / note. Value never appears in logs.

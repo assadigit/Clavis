@@ -176,6 +176,8 @@ export function Sidebar({ state, call, readOnly, filter, setFilter }: SidebarPro
     const active = filter.view === "category" && filter.categoryId === c.id;
     const isCollapsed = collapsed.has(c.id);
     const hasChildren = node.children.length > 0;
+    /* v1.11.0 (DECISIONS §51): pinned folders ride the mini palette. */
+    const isPinned = c.pinned === true;
     return (
       <div key={c.id}>
         <div
@@ -210,6 +212,32 @@ export function Sidebar({ state, call, readOnly, filter, setFilter }: SidebarPro
               onClick={() => pick({ view: "category", categoryId: c.id })}
             />
           </div>
+          {/* v1.11.0 (DECISIONS.md §51): pin a folder — it rides the mini
+              palette's top list and drills into its whole subtree. */}
+          {!readOnly ? (
+            <button
+              type="button"
+              className="clavis-btn clavis-btn-ghost clavis-focusable"
+              role="switch"
+              aria-checked={isPinned}
+              aria-label={isPinned ? `Unpin ${c.name}` : `Pin ${c.name}`}
+              title={
+                isPinned
+                  ? "Unpin — remove from the mini palette"
+                  : "Pin — show this folder in the mini palette"
+              }
+              style={{
+                padding: "var(--space-1)",
+                flexShrink: 0,
+                color: isPinned ? "var(--color-accent-text)" : "var(--text-muted)",
+              }}
+              onClick={() => {
+                void call("setCategoryPinned", { id: c.id, pinned: !isPinned });
+              }}
+            >
+              <Ix icon={Pin} size="sm" />
+            </button>
+          ) : null}
           {!readOnly ? (
             <Menu
               triggerIcon={MoreHorizontal}

@@ -6,7 +6,7 @@
 
 export const CURRENT_SCHEMA_VERSION = 1;
 // Bumped by the release workflow (release.yml compares the tag with this).
-export const APP_VERSION = "1.10.0";
+export const APP_VERSION = "1.11.0";
 
 export type EntryKind = "item" | "group";
 
@@ -18,6 +18,10 @@ export interface Category {
    *  Absent/null = top level. Mirrors Go's omitempty so flat vaults stay
    *  byte-identical to files written by older versions. */
   parentId?: string | null;
+  /** Pinned folder (v1.11.0, DECISIONS §51): rides the mini palette's top
+   *  list and drills into its whole subtree. Mirrors Go's omitempty
+   *  (absent = false). */
+  pinned?: boolean;
 }
 
 export interface Item {

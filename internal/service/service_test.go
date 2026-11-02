@@ -450,6 +450,55 @@ func TestStateMapMemoizedUntilTheStoreChanges(t *testing.T) {
 	})
 }
 
+/* -------- v1.11.0 (DECISIONS.md §51): pinned folders through dispatch -------- */
+
+func TestSetCategoryPinnedThroughDispatch(t *testing.T) {
+	s := newTestService(t)
+
+	res := dispatchJSON(t, s, "createCategory", `{"name":"Prompts"}`)
+	if res["ok"] != true {
+		t.Fatalf("createCategory failed: %v", res["error"])
+	}
+	id, _ := res["id"].(string)
+	if id == "" {
+		t.Fatal("createCategory returned no id")
+	}
+
+	// The action needs an explicit boolean; omitting it is a 400.
+	if res := dispatchJSON(t, s, "setCategoryPinned", `{"id":"`+id+`"}`); res["ok"] == true {
+		t.Fatal("setCategoryPinned without 'pinned' must fail")
+	}
+
+	res = dispatchJSON(t, s, "setCategoryPinned", `{"id":"`+id+`","pinned":true}`)
+	if res["ok"] != true {
+		t.Fatalf("setCategoryPinned failed: %v", res["error"])
+	}
+
+	// The redacted state carries the flag to the webview — categories have
+	// no secret content, so they pass through verbatim as always.
+	env := s.GetState()
+	found := false
+	for _, c := range env.UIState.Categories {
+		if c.ID == id {
+			found = true
+			if !c.Pinned {
+				t.Fatal("category should be pinned in the state envelope")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("created category missing from the state envelope")
+	}
+
+	// Unpin through dispatch, then unknown ids surface the store error.
+	if res := dispatchJSON(t, s, "setCategoryPinned", `{"id":"`+id+`","pinned":false}`); res["ok"] != true {
+		t.Fatalf("unpin failed: %v", res["error"])
+	}
+	if res := dispatchJSON(t, s, "setCategoryPinned", `{"id":"missing","pinned":true}`); res["ok"] == true {
+		t.Fatal("unknown category id must fail through dispatch")
+	}
+}
+
 /* -------- v1.6.0 (DECISIONS.md §44): shared credentials through dispatch -------- */
 
 func TestSharedFlagThroughDispatch(t *testing.T) {

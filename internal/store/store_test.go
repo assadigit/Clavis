@@ -887,6 +887,92 @@ func TestCreateCategoryNested(t *testing.T) {
 	}
 }
 
+func TestSetCategoryPinned(t *testing.T) {
+	f := newFixture(t)
+	prompts, err := f.s.CreateCategory("Prompts", nil)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	plain, err := f.s.CreateCategory("Notes", nil)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	if err := f.s.SetCategoryPinned(prompts.ID, true); err != nil {
+		t.Fatalf("SetCategoryPinned: %v", err)
+	}
+
+	// On disk the flag is omitempty (v1.11.0 §51): the pinned folder carries
+	// it, the unpinned one writes no key at all — vaults from older versions
+	// stay byte-identical, and older builds ignore the unknown key.
+	var onDisk struct {
+		Categories []struct {
+			ID     string `json:"id"`
+			Pinned *bool  `json:"pinned"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(readDataFile(t, f.dir)), &onDisk); err != nil {
+		t.Fatalf("unmarshal data file: %v", err)
+	}
+	byID := map[string]*bool{}
+	for _, c := range onDisk.Categories {
+		byID[c.ID] = c.Pinned
+	}
+	if got := byID[prompts.ID]; got == nil || *got != true {
+		t.Errorf("pinned category should carry pinned:true on disk, got %v", got)
+	}
+	if got := byID[plain.ID]; got != nil {
+		t.Errorf("unpinned category must omit the key entirely, got %v", *got)
+	}
+
+	// Pin + unpin round-trips through a reopen.
+	if err := f.s.SetCategoryPinned(plain.ID, true); err != nil {
+		t.Fatalf("SetCategoryPinned plain: %v", err)
+	}
+	if err := f.s.SetCategoryPinned(plain.ID, false); err != nil {
+		t.Fatalf("SetCategoryPinned unpin: %v", err)
+	}
+	f.s.Close()
+	s2, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	st := s2.State()
+	pinned := 0
+	for _, c := range st.Data.Categories {
+		if c.Pinned {
+			pinned++
+			if c.ID != prompts.ID {
+				t.Errorf("wrong category survived pinned: %s", c.ID)
+			}
+		}
+	}
+	if pinned != 1 {
+		t.Errorf("reopen should keep exactly the pinned folder, got %d", pinned)
+	}
+
+	// Unknown ids are refused loudly.
+	if err := s2.SetCategoryPinned("no-such-id", true); err == nil {
+		t.Error("unknown category id must be rejected")
+	}
+	s2.Close()
+
+	// A newer-version file (read-only) refuses the mutation untouched.
+	before := readDataFile(t, f.dir)
+	var v map[string]any
+	json.Unmarshal([]byte(before), &v)
+	v["schemaVersion"] = float64(99)
+	b, _ := json.Marshal(v)
+	writeDataFile(t, f.dir, string(b))
+	s3, err := New(f.dir, "1.0.0")
+	if err != nil {
+		t.Fatalf("reopen read-only: %v", err)
+	}
+	if err := s3.SetCategoryPinned(prompts.ID, false); err == nil {
+		t.Error("read-only store must refuse SetCategoryPinned")
+	}
+	s3.Close()
+}
+
 func TestSetCategoryParent(t *testing.T) {
 	f := newFixture(t)
 	a, _ := f.s.CreateCategory("A", nil)

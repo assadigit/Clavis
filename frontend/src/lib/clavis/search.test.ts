@@ -6,6 +6,7 @@ import {
   buildSearchEntries,
   compareEntries,
   compareRecent,
+  homeEntries,
   parseQuery,
   searchEntries,
 } from "./search";
@@ -141,6 +142,48 @@ describe("compareRecent", () => {
     const es = entries();
     const recent = es.filter((e) => e.lastUsedAt > 0).sort(compareRecent);
     expect(recent.map((e) => e.id)).toEqual(["i3", "g1", "i1"]); // Jan 5 > Jan 4 > Jan 2
+  });
+});
+
+/* -------- v1.11.0 (DECISIONS.md §51): folders in the search index -------- */
+
+describe("folders in the search index", () => {
+  it("buildSearchEntries includes every folder with its parent and pin", () => {
+    const got = buildSearchEntries(vault());
+    const folder = got.find((e) => e.kind === "category" && e.name === "Prompts");
+    expect(folder).toBeTruthy();
+    expect(folder?.parentId).toBe(""); // top level
+    expect(folder?.pinned).toBe(false);
+    expect(folder?.useCount).toBe(0);
+    /* Items and groups carry parentId "" — only folders have one. */
+    expect(got.find((e) => e.id === "i1")?.parentId).toBe("");
+    expect(got.find((e) => e.id === "g1")?.parentId).toBe("");
+  });
+
+  it("typing finds folders by name", () => {
+    const got = searchEntries("prom", buildSearchEntries(vault()));
+    expect(got.map((e) => e.id)).toContain("c2"); // the Prompts folder, by name prefix
+  });
+
+  it("@category filters exclude the folder rows themselves", () => {
+    // "@prompts" filters to the entries IN the Prompts category — the
+    // folder's own row (categoryName "") must never match.
+    const got = searchEntries("@prompts", buildSearchEntries(vault()));
+    expect(got.map((e) => e.id)).toEqual(["i3"]);
+  });
+
+  it("homeEntries keeps unpinned folders out; pinned folders and entries ride", () => {
+    const home = homeEntries(buildSearchEntries(vault())).map((e) => e.id);
+    expect(home).not.toContain("c1");
+    expect(home).not.toContain("c2");
+    expect(home).toContain("i1");
+    expect(home).toContain("g1");
+
+    const v = vault();
+    v.categories[1].pinned = true; // pin the Prompts folder
+    const home2 = homeEntries(buildSearchEntries(v)).map((e) => e.id);
+    expect(home2).toContain("c2"); // the pinned folder rides
+    expect(home2).not.toContain("c1"); // the unpinned one still doesn't
   });
 });
 

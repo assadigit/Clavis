@@ -1726,6 +1726,24 @@ func (s *Store) RenameCategory(id, name string) error {
 	return notFound("Category", id)
 }
 
+// SetCategoryPinned pins or unpins a category (v1.11.0, DECISIONS.md §51).
+// A pinned folder rides the mini palette's top list and drills into its
+// whole subtree; an unpinned one stays a plain sidebar folder.
+func (s *Store) SetCategoryPinned(id string, pinned bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.assertWritable(); err != nil {
+		return err
+	}
+	for i := range s.data.Categories {
+		if s.data.Categories[i].ID == id {
+			s.data.Categories[i].Pinned = pinned
+			return s.saveLocked(kindDaily)
+		}
+	}
+	return notFound("Category", id)
+}
+
 // DeleteCategory keeps its items (they become uncategorized) and lifts its
 // subcategories one level up — to the deleted category's own parent, or the
 // top level. No subcategory is ever deleted by side effect.

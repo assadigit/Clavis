@@ -158,6 +158,43 @@ describe("Sidebar category tree", () => {
   });
 });
 
+/* -------- v1.11.0 (DECISIONS.md §51): folder pin toggle -------- */
+
+describe("Sidebar folder pin toggle (v1.11.0 §51)", () => {
+  it("pins a folder via setCategoryPinned", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+    render(
+      <Sidebar state={state()} call={call} readOnly={false} filter={{ view: "all" }} setFilter={vi.fn()} />,
+    );
+    const toggle = screen.getByRole("switch", { name: "Pin Projects" });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await user.click(toggle);
+    expect(call).toHaveBeenCalledWith("setCategoryPinned", { id: "p", pinned: true });
+  });
+
+  it("shows a pinned folder as checked and unpins with pinned: false", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const s = state();
+    s.data.categories[1].pinned = true; // Projects pinned
+    const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+    render(
+      <Sidebar state={s} call={call} readOnly={false} filter={{ view: "all" }} setFilter={vi.fn()} />,
+    );
+    const toggle = screen.getByRole("switch", { name: "Unpin Projects" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    await user.click(toggle);
+    expect(call).toHaveBeenCalledWith("setCategoryPinned", { id: "p", pinned: false });
+  });
+
+  it("read-only hides the pin toggles", () => {
+    render(
+      <Sidebar state={state()} call={vi.fn()} readOnly filter={{ view: "all" }} setFilter={vi.fn()} />,
+    );
+    expect(screen.queryByRole("switch", { name: "Pin Projects" })).toBeNull();
+  });
+});
+
 /* -------- v1.6.0 (DECISIONS §44): the Shared view row -------- */
 
 describe("Sidebar shared credentials view (v1.6.0)", () => {
