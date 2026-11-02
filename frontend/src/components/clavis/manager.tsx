@@ -16,6 +16,7 @@ import { Ix, ShortcutKeycaps } from "./icons";
 import { ItemEditor } from "./item-editor";
 import { ManageItemsModal } from "./manage-items-modal";
 import { SettingsView } from "./settings-view";
+import { SharedHome } from "./shared-duplicates";
 import { Sidebar } from "./sidebar";
 import { TrashView } from "./trash-view";
 import { Btn, useMaximized } from "./ui-bits";
@@ -182,6 +183,12 @@ export function Manager(props: ManagerProps) {
           onCancelCreate={() => setCreating(null)}
         />
       );
+    }
+    /* The Shared view's home (v1.8.0 §48): when nothing is selected, the
+       detail column becomes the shared-credentials overview — explainer
+       plus the backend-driven duplicate detection with one-click merges. */
+    if (filter.view === "shared" && !activeSelection) {
+      return <SharedHome state={state} call={call} readOnly={readOnly} />;
     }
     /* Empty store: orient a brand-new user instead of repeating the
        list column's call-to-action (which confused first-time users). */

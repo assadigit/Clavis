@@ -9,7 +9,7 @@
  */
 import { Call } from "@wailsio/runtime";
 import { messages } from "@/lib/clavis/messages";
-import type { ClavisState } from "@/lib/clavis/types";
+import type { ClavisState, SharedDuplicateCluster } from "@/lib/clavis/types";
 
 export interface BackupPreview {
   valid: boolean;
@@ -44,6 +44,9 @@ export interface ApiResult {
   text?: string;
   summary?: { added: number; updated: number; skipped: number };
   preview?: BackupPreview | FilesPreview;
+  /** "detectSharedDuplicates": the backend scan result (v1.8.0 §48) —
+   *  name-only summaries, never values. */
+  clusters?: SharedDuplicateCluster[];
 }
 
 export type CallFn = (

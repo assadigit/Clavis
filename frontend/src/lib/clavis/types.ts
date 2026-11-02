@@ -6,7 +6,7 @@
 
 export const CURRENT_SCHEMA_VERSION = 1;
 // Bumped by the release workflow (release.yml compares the tag with this).
-export const APP_VERSION = "1.7.0";
+export const APP_VERSION = "1.8.0";
 
 export type EntryKind = "item" | "group";
 
@@ -152,3 +152,32 @@ export interface ImportSummary {
 export type AnyEntry =
   | ({ kind: "item" } & Item)
   | ({ kind: "group" } & Group);
+
+/* ---- shared-credential detection (v1.8.0, DECISIONS §48) ---- */
+
+/** One copy of a duplicated value: the item plus the live groups that
+ *  reference it. Detected by the BACKEND — values never cross the boundary,
+ *  so the frontend can only ever see these name-only summaries. */
+export interface SharedDuplicateMember {
+  itemId: string;
+  name: string;
+  key: string;
+  groupNames: string[];
+}
+
+/** A detected duplicate set: K live items holding the exact same value,
+ *  together referenced by ≥2 distinct groups ("the same token pasted into
+ *  every project"). itemId is the copy that survives a merge. */
+export interface SharedDuplicateCluster {
+  itemId: string;
+  name: string;
+  key: string;
+  /** Masked hint (§5.2 rule, applied backend-side): last 4 chars only when
+   *  showLast4 is on and the value is ≥ 12 characters. */
+  valueLast4?: string;
+  copies: number;
+  /** Distinct group names across all members, sorted. */
+  groupNames: string[];
+  /** Every copy (the canonical included), oldest-first. */
+  members: SharedDuplicateMember[];
+}

@@ -563,3 +563,102 @@ func TestResetAllDataThroughDispatch(t *testing.T) {
 		t.Fatal("the state snapshot must show the empty vault")
 	}
 }
+
+/* -------- v1.8.0: intelligent shared-credential detection (§48) -------- */
+
+// The scan action: clusters with ids/names/group names and the §5.2 masked
+// hint — but never a value — and no state (nothing changed).
+func TestDetectSharedDuplicatesThroughDispatch(t *testing.T) {
+	s := newTestService(t)
+	a := mustCreateItem(t, s, "GitHub token", "ghp_shared_secret_1234", true)
+	b := mustCreateItem(t, s, "GH_PAT", "ghp_shared_secret_1234", true)
+	mustCreateGroup(t, s, "Repo A", a)
+	mustCreateGroup(t, s, "Repo B", b)
+
+	res := dispatchJSON(t, s, "detectSharedDuplicates", `{}`)
+	if res["ok"] != true {
+		t.Fatalf("detectSharedDuplicates failed: %v", res["error"])
+	}
+	if _, hasState := res["state"]; hasState {
+		t.Fatal("the scan is read-only: the response must not carry a state snapshot")
+	}
+	raw, _ := json.Marshal(res["clusters"])
+	if !strings.Contains(string(raw), `"itemId":"`+a+`"`) {
+		t.Fatalf("the oldest copy must be the proposed canonical, got %s", raw)
+	}
+	if !strings.Contains(string(raw), `"valueLast4":"1234"`) {
+		t.Fatal("the §5.2 hint must ride along (showLast4 on, value ≥ 12 chars)")
+	}
+	if strings.Contains(string(raw), "ghp_shared_secret_1234") {
+		t.Fatal("the value itself must NEVER cross to the webview")
+	}
+	if !strings.Contains(string(raw), `"copies":2`) || !strings.Contains(string(raw), "Repo A") {
+		t.Fatalf("the cluster must report its size and group names, got %s", raw)
+	}
+}
+
+// The merge action: one shared canonical, groups re-pointed, redacted state
+// in the response; a stale merge is refused loudly.
+func TestMergeSharedDuplicatesThroughDispatch(t *testing.T) {
+	s := newTestService(t)
+	a := mustCreateItem(t, s, "GitHub token", "ghp_shared_secret_1234", true)
+	b := mustCreateItem(t, s, "GH_PAT", "ghp_shared_secret_1234", true)
+	c := mustCreateItem(t, s, "repo C token", "ghp_shared_secret_1234", true)
+	mustCreateGroup(t, s, "Repo A", a)
+	mustCreateGroup(t, s, "Repo B", b)
+	mustCreateGroup(t, s, "Repo C", c)
+
+	payload := fmt.Sprintf(`{"itemIds":[%q,%q,%q]}`, a, b, c)
+	res := dispatchJSON(t, s, "mergeSharedDuplicates", payload)
+	if res["ok"] != true {
+		t.Fatalf("mergeSharedDuplicates failed: %v", res["error"])
+	}
+	if res["id"] != a {
+		t.Fatalf("the canonical id must come back, got %v", res["id"])
+	}
+	st := s.GetState()
+	var canonical *store.Item
+	live := 0
+	for i := range st.UIState.Items {
+		it := st.UIState.Items[i]
+		if it.DeletedAt == nil && it.Value == "" && it.ID == a {
+			canonical = &st.UIState.Items[i].Item
+		}
+		if it.DeletedAt == nil {
+			live++
+		}
+	}
+	if canonical == nil || !canonical.Shared {
+		t.Fatal("the canonical must survive as a shared item in the redacted state")
+	}
+	if live != 1 {
+		t.Fatalf("live items after the merge = %d, want exactly the canonical", live)
+	}
+	for _, g := range st.UIState.Groups {
+		if len(g.ItemIDs) != 1 || g.ItemIDs[0] != a {
+			t.Fatalf("group %s must reference the canonical only, got %v", g.Name, g.ItemIDs)
+		}
+	}
+	// The response state is redacted: values never cross even on the merge
+	// path.
+	if strings.Contains(stateJSON(t, s), "ghp_shared_secret_1234") {
+		t.Fatal("values must never appear in the state snapshot")
+	}
+
+	// A stale merge is refused with the actionable error: a fresh duplicate
+	// pair whose values diverged between the scan and the apply.
+	d := mustCreateItem(t, s, "NPM token", "npm_shared_secret", true)
+	e := mustCreateItem(t, s, "NPM_PAT", "npm_shared_secret", true)
+	mustCreateGroup(t, s, "Repo D", d)
+	mustCreateGroup(t, s, "Repo E", e)
+	if err := s.Store.UpdateItem(e, store.ItemPatch{Value: strpService("rotated")}); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	bad := dispatchJSON(t, s, "mergeSharedDuplicates",
+		fmt.Sprintf(`{"itemIds":[%q,%q]}`, d, e))
+	if bad["ok"] != false || !strings.Contains(bad["error"].(string), "scan again") {
+		t.Fatalf("a stale merge must fail with the scan-again error, got %v", bad)
+	}
+}
+
+func strpService(s string) *string { return &s }

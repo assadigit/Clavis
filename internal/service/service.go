@@ -747,6 +747,39 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			}
 			return s.done(nil)
 		}
+	case "detectSharedDuplicates":
+		{
+			/* v1.8.0 (DECISIONS.md §48): the intelligent half of shared
+			   credentials. Values never cross to the webview (§5.2), so
+			   the scan runs HERE on the raw snapshot; the result carries
+			   ids, names and group names only, plus the masked valueLast4
+			   hint computed with the SAME rule the state envelope uses.
+			   Read-only: no state in the response (nothing changed). */
+			st := s.Store.State()
+			clusters := store.DetectSharedDuplicates(st.Data)
+			for i := range clusters {
+				for _, it := range st.Data.Items {
+					if it.ID == clusters[i].ItemID {
+						clusters[i].ValueLast4 = last4PerRule(it.Value, st.Data.Settings.ShowLast4)
+						break
+					}
+				}
+			}
+			return map[string]any{"ok": true, "clusters": clusters}
+		}
+	case "mergeSharedDuplicates":
+		{
+			/* v1.8.0: consolidate identical copies into one shared
+			   credential — the canonical survives (shared=true), groups
+			   are re-pointed at it, the duplicates go to the Trash with
+			   tombstones. The store re-validates liveness and value
+			   equality at apply time. */
+			item, err := s.Store.MergeSharedDuplicates(getStrArr(p, "itemIds"))
+			if err != nil {
+				return FailErr(err)
+			}
+			return s.done(map[string]any{"id": item.ID})
+		}
 	case "clearRecoveredNotice":
 		{
 			s.Store.ClearRecoveredNotice()

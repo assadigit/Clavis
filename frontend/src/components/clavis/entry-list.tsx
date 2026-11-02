@@ -309,7 +309,7 @@ export function EntryList({
                 {filter.view === "recent" && query.trim() === ""
                   ? "Nothing used yet — copy an entry and it shows up here."
                   : filter.view === "shared" && query.trim() === ""
-                    ? "No shared credentials yet — open an item and turn on Shared to define one."
+                    ? "No shared credentials yet — the overview on the right can detect them from your duplicates, or turn on Shared in any item."
                     : "Nothing found."}
               </span>
             </div>
