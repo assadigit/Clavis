@@ -206,6 +206,14 @@ If the same edit is made from the item's own detail view (no current group), sho
 
 **Deleting a shared item** → modal: "This item is used in N groups: …" with **Delete everywhere** (danger fill) and **Cancel**. Removing it from one group (the × in the group editor) never shows this modal.
 
+### 5.6b Duplicate detection (the Shared view's home panel, v1.8.0; comparison rule v1.11.1)
+Opening the **Shared** view with nothing selected shows the scan panel (v1.8.0, DECISIONS §48). The scan runs in the backend on the raw vault — item values never cross to the webview (§5.2); the result carries ids, names and group names only, plus the masked `valueLast4` hint.
+
+- **Eligibility:** a value held by ≥2 live items, together referenced by ≥2 distinct live items-mode groups, becomes one suggestion cluster (biggest first, then name). Document groups (§40) are opaque text and never participate; trash entries, empty values and duplicates confined to one group never cluster.
+- **The comparison rule (v1.11.1, DECISIONS §52): two copies are the same credential when their values are equal after trimming surrounding whitespace** — the value the tolerant paste parser would have extracted. The paste parser trims before storing, but the item editor stores values verbatim, so real-world copies arrive clipboard-padded; the byte-exact scan filed each under its own bucket and reported all-clear (the user's report: the same GitHub token in every group, "but the system didn't find it"). **Quotes and letter case still have to match** — a quote can be part of a password, and tokens are case-sensitive. Whitespace-only values are empty and never cluster.
+- **The merge** (`Merge into one shared credential`, behind a confirmation modal) is one atomic save, re-validated at apply time with the same trimmed rule: the canonical survivor (already-shared copy wins, else oldest, else smallest id — deterministic) keeps its stored value **byte-exact** (the merge never rewrites a value); every live items-mode group is re-pointed at it in place; the extra copies soft-delete to the Trash with §46 tombstones — recoverable for 30 days, and restoring one brings it back as a plain standalone item. Usage stats merge honestly (useCount sums, lastUsedAt keeps the latest, pinned survives if any copy had it). A confirmation that went stale (a copy edited beyond padding, trashed or deleted since the scan) is REFUSED with a "scan again" error, never silently resolved.
+- The scan auto-runs on mount and after every mutation; an all-clear states the matching rule so it is actionable, and the modal discloses the trimmed match and the stored-value promise.
+
 ### 5.7 Delete, undo, trash (the safe path is the easy path)
 - No "Are you sure?" dialogs, except the shared-item modals above and "Replace everything" on import.
 - Every delete is immediate and shows a toast at the bottom of the window: "Deleted 'GitHub token' · **Undo**" for about 8 seconds. Undo restores it exactly (including group memberships).
@@ -352,6 +360,7 @@ You must run these yourself and fix failures. The owner will not.
 - [ ] Shortcut-to-copied is 3 keystrokes for a top result.
 - [ ] Items, groups, categories, tags and search all work as specified.
 - [ ] Shared items: one edit updates every group, with the correct three-button modal.
+- [ ] Duplicate detection (§5.6b): the same value in copies across ≥2 groups is proposed as one cluster — copies that differ only by leading/trailing spaces match; quotes and letter case don't — and the merge re-points every group at one shared credential, byte-exact stored value.
 - [ ] Undo works for every delete; Trash restores; nothing is lost by accident.
 - [ ] Full backup export/import and per-item/group Markdown/TXT import/export work and round-trip.
 - [ ] Data is in `%APPDATA%\Clavis\`, shared by installer and portable builds, with automatic backups and corrupt-file recovery.

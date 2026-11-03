@@ -207,6 +207,68 @@ func TestDetectSharedDuplicatesIgnoresDocGroupsTrashAndEmpty(t *testing.T) {
 	}
 }
 
+// The user's report, verbatim (v1.11.1, DECISIONS.md §52): "currently same
+// github token has been repeated across literally all groups items, but
+// system didn't find it." The copies were byte-DIFFERENT: the paste parser
+// trims values before storing, but the item editor stores verbatim — so
+// copies created by typing/pasting into the editor carry clipboard padding
+// forever, and pre-v1.6.0 pastes predate the tolerant parser's trim. The
+// byte-exact scan filed every copy under its own bucket and reported
+// all-clear. The comparison now trims surrounding whitespace (one
+// sharedValueKey rule): one token across all groups → one cluster, no
+// matter what padding each copy wandered in with.
+func TestDetectSharedDuplicatesToleratesSurroundingWhitespace(t *testing.T) {
+	f := newFixture(t)
+	// The user's shape: ONE GitHub token, one copy per group, ALL groups.
+	clean := mustItem(t, f.s, "GitHub token", "ghp_padded_2026") // oldest → canonical
+	f.advance(time.Minute)
+	padLeft := mustItem(t, f.s, "GH_PAT", " ghp_padded_2026")
+	f.advance(time.Minute)
+	padRight := mustItem(t, f.s, "ci token", "ghp_padded_2026 ")
+	f.advance(time.Minute)
+	padBoth := mustItem(t, f.s, "deploy token", "  ghp_padded_2026  ")
+	f.advance(time.Minute)
+	padTabs := mustItem(t, f.s, "backup token", "\tghp_padded_2026\r\n")
+	mustGroup(t, f.s, "Project A", clean.ID)
+	mustGroup(t, f.s, "Project B", padLeft.ID)
+	mustGroup(t, f.s, "Project C", padRight.ID)
+	mustGroup(t, f.s, "Project D", padBoth.ID)
+	mustGroup(t, f.s, "Project E", padTabs.ID)
+	// Boundary decoy that must NOT join: quoting is content, not padding —
+	// a password may legitimately start and end with a quote.
+	quoted := mustItem(t, f.s, "quoted copy", `"ghp_padded_2026"`)
+	mustGroup(t, f.s, "Project F", quoted.ID)
+	// Whitespace-only values are EMPTY for comparison — never cluster,
+	// even spanning two groups (the only reason they can't: the empty-key skip).
+	spacer1 := mustItem(t, f.s, "blank 1", "   ")
+	spacer2 := mustItem(t, f.s, "blank 2", "\t ")
+	mustGroup(t, f.s, "Project G", spacer1.ID)
+	mustGroup(t, f.s, "Project H", spacer2.ID)
+
+	clusters := DetectSharedDuplicates(f.s.State().Data)
+	if len(clusters) != 1 {
+		t.Fatalf("detected %d clusters, want 1 — the padded copies of ONE token must join one cluster (the user's report)", len(clusters))
+	}
+	c := clusters[0]
+	if c.Copies != 5 || len(c.Members) != 5 {
+		t.Fatalf("copies = %d, members = %d — want 5/5: every padded copy joins its clean sibling", c.Copies, len(c.Members))
+	}
+	if c.ItemID != clean.ID {
+		t.Fatalf("canonical = %s, want the oldest copy %s", c.ItemID, clean.ID)
+	}
+	if want := "Project A,Project B,Project C,Project D,Project E"; strings.Join(c.GroupNames, ",") != want {
+		t.Fatalf("groupNames = %v, want the five projects (the quoted copy and the blanks never join)", c.GroupNames)
+	}
+	for _, m := range c.Members {
+		if m.ItemID == quoted.ID {
+			t.Fatal("a quoted value is a different value — quotes are content, not padding")
+		}
+		if m.ItemID == spacer1.ID || m.ItemID == spacer2.ID {
+			t.Fatal("a whitespace-only value is empty — it must never cluster")
+		}
+	}
+}
+
 // Biggest cluster first, then name — the most impactful suggestion on top.
 func TestDetectSharedDuplicatesOrdering(t *testing.T) {
 	f := newFixture(t)
@@ -342,6 +404,57 @@ func TestMergeSharedDuplicatesGroupWithTwoCopies(t *testing.T) {
 		if len(g.ItemIDs) != 2 || g.ItemIDs[0] != a.ID || g.ItemIDs[1] != other.ID {
 			t.Fatalf("Mixed must become [canonical, unrelated] in place, got %v", g.ItemIDs)
 		}
+	}
+}
+
+// The merge across PADDED copies: the re-validation trims (a padding-only
+// edit between scan and merge never makes the confirmation stale), and the
+// canonical keeps its stored value BYTE-EXACT — the merge never rewrites a
+// value (§5.2). If the survivor's copy carries padding, it stays as stored;
+// the user edits it afterwards like any shared credential.
+func TestMergeSharedDuplicatesPaddedValues(t *testing.T) {
+	f := newFixture(t)
+	padded := mustItem(t, f.s, "GitHub token", " ghp_padded_merge ") // oldest → canonical, padding and all
+	f.advance(time.Minute)
+	clean := mustItem(t, f.s, "GH_PAT", "ghp_padded_merge")
+	f.advance(time.Minute)
+	other := mustItem(t, f.s, "ci token", "ghp_padded_merge\t")
+	mustGroup(t, f.s, "Repo A", padded.ID)
+	mustGroup(t, f.s, "Repo B", clean.ID)
+	mustGroup(t, f.s, "Repo C", other.ID)
+
+	// A padding-only edit after the scan: still the same credential — the
+	// merge must go through (the byte-exact version refused this).
+	if err := f.s.UpdateItem(other.ID, ItemPatch{Value: strp(" ghp_padded_merge ")}); err != nil {
+		t.Fatalf("pad-edit other: %v", err)
+	}
+	got, err := f.s.MergeSharedDuplicates([]string{padded.ID, clean.ID, other.ID})
+	if err != nil {
+		t.Fatalf("MergeSharedDuplicates across padded copies: %v", err)
+	}
+	if got.ID != padded.ID || !got.Shared {
+		t.Fatal("the oldest padded copy must survive as the shared canonical")
+	}
+	after := f.s.findItem(padded.ID)
+	if after == nil || after.Value != " ghp_padded_merge " {
+		t.Fatalf("the canonical's stored value must stay byte-exact (no silent trim), got %q", after.Value)
+	}
+	st := f.s.State()
+	for _, g := range st.Data.Groups {
+		if g.DeletedAt == nil && (len(g.ItemIDs) != 1 || g.ItemIDs[0] != padded.ID) {
+			t.Fatalf("group %s must reference only the canonical, got %v", g.Name, g.ItemIDs)
+		}
+	}
+	tombs := readDeletionsFile(t, f.dir)
+	if tombs[clean.ID] == "" || tombs[other.ID] == "" {
+		t.Fatal("absorbed copies must carry tombstones (§46): a stale backup can never resurrect them as live duplicates")
+	}
+	if tombs[padded.ID] != "" {
+		t.Fatal("the canonical survivor must NOT be tombstoned")
+	}
+	// The merged world must not re-cluster: one shared copy, nothing to find.
+	if clusters := DetectSharedDuplicates(f.s.State().Data); len(clusters) != 0 {
+		t.Fatalf("after the merge the scan must find nothing, got %d clusters", len(clusters))
 	}
 }
 

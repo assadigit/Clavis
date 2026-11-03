@@ -155,6 +155,35 @@ describe("SharedHome (v1.8.0 duplicate detection)", () => {
     expect(screen.queryByRole("button", { name: "Merge into one shared credential" })).toBeNull();
   });
 
+  // v1.11.1 (DECISIONS §52): the all-clear line states the comparison rule —
+  // the user's report was "the same github token is in all my groups, but the
+  // system didn't find it" (the copies were clipboard-padded, not
+  // byte-identical). The panel now tells the user what matches and what
+  // doesn't, so an all-clear is actionable instead of a dead end.
+  it("the all-clear line states the whitespace-tolerant matching rule", async () => {
+    const call = makeCall([]);
+    render(<SharedHome state={state()} call={call} readOnly={false} />);
+
+    expect(
+      await screen.findByText(/Matching ignores leading\/trailing spaces; quotes and letter case still have to match\./)
+    ).toBeTruthy();
+  });
+
+  // v1.11.1 (§52): the confirmation modal discloses both halves of the rule —
+  // the trim-tolerant match, and the no-rewrite promise (the surviving copy
+  // keeps its stored value byte-exact; values are the most protected field).
+  it("the confirmation modal discloses the trimmed match and the stored-value promise", async () => {
+    const call = makeCall([cluster]);
+    const user = userEvent.setup();
+    render(<SharedHome state={state()} call={call} readOnly={false} />);
+
+    await user.click(await screen.findByRole("button", { name: "Merge into one shared credential" }));
+
+    expect(
+      await screen.findByText(/Matching ignores leading\/trailing spaces — the surviving copy keeps its stored value exactly as it is\./)
+    ).toBeTruthy();
+  });
+
   it("locks the merge behind read-only", async () => {
     const call = makeCall([cluster]);
     render(<SharedHome state={state()} call={call} readOnly={true} />);

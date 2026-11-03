@@ -767,13 +767,19 @@ func (s *Service) dispatch(action string, p map[string]any) map[string]any {
 			   the scan runs HERE on the raw snapshot; the result carries
 			   ids, names and group names only, plus the masked valueLast4
 			   hint computed with the SAME rule the state envelope uses.
-			   Read-only: no state in the response (nothing changed). */
+			   Read-only: no state in the response (nothing changed).
+			   v1.11.1 (§52): the scan compares TRIMMED values (the item
+			   editor stores Value verbatim, so real-world copies arrive
+			   clipboard-padded) — and the hint is computed on the TRIMMED
+			   value: the credential as the tolerant parser would have
+			   stored it, so a padded survivor's card shows the token's
+			   tail, never its padding. */
 			st := s.Store.State()
 			clusters := store.DetectSharedDuplicates(st.Data)
 			for i := range clusters {
 				for _, it := range st.Data.Items {
 					if it.ID == clusters[i].ItemID {
-						clusters[i].ValueLast4 = last4PerRule(it.Value, st.Data.Settings.ShowLast4)
+						clusters[i].ValueLast4 = last4PerRule(strings.TrimSpace(it.Value), st.Data.Settings.ShowLast4)
 						break
 					}
 				}

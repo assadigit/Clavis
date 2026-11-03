@@ -18,11 +18,23 @@
  * Document groups (§40) are opaque verbatim text and reference no items, so
  * they never take part in detection or merging; their content is re-pasted
  * by the user, by design.
+ *
+ * COMPARISON (v1.11.1, DECISIONS.md §52): two copies are the same credential
+ * when their values are equal after trimming surrounding whitespace —
+ * sharedValueKey, ONE rule used by the scan AND the merge re-validation so
+ * they can never disagree. The user's report: the same GitHub token was
+ * pasted into every group, but the copies were byte-DIFFERENT — clipboard
+ * padding survives the item editor (CreateItem/UpdateItem store Value
+ * verbatim; only the tolerant paste parser trims), so the byte-exact scan
+ * filed every copy under its own bucket and reported all-clear. Quotes and
+ * letter case stay strict: a quote can be part of a password, and tokens
+ * are case-sensitive.
  */
 package store
 
 import (
 	"errors"
+	"strings"
 )
 
 // SharedDuplicateMember is one copy of a duplicated value: the item plus the
@@ -47,6 +59,18 @@ type SharedDuplicateCluster struct {
 	Copies     int                     `json:"copies"`
 	GroupNames []string                `json:"groupNames"`
 	Members    []SharedDuplicateMember `json:"members"`
+}
+
+// sharedValueKey is the comparison key for "the same credential": the value
+// with surrounding whitespace trimmed — exactly what the tolerant paste
+// parser extracts before storing (exchange.ParseCredentialLine trims the
+// value; the item editor stores verbatim, and pre-v1.6.0 pastes predate the
+// trim). Clipboard padding must never split one credential into per-copy
+// buckets. Quotes and letter case stay strict — a quote can be part of a
+// password, tokens are case-sensitive. Scan AND merge share this one rule,
+// so a stale confirmation can never disagree with the scan that proposed it.
+func sharedValueKey(v string) string {
+	return strings.TrimSpace(v)
 }
 
 // sharedRankLess reports whether item a beats item b as the canonical
@@ -85,11 +109,14 @@ func DetectSharedDuplicates(v VaultData) []SharedDuplicateCluster {
 		sortStrings(groupsOf[id])
 	}
 
-	/* value → live items holding it. Empty values never cluster. */
+	/* comparison key (§52: trimmed) → live items holding that credential.
+	   Whitespace-only values are empty for comparison: never cluster. */
 	byValue := map[string][]Item{}
 	for _, it := range v.Items {
-		if it.DeletedAt == nil && it.Value != "" {
-			byValue[it.Value] = append(byValue[it.Value], it)
+		if it.DeletedAt == nil {
+			if key := sharedValueKey(it.Value); key != "" {
+				byValue[key] = append(byValue[key], it)
+			}
 		}
 	}
 
@@ -195,8 +222,14 @@ func buildSharedCluster(members []Item, groupsOf map[string][]string) SharedDupl
 // sums, lastUsedAt keeps the latest, pinned survives if any copy had it.
 //
 // Apply-time re-validation: every item must still exist and be live, and
-// every value must still be identical — a confirmation made before an edit
-// is REFUSED, never silently resolved.
+// every value must still be the same credential (sharedValueKey — §52):
+// a confirmation made before an edit is REFUSED, never silently resolved.
+// A padding-only edit is NOT a change — the merge goes through.
+//
+// The canonical keeps its stored value BYTE-EXACT: the merge never rewrites
+// a value (§5.2 — values are the most protected field in the system). If
+// the survivor's stored copy carries surrounding whitespace, it stays as
+// stored; the user can edit it afterwards like any shared credential.
 func (s *Store) MergeSharedDuplicates(itemIDs []string) (Item, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -220,12 +253,12 @@ func (s *Store) MergeSharedDuplicates(itemIDs []string) (Item, error) {
 		}
 		members = append(members, it)
 	}
-	value := members[0].Value
-	if value == "" {
+	key := sharedValueKey(members[0].Value)
+	if key == "" {
 		return Item{}, errors.New("these items no longer hold the same value — scan again")
 	}
 	for _, m := range members[1:] {
-		if m.Value != value {
+		if sharedValueKey(m.Value) != key {
 			return Item{}, errors.New("these items no longer hold the same value — scan again")
 		}
 	}

@@ -206,7 +206,8 @@ export function SharedHome({ state, call, readOnly }: SharedHomeProps) {
             <Ix icon={Check} size="sm" style={{ color: "var(--color-accent-text)" }} />
             <span className="t-muted" style={{ fontSize: "var(--text-sm)" }}>
               No duplicates detected — every value that appears in several groups is already one
-              shared credential.
+              shared credential. Matching ignores leading/trailing spaces; quotes and letter case
+              still have to match.
             </span>
           </div>
         ) : (
@@ -261,6 +262,10 @@ export function SharedHome({ state, call, readOnly }: SharedHomeProps) {
               {Math.max(confirming.copies - 1, 0) === 1 ? "copy moves" : "copies move"} to the Trash —
               recoverable for 30 days. From then on, changing the value once updates every group at
               once.
+            </p>
+            <p className="t-muted" style={{ margin: "var(--space-3) 0 0 0", fontSize: "var(--text-sm)", lineHeight: "var(--leading-relaxed)" }}>
+              Matching ignores leading/trailing spaces — the surviving copy keeps its stored value
+              exactly as it is.
             </p>
           </>
         ) : null}

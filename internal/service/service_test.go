@@ -647,6 +647,40 @@ func TestDetectSharedDuplicatesThroughDispatch(t *testing.T) {
 	}
 }
 
+// v1.11.1 (§52): the scan compares TRIMMED values (the user's report — the
+// same token across all groups, but the copies arrived clipboard-padded),
+// and the §5.2 hint is computed on the TRIMMED value: the credential as
+// the tolerant parser would have stored it, so a padded survivor's card
+// shows the token's tail, never its padding.
+func TestDetectSharedDuplicatesTrimmedComparisonThroughDispatch(t *testing.T) {
+	s := newTestService(t)
+	/* The oldest copy (→ canonical) carries padding; strict clock advance
+	   so the canonical is deterministic, every run (the v1.9.0 lesson). */
+	now := time.Now()
+	s.Store.SetClock(func() time.Time { return now })
+	a := mustCreateItem(t, s, "GitHub token", "  ghp_trimmed_hint_1234  ", true)
+	now = now.Add(time.Second)
+	b := mustCreateItem(t, s, "GH_PAT", "ghp_trimmed_hint_1234", true)
+	now = now.Add(time.Second)
+	mustCreateGroup(t, s, "Repo A", a)
+	mustCreateGroup(t, s, "Repo B", b)
+
+	res := dispatchJSON(t, s, "detectSharedDuplicates", `{}`)
+	if res["ok"] != true {
+		t.Fatalf("detectSharedDuplicates failed: %v", res["error"])
+	}
+	raw, _ := json.Marshal(res["clusters"])
+	if !strings.Contains(string(raw), `"copies":2`) {
+		t.Fatalf("a padded copy and a clean copy must form ONE cluster (the user's report), got %s", raw)
+	}
+	if !strings.Contains(string(raw), `"valueLast4":"1234"`) {
+		t.Fatalf("the hint must come from the TRIMMED value (…1234, not the padding), got %s", raw)
+	}
+	if strings.Contains(string(raw), "ghp_trimmed_hint_1234") {
+		t.Fatal("the value itself must never cross to the webview")
+	}
+}
+
 // The merge action: one shared canonical, groups re-pointed, redacted state
 // in the response; a stale merge is refused loudly.
 func TestMergeSharedDuplicatesThroughDispatch(t *testing.T) {
