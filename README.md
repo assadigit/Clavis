@@ -93,7 +93,7 @@ frontend/              React + TypeScript + Vite (popup + manager entries)
                        components/clavis/: ui-bits.tsx re-exports the ui/ kit;
                        settings/ + popup-root + popup/manager trees
 build/                 icons, manifest, version info, NSIS script
-SPEC.md, frontend/src/design-tokens.css   the product spec and the single (live) source of style
+docs/SPEC.md, frontend/src/design-tokens.css   the product spec and the single (live) source of style
 ```
 
 See `docs/DEVELOPMENT.md` for build/test/release and
