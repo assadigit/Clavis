@@ -181,11 +181,14 @@ After a copy:
 Adding an item must take one short form: name, value (multi-line), category, tags, optional note, and the secret/pin toggles. **Enter saves** (Ctrl+Enter inside the multi-line value field).
 
 ### 5.4 Item editor
+The editor has two presentations of one form (v1.12.0, DECISIONS §53): the **inline editor** in the detail column (the default) and the **full editor**, a large centered modal opened on demand — same fields, same logic, more room.
+
 - Fields: name, key (shown only when the item belongs to a group or the user expands "Advanced"), value, category (dropdown, can create new inline), tags (chips with autocomplete), note, "Secret" toggle, "Pinned" toggle.
 - Value display: if `isSecret`, show dots with an eye button to reveal; clicking again hides. Revealed state resets when the selection changes or the window hides. A small hint under the value field reads **Enter saves · Ctrl+Enter adds a line** (the keyboard behavior lives where the typing happens — never in the action bar).
 - The secret/pinned toggles sit in an equal-width two-column grid (one column on narrow panes) so they stay vertically aligned.
 - A **Used in** list shows every group containing this item (click to jump to the group).
 - Action bar (bottom, anchored by a hairline divider): **Save** (left, only when dirty) and **Cancel** (left, create mode); **Copy**, **Duplicate**, and a **⋯ menu** (right) holding Export Markdown, Export Text, and **Delete item** (danger, below a divider — same pattern as the group editor). Delete never appears as a standalone red button in the bar itself.
+- **The full editor (v1.12.0)**: the inline editor carries two launch affordances — a quiet expand button in its header row (always visible; a long value pushes the footer below the fold) and a labeled **Full editor** button in the action bar. The modal is the app's standard dialog shell at `min(900px, …)`: title = the item's tile + live name (with a proper accessible name, "Edit item …"), the context chips and meta line as the first body row, **Advanced pre-expanded** (the key field visible from the start), a taller value area (12 rows), the same fields, the same pinned action bar, and Enter-saves keyboard behavior. The modal's open state is owned by the manager, so a save inside it (which re-mounts the editor with a fresh draft and the "Saved" state) never closes it; deleting the item closes it; Duplicate and "Only for this group" make it follow the new copy; and `groupContextId` passes through, so the §5.6 shared-item choices appear identically. Closing with a dirty draft asks first (**Discard changes?** — Keep editing / Discard); a clean draft, read-only mode, Esc, the scrim and the × all close directly. Create mode stays inline-only. While both presentations are mounted, their field ids are variant-unique so labels never point at the other editor's inputs.
 
 ### 5.5 Group editor
 - Fields: name, category, tags, pinned.

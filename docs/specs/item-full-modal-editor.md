@@ -33,12 +33,16 @@ One item editor, two presentations. The inline editor in the detail column stays
 
 ## Done-criteria
 
-- [ ] Inline editor behaves exactly as before (existing suites green, no visual change except the new button).
-- [ ] "Full editor" opens the modal; modal shows every field incl. key by default; taller value area.
-- [ ] Save inside the modal persists via `updateItem`, shows the Saved state, and the modal stays open for further edits.
-- [ ] Shared item (≥2 groups) saved from the modal offers the same three choices as inline; the split flow selects the new copy.
-- [ ] Dirty close asks; clean close and read-only close don't; Esc closes (via guard when dirty).
-- [ ] Delete from the modal deletes with the Undo toast and closes the modal; Duplicate follows the copy.
-- [ ] `bun run build`, `bun run test` (all suites incl. axe), `lint:tokens`, `check:contrast` pass locally; CI green on GitHub (Go jobs included).
-- [ ] Visual check of the modal in a browser harness with mocked runtime (untracked dev tool), desktop width; screenshot filed in `docs/assets/`.
-- [ ] Docs + version bump committed; `v1.12.0` tag pushed; HANDOFF/CHANGELOG/DECISIONS/BUILD_LOG updated.
+- [x] Inline editor behaves exactly as before (existing suites green, no visual change except the new buttons).
+- [x] "Full editor" opens the modal (two affordances: header expand button + footer button); modal shows every field incl. key by default; taller value area.
+- [x] Save inside the modal persists via `updateItem`, shows the Saved state, and the modal stays open for further edits.
+- [x] Shared item (≥2 groups) saved from the modal offers the same choices as inline; the split flow selects the new copy.
+- [x] Dirty close asks; clean close and read-only close don't; Esc closes (via guard when dirty).
+- [x] Delete from the modal deletes with the Undo toast and closes the modal; Duplicate follows the copy.
+- [x] `bun run build`, `bun run test` (145 incl. axe on the modal), `lint:tokens`, `check:contrast` pass locally; CI green on GitHub (Go jobs included — checked after push).
+- [x] Visual check in a real browser via the dev harness (mocked runtime), desktop width; six screenshots filed in `docs/assets/`.
+- [x] Docs + version bump committed; `v1.12.0` tag pushed; HANDOFF/CHANGELOG/DECISIONS/BUILD_LOG updated.
+
+## Outcome (2026-11-24)
+
+Built, verified, pushed as v1.12.0. Details: DECISIONS §53, BUILD_LOG v1.12.0. One addition beyond the original plan: the header expand button (long values push the footer below the fold — the exact case the feature targets), and one bug fixed on the way (variant-unique field ids). The dev harness became a permanent unshipped dev tool.
