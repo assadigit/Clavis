@@ -2,6 +2,48 @@
 
 Rewritten at the end of each session (AGENTS.md §10). Newest session at the top.
 
+## Session 2026-11-24 (later) — self-update download resilience (v1.12.1) — DONE
+
+**Goal:** fix the in-app update failure the owner hit updating to 1.12.0
+(`net/http: TLS handshake timeout` against `release-assets.githubusercontent.com`).
+
+**Status: DONE — v1.12.1 released.** Commits: `1e839a0` (audit + spec), `df7ae3d`
+(the fix), docs+version commit, tag `v1.12.1` (Release workflow publishes both
+artifacts — verify on the releases page before announcing).
+
+**Root cause in one line:** Go's net/http ignores the Windows system proxy, and
+the owner's network starves the GitHub asset CDN's TLS handshake — the updater
+connected direct-only, once, with a 10 s handshake deadline.
+
+**What shipped** (details DECISIONS §54): proxy-aware transports (env → Windows
+system proxy → direct) for both the update check and the download; proxy→direct
+client rotation over 4 attempts with backoff; 30 s dial/TLS budgets, 3-min
+per-attempt deadline under the unchanged 10-min total; resume from `.part` +
+`.part.meta` guard (stale parts never mixed; a complete part finishes without
+re-downloading); honest failure messages mentioning the VPN/proxy path.
+
+**Verification this session:** Go 1.27.4 installed in the sandbox; `gofmt`,
+`go vet ./internal/...`, `go test ./internal/...` green on linux; `GOOS=windows
+go vet ./...` green (type-checks the registry code); production
+`-tags production` build cross-compiled cleanly; govulncheck clean on
+`./internal/...`; frontend gates re-run green (145/145, tsc, tokens, contrast).
+NOT tested: the real Windows proxy registry read and a live censored-network
+download (no Windows machine in the sandbox) — the registry reader is 15 lines
+over a documented WinINET key and the parser/resume/retry logic is fully
+covered by tests; CI vets/compiles the Windows path on windows-latest.
+
+**How the owner gets 1.12.1** (their installed updater is the broken one):
+turn the VPN on (Clavis ≥ 1.12.1 follows the Windows proxy setting — but the
+OLD build does not), or download once from the release page in a browser
+(Settings → About → "Release page"), or use TUN/VPN mode for that one update.
+From 1.12.1 on, self-updates route through the system proxy and retry/resume.
+
+**Follow-ups (not blocking):** PAC/WPAD (`AutoConfigURL`) proxy support if a
+PAC user reports failure; consider surfacing the detected proxy in the update
+card for transparency.
+
+---
+
 ## Session 2026-11-24 — full-modal item editor (v1.12.0) — DONE
 
 **Goal:** give the item editor a second, bigger home — the inline editor stays as-is, and "Full editor" buttons open the complete editor in a large centered modal (~900px). Owner's answers: open via button on the inline view (B), large centered dialog (B), the whole editor inside (A).

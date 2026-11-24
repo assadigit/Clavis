@@ -2,6 +2,14 @@
 
 What changed, per session, newest first. Started 2026-11-24 during the AGENTS.md §12 first-time setup — deeper engineering history for earlier versions lives in `docs/BUILD_LOG.md` and `docs/DECISIONS.md` (decision log, add-only).
 
+## 2026-11-24 — session: self-update download resilience (v1.12.1)
+
+- Bug fix (owner report: in-app update to 1.12.0 failed with `net/http: TLS handshake timeout` on the GitHub asset CDN): the updater now survives censored/throttled networks. Root cause: Go's net/http ignores the Windows system proxy (the setting every VPN client writes); on the owner's network the CDN host's TLS handshake starves while `api.github.com`/`github.com` answer fine (audit: `docs/audits/2026-11-24-self-update-download-failure.md`, spec: `docs/specs/self-update-download-resilience.md`, DECISIONS §54).
+- Four layers: proxy-aware transports (env proxy → Windows system proxy → direct; a direct fallback transport runs when the configured proxy is dead); 4 attempts with 1s/2s/4s backoff rotating proxy→direct; patient budgets (30 s dial/TLS, 3-min per-attempt deadline under the unchanged 10-minute total); resume — a retry continues from where the download stopped (`.part` + `.part.meta` guard; stale parts from another version are never mixed, a complete part behind a blocked rename finishes without re-downloading).
+- The update **check** got the same proxy awareness; the two failure messages now mention the VPN/proxy path and the release-page fallback.
+- Tests: Go 8 new + 2 updated, all green locally on linux AND under `GOOS=windows go vet ./...` + the production build cross-compiled (Go 1.27.4 installed in the sandbox this session); frontend untouched — 145/145 green, tsc, token lint, AA contrast all pass.
+- Version 1.12.1 (five places: `app.go`, `clavis.nsi`, `winres/info.json` — `file_version` also fixed from a stale 1.6.0.0, `types.ts`, tag).
+
 ## 2026-11-24 — session: full-modal item editor (v1.12.0)
 
 - AGENTS.md §12 first-time setup: this CHANGELOG, `docs/HANDOFF.md`, `docs/specs/`, `docs/audits/`, `docs/archive/`, `docs/assets/`, Project facts filled into AGENTS.md §11; `.gitignore` now covers `.env` and `backups/`.
