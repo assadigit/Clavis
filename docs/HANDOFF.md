@@ -6,7 +6,9 @@ Rewritten at the end of each session (AGENTS.md §10). Newest session at the top
 
 **Goal:** give the item editor a second, bigger home — the inline editor stays as-is, and "Full editor" buttons open the complete editor in a large centered modal (~900px). Owner's answers: open via button on the inline view (B), large centered dialog (B), the whole editor inside (A).
 
-**Status: done and pushed.** Commits: `d9d5a21` (§12 first-time setup), `6b85d7f` (audit + spec), `9a8a0a4` (the feature), plus the docs/version commit and the `v1.12.0` tag (see git log for the exact shas).
+**Status: DONE AND RELEASED — v1.12.0 is live.** Releases page: `Clavis-Setup-1.12.0.exe` + `Clavis-Portable-1.12.0.exe` (verified). Commits: `d9d5a21` (§12 setup), `6b85d7f` (audit + spec), `9a8a0a4` (the feature), `6463ed0` (docs+version), `2123924` (go 1.27.4 — govulncheck gate had started failing every push on the Go stdlib advisory GO-2026-6859), `cdbb37d` (toolchain note), `9d02168` (complete the five-place version bump the release guard enforces).
+
+**Process note (disclosed):** the first `v1.12.0` tag pointed at `cdbb37d`, whose release run was REFUSED by the version guard (two of the five version places were still 1.11.1) — nothing was published. The tag was deleted and re-created at `9d02168` before any release existed; the re-run published cleanly. No published artifact was ever affected.
 
 **What shipped:**
 - `ItemEditor` has `variant: "inline" | "modal"` — one component, one logic, two presentations. The inline editor is unchanged except two launch affordances: a header expand button (always visible) and a footer "Full editor" button.
