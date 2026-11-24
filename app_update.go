@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -91,7 +92,7 @@ func (c *Clavis) CheckUpdate(force bool) updateEnvelope {
 	if err != nil {
 		return updateEnvelope{
 			Ok:      false,
-			Error:   "Could not reach GitHub right now. Try again in a minute, or open the releases page.",
+			Error:   "Could not reach GitHub right now. If you use a VPN or proxy, turn it on and try again, or open the releases page.",
 			Current: AppVersion,
 			Mode:    string(updateMode()),
 		}
@@ -191,7 +192,20 @@ func (c *Clavis) InstallUpdate() map[string]any {
 	}
 	emit("starting", 0)
 
-	client := &http.Client{Timeout: updateDownloadTimeout}
+	// One shared budget for every attempt (unchanged 10-minute UX); each
+	// attempt additionally gets its own shorter deadline inside
+	// DownloadWithRetries so a stalled connection cannot spend the whole
+	// window alone.
+	ctx, cancel := context.WithTimeout(context.Background(), updateDownloadTimeout)
+	defer cancel()
+
+	// Proxy-aware transport first, direct as the fallback attempt: a
+	// configured proxy that is down or breaking TLS must not strand the
+	// update (spec: self-update-download-resilience).
+	clients := []*http.Client{
+		{Transport: updater.ProxyTransport()},
+		{Transport: updater.DirectTransport()},
+	}
 	var url, dest string
 	var size int64
 
@@ -209,7 +223,7 @@ func (c *Clavis) InstallUpdate() map[string]any {
 		dest = exe + ".new"
 	}
 
-	if err := updater.DownloadToFile(client, url, dest, size, func(r, total int64) {
+	if err := updater.DownloadWithRetries(ctx, clients, url, dest, size, func(r, total int64) {
 		pct := 0.0
 		if total > 0 {
 			pct = float64(r) / float64(total) * 100
@@ -218,7 +232,8 @@ func (c *Clavis) InstallUpdate() map[string]any {
 	}); err != nil {
 		os.Remove(dest)
 		emit("failed", 0)
-		return service.Fail("The download did not complete: "+err.Error(), 502)
+		return service.Fail("The download did not complete: "+err.Error()+
+			". If you use a VPN or proxy, turn it on and try again — Clavis follows the Windows proxy setting — or download from the release page.", 502)
 	}
 	emit("downloaded", 100)
 

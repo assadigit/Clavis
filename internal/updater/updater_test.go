@@ -4,6 +4,7 @@
 package updater
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -184,7 +185,7 @@ func TestDownloadToFile(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "Clavis.exe")
 	var calls int
 	var lastR, lastT int64
-	err := DownloadToFile(srv.Client(), srv.URL, dest, int64(len(payload)), func(r, total int64) {
+	err := DownloadToFile(context.Background(), srv.Client(), srv.URL, dest, int64(len(payload)), func(r, total int64) {
 		calls++
 		lastR, lastT = r, total
 	})
@@ -209,6 +210,9 @@ func TestDownloadToFile(t *testing.T) {
 	if _, err := os.Stat(dest + ".part"); !os.IsNotExist(err) {
 		t.Error(".part file left behind")
 	}
+	if _, err := os.Stat(dest + ".part.meta"); !os.IsNotExist(err) {
+		t.Error(".part.meta file left behind")
+	}
 }
 
 func TestDownloadToFileSizeMismatch(t *testing.T) {
@@ -218,7 +222,7 @@ func TestDownloadToFileSizeMismatch(t *testing.T) {
 	defer srv.Close()
 
 	dest := filepath.Join(t.TempDir(), "Clavis.exe")
-	err := DownloadToFile(srv.Client(), srv.URL, dest, 4096, nil)
+	err := DownloadToFile(context.Background(), srv.Client(), srv.URL, dest, 4096, nil)
 	if err == nil || !strings.Contains(err.Error(), "incomplete") {
 		t.Fatalf("want size-mismatch error, got %v", err)
 	}
