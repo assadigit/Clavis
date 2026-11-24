@@ -2,6 +2,15 @@
 
 Rewritten at the end of each session (AGENTS.md §10). Newest session at the top.
 
+## Session 2026-11-24 (latest) — full-editor button on list rows (v1.13.0)
+
+**Goal:** the owner reported "when you have items showing in sidebar, I want a
+button so u can edit/work on them in a bigger editor" — v1.12.0's full-modal editor
+is only reachable through the tight inline editor; add the launch button directly
+on the rows where items are listed (manager entry list + group member well).
+Milestones: M1 audit + spec · M2 the buttons + wiring + tests · M3 docs, version
+bump 1.13.0, tag, release. Status: in progress.
+
 ## Session 2026-11-24 (later) — self-update download resilience (v1.12.1) — DONE
 
 **Goal:** fix the in-app update failure the owner hit updating to 1.12.0
