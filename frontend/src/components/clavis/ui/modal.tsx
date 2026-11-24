@@ -43,6 +43,7 @@ export function Modal({
   children,
   footer,
   width,
+  ariaLabel,
 }: {
   open: boolean;
   title: ReactNode;
@@ -50,6 +51,9 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   width?: string;
+  /** v1.12.0 (DECISIONS §53): the dialog's accessible name when the title
+   *  is rich content (an icon + live name) instead of a plain string. */
+  ariaLabel?: string;
 }) {
   useEscStack(open, onClose);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -121,7 +125,7 @@ export function Modal({
         className="glass-panel clavis-pop-in relative flex flex-col"
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === "string" ? title : "Clavis dialog"}
+        aria-label={typeof title === "string" ? title : ariaLabel ?? "Clavis dialog"}
         style={{
           width: width ?? "min(560px, calc(100vw - var(--space-6)))",
           maxHeight: "calc(var(--clavis-modal-vh, 100dvh) - var(--space-6))",

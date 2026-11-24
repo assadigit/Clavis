@@ -2,10 +2,14 @@
  * CLAVIS — item editor (SPEC §5.4, §5.6, §5.7).
  * Enter saves; Ctrl+Enter inserts a newline inside the value field.
  * Secret values are masked until revealed; reveal resets on item change.
+ *
+ * v1.12.0 (DECISIONS §53): two presentations of the one editor — the
+ * inline detail-column form (default) and the full-modal editor opened by
+ * its "Full editor" button. Same component, same logic, same fields.
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -15,6 +19,7 @@ import {
   FileJson,
   FileText,
   Link2,
+  Maximize2,
   MoreHorizontal,
   Trash2,
 } from "lucide-react";
@@ -28,7 +33,7 @@ import { allTags, formatDateTime, groupsContaining } from "./derive";
 import { EntryTile, Ix } from "./icons";
 import { SharedDeleteModal, SharedEditModal } from "./shared-modals";
 import { ValueField } from "./editors/value-field";
-import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
+import { Btn, CategorySelect, FieldLabel, Menu, MenuItem, Modal, TagInput, TextArea, TextInput, Toggle } from "./ui-bits";
 
 interface ItemDraft {
   name: string;
@@ -59,6 +64,13 @@ export interface ItemEditorProps {
   onSelectEntry: (sel: Selection) => void;
   deleteEntry: (kind: "item" | "group", id: string) => void;
   onCancelCreate: () => void;
+  /** v1.12.0 (DECISIONS §53): the presentation — the inline detail-column
+   *  editor (default) or the full-modal editor. */
+  variant?: "inline" | "modal";
+  /** Inline, edit mode: opens the full-modal editor for this item. */
+  onOpenFullEditor?: () => void;
+  /** Modal variant: close — guarded when the draft is dirty. */
+  onClose?: () => void;
 }
 
 function draftFromItem(item: Item): ItemDraft {
@@ -76,7 +88,7 @@ function draftFromItem(item: Item): ItemDraft {
 }
 
 export function ItemEditor(props: ItemEditorProps) {
-  const { mode, state, call, readOnly, item, prefillName, forGroupId, groupContextId, onDone, onSelectEntry, deleteEntry, onCancelCreate } = props;
+  const { mode, state, call, readOnly, item, prefillName, forGroupId, groupContextId, onDone, onSelectEntry, deleteEntry, onCancelCreate, variant = "inline", onOpenFullEditor, onClose } = props;
 
   /* The state snapshot is redacted (values stripped), so the edit form
      fetches exactly this item's value on mount — one "getValue" round-trip,
@@ -105,10 +117,12 @@ export function ItemEditor(props: ItemEditorProps) {
     // The manager remounts this editor (key includes updatedAt) whenever the
     // item changes, so a per-item fetch effect is enough.
   }, [mode, item, call]);
-  const [advanced, setAdvanced] = useState(false);
+  const [advanced, setAdvanced] = useState(variant === "modal");
   const [saving, setSaving] = useState(false);
   const [pendingSave, setPendingSave] = useState<{ patch: Record<string, unknown>; groups: Group[] } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /* v1.12.0 (DECISIONS §53): the full editor's dirty-close guard. */
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   /* The manager remounts this editor with a fresh key whenever the item or
      its updatedAt changes, so the draft/reveal state resets by remounting
@@ -138,6 +152,17 @@ export function ItemEditor(props: ItemEditorProps) {
       o.tags.join("\u0000") !== draft.tags.join("\u0000")
     );
   }, [item, draft, loadedValue]);
+
+  /* v1.12.0 (DECISIONS §53): every close path of the full editor (Esc,
+   *  scrim, ×) funnels here — a dirty draft asks first, everything else
+   *  closes. Stable identities keep the Esc stack correctly ordered when
+   *  the shared-item modals stack above this editor. */
+  const requestClose = useCallback(() => {
+    if (variant !== "modal") return;
+    if (dirty) setConfirmDiscard(true);
+    else onClose?.();
+  }, [variant, dirty, onClose]);
+  const cancelDiscard = useCallback(() => setConfirmDiscard(false), []);
 
   const showKeyField = (mode === "edit" && usedIn.length >= 1) || advanced;
 
@@ -287,48 +312,47 @@ export function ItemEditor(props: ItemEditorProps) {
     );
   }
 
-  return (
-    <div
-      className="clavis-scroll flex flex-col"
-      style={{ gap: "var(--space-4)", overflowY: "auto", padding: "var(--space-4)", flex: 1, minHeight: 0 }}
-      onKeyDown={handleKeyDown}
-    >
-      <header className="flex flex-col" style={{ gap: "var(--space-2)" }}>
-        <div className="flex items-center" style={{ gap: "var(--space-3)" }}>
-          <EntryTile kind="item" isSecret={effectiveSecret} lg />
-          <h2 className="flex-1 truncate" style={{ margin: 0, fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }} dir="auto">
-            {mode === "create" ? "New item" : draft.name}
-          </h2>
-        </div>
-        <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
-          {currentGroup ? (
-            <span className="glass-chip inline-flex items-center" style={{ gap: "var(--space-1)", padding: "calc(var(--space-1) / 2) var(--space-2)", fontSize: "var(--text-xs)" }}>
-              <Ix icon={Link2} size="sm" style={{ width: "var(--text-xs)", height: "var(--text-xs)", color: "var(--color-accent-text)" }} />
-              editing within “{currentGroup.name}”
-            </span>
-          ) : null}
-          {forGroupId ? (
-            <span className="glass-chip inline-flex items-center" style={{ gap: "var(--space-1)", padding: "calc(var(--space-1) / 2) var(--space-2)", fontSize: "var(--text-xs)" }}>
-              <Ix icon={Link2} size="sm" style={{ width: "var(--text-xs)", height: "var(--text-xs)", color: "var(--color-accent-text)" }} />
-              will be added to the group
-            </span>
-          ) : null}
-          {mode === "edit" && item ? (
-            <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
-              {effectiveSecret ? "Secret" : "Not secret"} · used {item.useCount}× · updated {formatDateTime(item.updatedAt)}
-            </span>
-          ) : null}
-        </div>
-      </header>
+  /* v1.12.0: the inline and full editors can be mounted at the same time
+   *  (the modal opens over the detail column) — the field ids carry the
+   *  variant so labels never point at the other editor's inputs. */
+  const idSuffix = variant === "modal" ? "-full" : "";
 
+  /* v1.12.0 (DECISIONS §53): two presentations of the one editor — the
+   *  chips + meta line, the fields and the action bar are shared trees;
+   *  only the container differs (the detail column vs the Modal shell). */
+  const contextChips = (
+    <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
+      {currentGroup ? (
+        <span className="glass-chip inline-flex items-center" style={{ gap: "var(--space-1)", padding: "calc(var(--space-1) / 2) var(--space-2)", fontSize: "var(--text-xs)" }}>
+          <Ix icon={Link2} size="sm" style={{ width: "var(--text-xs)", height: "var(--text-xs)", color: "var(--color-accent-text)" }} />
+          editing within “{currentGroup.name}”
+        </span>
+      ) : null}
+      {forGroupId ? (
+        <span className="glass-chip inline-flex items-center" style={{ gap: "var(--space-1)", padding: "calc(var(--space-1) / 2) var(--space-2)", fontSize: "var(--text-xs)" }}>
+          <Ix icon={Link2} size="sm" style={{ width: "var(--text-xs)", height: "var(--text-xs)", color: "var(--color-accent-text)" }} />
+          will be added to the group
+        </span>
+      ) : null}
+      {mode === "edit" && item ? (
+        <span className="t-muted" style={{ fontSize: "var(--text-xs)" }}>
+          {effectiveSecret ? "Secret" : "Not secret"} · used {item.useCount}× · updated {formatDateTime(item.updatedAt)}
+        </span>
+      ) : null}
+    </div>
+  );
+
+  /* v1.12.0: the form fields — one tree, two presentations. */
+  const fields = (
+    <>
       <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
-        <FieldLabel htmlFor="clavis-item-name">Name</FieldLabel>
+        <FieldLabel htmlFor={`clavis-item-name${idSuffix}`}>Name</FieldLabel>
         <TextInput
-          id="clavis-item-name"
+          id={`clavis-item-name${idSuffix}`}
           value={draft.name}
           disabled={readOnly}
           dir="auto"
-          autoFocus={mode === "create"}
+          autoFocus={mode === "create" || variant === "modal"}
           placeholder="GitHub token"
           onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
         />
@@ -348,9 +372,9 @@ export function ItemEditor(props: ItemEditorProps) {
 
       {showKeyField ? (
         <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
-          <FieldLabel htmlFor="clavis-item-key">Key — used as NAME=value when the group is copied</FieldLabel>
+          <FieldLabel htmlFor={`clavis-item-key${idSuffix}`}>Key — used as NAME=value when the group is copied</FieldLabel>
           <TextInput
-            id="clavis-item-key"
+            id={`clavis-item-key${idSuffix}`}
             mono
             dir="auto"
             value={draft.key}
@@ -369,6 +393,8 @@ export function ItemEditor(props: ItemEditorProps) {
         onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value }))}
         disabled={readOnly}
         showLast4={showLast4}
+        rows={variant === "modal" ? 12 : undefined}
+        id={`clavis-item-value${idSuffix}`}
       />
 
       <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
@@ -389,14 +415,14 @@ export function ItemEditor(props: ItemEditorProps) {
           onChange={(tags) => setDraft((d) => ({ ...d, tags }))}
           suggestions={allTags(state.data)}
           disabled={readOnly}
-          id="clavis-item-tags"
+          id={`clavis-item-tags${idSuffix}`}
         />
       </div>
 
       <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
-        <FieldLabel htmlFor="clavis-item-note">Note</FieldLabel>
+        <FieldLabel htmlFor={`clavis-item-note${idSuffix}`}>Note</FieldLabel>
         <TextArea
-          id="clavis-item-note"
+          id={`clavis-item-note${idSuffix}`}
           mono
           dir="auto"
           value={draft.note}
@@ -457,59 +483,72 @@ export function ItemEditor(props: ItemEditorProps) {
           ))}
         </div>
       ) : null}
+    </>
+  );
 
-      <footer
-        className="flex flex-wrap items-center"
-        style={{
-          gap: "var(--space-2)",
-          marginTop: "var(--space-1)",
-          paddingTop: "var(--space-4)",
-          borderTop: "1px solid var(--glass-border)",
-        }}
-      >
-        <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
-          {!readOnly ? (
-            dirty ? (
-              <Btn variant="primary" icon={Check} label={saving ? "Saving…" : "Save"} onClick={() => void save()} disabled={saving} />
-            ) : (
-              /* F-020 (UI-audit round 1 Phase 7): the save affordance exists
-                 from the start — a disabled "Saved" state when the form is
-                 clean, instead of empty space. Create mode is always dirty. */
-              <Btn
-                variant="primary"
-                icon={Check}
-                label="Saved"
-                disabled
-                ariaLabel="Saved — no changes yet"
-                title="No changes yet"
-              />
-            )
-          ) : null}
-          {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
-        </div>
-        {mode === "edit" && item ? (
-          <div className="flex flex-1 flex-wrap items-center justify-end" style={{ gap: "var(--space-2)" }}>
-            <Btn variant="glass" icon={Copy} label="Copy" onClick={() => void copyItem()} title="Copy value" disabled={readOnly} />
-            <Btn variant="glass" icon={Copy} label="Duplicate" onClick={() => void duplicate()} title="Duplicate item" disabled={readOnly} />
-            <Menu triggerIcon={MoreHorizontal} triggerTitle="More actions" align="end" triggerVariant="glass" disabled={readOnly}>
-              {/* UI-audit round 1 Phase 4 (F-017/F-003): the lossless JSON
-                  export sits above the lossy Markdown/TXT, with the plaintext
-                  warning Settings already shows. */}
-              <MenuItem
-                icon={FileJson}
-                label="Export JSON (backup-safe)"
-                hint="Contains your real value in plain text."
-                onClick={() => downloadExport("item-json", item.id)}
-              />
-              <MenuItem icon={FileText} label="Export Markdown" onClick={() => downloadExport("item-md", item.id)} />
-              <MenuItem icon={FileText} label="Export Text" onClick={() => downloadExport("item-txt", item.id)} />
-              <div aria-hidden style={{ borderTop: "1px solid var(--glass-border)", margin: "var(--space-1) 0" }} />
-              <MenuItem icon={Trash2} label="Delete item" danger onClick={onDeleteClick} disabled={readOnly} />
-            </Menu>
-          </div>
+  /* The action bar (SPEC §5.4): Save/Saved left, Copy/Duplicate/⋯ right —
+   *  and, inline in edit mode, the "Full editor" launch button (v1.12.0
+   *  §53). In the modal the bar rides in the Modal shell's pinned footer. */
+  const footerActions = (
+    <>
+      <div className="flex flex-wrap items-center" style={{ gap: "var(--space-2)" }}>
+        {!readOnly ? (
+          dirty ? (
+            <Btn variant="primary" icon={Check} label={saving ? "Saving…" : "Save"} onClick={() => void save()} disabled={saving} />
+          ) : (
+            /* F-020 (UI-audit round 1 Phase 7): the save affordance exists
+               from the start — a disabled "Saved" state when the form is
+               clean, instead of empty space. Create mode is always dirty. */
+            <Btn
+              variant="primary"
+              icon={Check}
+              label="Saved"
+              disabled
+              ariaLabel="Saved — no changes yet"
+              title="No changes yet"
+            />
+          )
         ) : null}
-      </footer>
+        {mode === "create" ? <Btn variant="ghost" label="Cancel" onClick={onCancelCreate} /> : null}
+      </div>
+      {mode === "edit" && item ? (
+        <div className="flex flex-1 flex-wrap items-center justify-end" style={{ gap: "var(--space-2)" }}>
+          {variant === "inline" && onOpenFullEditor ? (
+            <Btn
+              variant="glass"
+              icon={Maximize2}
+              label="Full editor"
+              title="Open the full editor — every field, more room"
+              onClick={onOpenFullEditor}
+            />
+          ) : null}
+          <Btn variant="glass" icon={Copy} label="Copy" onClick={() => void copyItem()} title="Copy value" disabled={readOnly} />
+          <Btn variant="glass" icon={Copy} label="Duplicate" onClick={() => void duplicate()} title="Duplicate item" disabled={readOnly} />
+          <Menu triggerIcon={MoreHorizontal} triggerTitle="More actions" align="end" triggerVariant="glass" disabled={readOnly}>
+            {/* UI-audit round 1 Phase 4 (F-017/F-003): the lossless JSON
+                export sits above the lossy Markdown/TXT, with the plaintext
+                warning Settings already shows. */}
+            <MenuItem
+              icon={FileJson}
+              label="Export JSON (backup-safe)"
+              hint="Contains your real value in plain text."
+              onClick={() => downloadExport("item-json", item.id)}
+            />
+            <MenuItem icon={FileText} label="Export Markdown" onClick={() => downloadExport("item-md", item.id)} />
+            <MenuItem icon={FileText} label="Export Text" onClick={() => downloadExport("item-txt", item.id)} />
+            <div aria-hidden style={{ borderTop: "1px solid var(--glass-border)", margin: "var(--space-1) 0" }} />
+            <MenuItem icon={Trash2} label="Delete item" danger onClick={onDeleteClick} disabled={readOnly} />
+          </Menu>
+        </div>
+      ) : null}
+    </>
+  );
 
+  /* The shared-item modals (SPEC §5.6) render identically in both
+     presentations — each is its own overlay and stacks above whatever
+     container is open. */
+  const sharedModals = (
+    <>
       <SharedEditModal
         open={pendingSave !== null}
         groups={pendingSave?.groups ?? usedIn}
@@ -530,6 +569,106 @@ export function ItemEditor(props: ItemEditorProps) {
           if (item) deleteEntry("item", item.id);
         }}
       />
+    </>
+  );
+
+  /* v1.12.0 (DECISIONS §53): the full-modal editor — the complete form in
+   *  the app's Modal shell (900px, scrollable body, pinned action bar),
+   *  with the dirty-close guard stacked on top. */
+  if (variant === "modal") {
+    return (
+      <>
+        <Modal
+          open
+          onClose={requestClose}
+          width="min(900px, calc(100vw - var(--space-6)))"
+          ariaLabel={`Edit item ${draft.name}`}
+          title={
+            <span className="flex min-w-0 items-center" style={{ gap: "var(--space-2)" }}>
+              <EntryTile kind="item" isSecret={effectiveSecret} />
+              <span className="truncate" dir="auto">
+                {draft.name}
+              </span>
+            </span>
+          }
+          footer={footerActions}
+        >
+          <div className="flex flex-col" style={{ gap: "var(--space-4)" }} onKeyDown={handleKeyDown}>
+            {contextChips}
+            {fields}
+          </div>
+        </Modal>
+        {sharedModals}
+        <Modal
+          open={confirmDiscard}
+          onClose={cancelDiscard}
+          title="Discard changes?"
+          footer={
+            <>
+              <Btn variant="ghost" label="Keep editing" onClick={cancelDiscard} />
+              <Btn
+                variant="danger"
+                label="Discard changes"
+                onClick={() => {
+                  setConfirmDiscard(false);
+                  onClose?.();
+                }}
+              />
+            </>
+          }
+        >
+          <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", lineHeight: "var(--leading-relaxed)" }}>
+            “{item?.name}” has unsaved changes. Closing the editor discards them.
+          </p>
+        </Modal>
+      </>
+    );
+  }
+
+  return (
+    <div
+      className="clavis-scroll flex flex-col"
+      style={{ gap: "var(--space-4)", overflowY: "auto", padding: "var(--space-4)", flex: 1, minHeight: 0 }}
+      onKeyDown={handleKeyDown}
+    >
+      <header className="flex flex-col" style={{ gap: "var(--space-2)" }}>
+        <div className="flex items-center" style={{ gap: "var(--space-3)" }}>
+          <EntryTile kind="item" isSecret={effectiveSecret} lg />
+          <h2 className="flex-1 truncate" style={{ margin: 0, fontSize: "var(--text-lg)", fontWeight: "var(--weight-semibold)" }} dir="auto">
+            {mode === "create" ? "New item" : draft.name}
+          </h2>
+          {/* v1.12.0 (§53): the always-visible launch affordance — long
+              values push the footer's "Full editor" button below the fold,
+              so the header carries a quiet expand button too (same pattern
+              as the member-row actions). */}
+          {variant === "inline" && onOpenFullEditor && mode === "edit" ? (
+            <button
+              type="button"
+              className="clavis-btn clavis-btn-ghost clavis-focusable"
+              onClick={onOpenFullEditor}
+              aria-label="Open the full editor"
+              title="Open the full editor — every field, more room"
+              style={{ padding: "var(--space-1)", flexShrink: 0 }}
+            >
+              <Ix icon={Maximize2} size="sm" />
+            </button>
+          ) : null}
+        </div>
+        {contextChips}
+      </header>
+      {fields}
+      <footer
+        className="flex flex-wrap items-center"
+        style={{
+          gap: "var(--space-2)",
+          marginTop: "var(--space-1)",
+          paddingTop: "var(--space-4)",
+          borderTop: "1px solid var(--glass-border)",
+        }}
+      >
+        {footerActions}
+      </footer>
+      {sharedModals}
     </div>
   );
 }

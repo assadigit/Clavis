@@ -19,6 +19,8 @@ export function ValueField({
   onChange,
   disabled,
   showLast4,
+  rows,
+  id = "clavis-item-value",
 }: {
   /** Edit mode: secrets start masked (create mode shows the plain textarea). */
   isEdit: boolean;
@@ -28,6 +30,12 @@ export function ValueField({
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   disabled: boolean;
   showLast4: boolean;
+  /** v1.12.0 (DECISIONS §53): taller value area in the full-modal editor
+   *  (default 6 = the inline behavior, unchanged). */
+  rows?: number;
+  /** v1.12.0: the field id — the modal passes a variant-unique id so the
+   *  two mounted editors never share one. */
+  id?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
   const masked = isEdit && secret && !revealed;
@@ -35,7 +43,7 @@ export function ValueField({
   if (masked) {
     return (
       <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
-        <FieldLabel htmlFor="clavis-item-value">Value</FieldLabel>
+        <FieldLabel htmlFor={id}>Value</FieldLabel>
         <div className="glass-input flex items-center justify-between" style={{ padding: "var(--space-2) var(--space-3)", gap: "var(--space-2)" }}>
           <span className="t-mono t-muted truncate" dir="auto" style={{ fontSize: "var(--text-sm)" }}>
             {maskValue(value, showLast4)}
@@ -47,7 +55,7 @@ export function ValueField({
   }
   return (
     <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
-      <FieldLabel htmlFor="clavis-item-value">Value</FieldLabel>
+      <FieldLabel htmlFor={id}>Value</FieldLabel>
       <div className="flex flex-col" style={{ gap: "var(--space-1)", width: "100%" }}>
         {isEdit && secret ? (
           <div className="flex justify-end">
@@ -55,7 +63,7 @@ export function ValueField({
           </div>
         ) : null}
         <TextArea
-          id="clavis-item-value"
+          id={id}
           mono
           dir="auto"
           value={value}
@@ -63,7 +71,7 @@ export function ValueField({
           spellCheck={false}
           aria-label="Value"
           placeholder="The token, prompt or note…"
-          rows={6}
+          rows={rows ?? 6}
           onChange={onChange}
         />
         <FieldHint>Enter saves · Ctrl+Enter adds a line</FieldHint>

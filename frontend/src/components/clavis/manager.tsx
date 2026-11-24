@@ -51,12 +51,18 @@ export function Manager(props: ManagerProps) {
      survives the editor remounts that every membership change triggers
      (the editor's key includes the group's updatedAt). */
   const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
+  /* v1.12.0 (DECISIONS §53): the full-modal item editor — owned HERE, like
+   *  managingGroupId, so a save inside it (which re-keys the inline editor
+   *  behind) never closes the modal mid-edit. */
+  const [fullEditId, setFullEditId] = useState<string | null>(null);
+  const closeFullEditor = useCallback(() => setFullEditId(null), []);
 
   const data = state.data;
   const liveCount = liveItems(data).length + liveGroups(data).length;
   const selItem = selection?.kind === "item" ? data.items.find((i) => i.id === selection.id && !i.deletedAt) : undefined;
   const selGroup = selection?.kind === "group" ? data.groups.find((g) => g.id === selection.id && !g.deletedAt) : undefined;
   const managingGroup = managingGroupId ? data.groups.find((g) => g.id === managingGroupId && !g.deletedAt) : undefined;
+  const fullEditItem = fullEditId ? data.items.find((i) => i.id === fullEditId && !i.deletedAt) : undefined;
   const activeSelection: Selection | null =
     selItem || selGroup ? (selection as Selection) : null;
 
@@ -64,6 +70,14 @@ export function Manager(props: ManagerProps) {
     setSelection(null);
     setCreating({ kind });
   }
+
+  /* v1.12.0: Duplicate or "Only for this group" inside the full editor —
+     the modal follows the new copy; a group jump just moves the selection
+     behind it. */
+  const followFullEdit = useCallback((sel: Selection) => {
+    setSelection(sel);
+    if (sel.kind === "item") setFullEditId(sel.id);
+  }, []);
 
   /* Instant copy from a list row: the backend writes the clipboard (value
      for items, KEY=value block for groups) and applies the privacy formats
@@ -160,6 +174,7 @@ export function Manager(props: ManagerProps) {
           readOnly={readOnly}
           item={selItem}
           groupContextId={selection.groupContextId}
+          onOpenFullEditor={() => setFullEditId(selItem.id)}
           onDone={(sel) => setSelection(sel)}
           onSelectEntry={(sel) => setSelection(sel)}
           deleteEntry={deleteEntry}
@@ -353,6 +368,28 @@ export function Manager(props: ManagerProps) {
             setManagingGroupId(null);
             setCreating({ kind: "item", forGroupId: gid });
           }}
+        />
+      ) : null}
+
+      {/* v1.12.0 (DECISIONS §53): the full-modal item editor. Re-keyed on
+          updatedAt like the inline editor (fresh draft after every save);
+          the open state (fullEditId) survives that remount, and a deleted
+          item unmounts it naturally. */}
+      {fullEditItem ? (
+        <ItemEditor
+          key={`full-item-${fullEditItem.id}-${fullEditItem.updatedAt}`}
+          mode="edit"
+          variant="modal"
+          state={state}
+          call={call}
+          readOnly={readOnly}
+          item={fullEditItem}
+          groupContextId={selection?.kind === "item" && selection.id === fullEditItem.id ? selection.groupContextId : undefined}
+          onDone={followFullEdit}
+          onSelectEntry={followFullEdit}
+          deleteEntry={deleteEntry}
+          onClose={closeFullEditor}
+          onCancelCreate={() => setCreating(null)}
         />
       ) : null}
     </div>

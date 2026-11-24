@@ -5,7 +5,7 @@
  * back to the manager. Fake data only (FAKE-* values). Wails runtime mocked.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Manager } from "./manager";
 import type { ClavisState } from "@/lib/clavis/types";
@@ -213,5 +213,29 @@ describe("Manager smoke", () => {
     expect(screen.getByText("FAKE Hibana key")).toBeTruthy();
     /* …while entries outside the subtree stay out. */
     expect(screen.queryByText("FAKE unrelated key")).toBeNull();
+  });
+
+  /* v1.12.0 (DECISIONS §53): the inline editor's "Full editor" button
+     opens the full-modal editor, and saving there persists through
+     updateItem. */
+  it("Full editor opens the modal editor and saving persists through updateItem", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { call } = setup({ kind: "item", id: "fake-item-1" });
+    await screen.findByRole("heading", { name: "FAKE GitHub token" });
+    await user.click(screen.getByRole("button", { name: "Full editor" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.getAttribute("aria-label")).toBe("Edit item FAKE GitHub token");
+    /* The key field is visible by default in the full editor. */
+    expect(within(dialog).getByLabelText("Key — used as NAME=value when the group is copied")).toBeTruthy();
+    /* Edit and save inside the modal. */
+    const name = within(dialog).getByLabelText("Name");
+    await user.type(name, "X");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("updateItem", {
+        id: "fake-item-1",
+        patch: expect.objectContaining({ name: "FAKE GitHub tokenX" }),
+      }),
+    );
   });
 });

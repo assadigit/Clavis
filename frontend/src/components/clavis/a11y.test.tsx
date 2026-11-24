@@ -159,6 +159,27 @@ describe("a11y: every major screen passes axe (color-contrast disabled — owned
     await expectNoViolations(document.body);
   });
 
+  /* v1.12.0 (DECISIONS §53): the full-modal editor — the axe gate covers
+     the dialog presentation (focus trap, labels, the pinned action bar). */
+  it("ItemEditor (full-modal variant) passes axe", async () => {
+    render(
+      <ItemEditor
+        mode="edit"
+        variant="modal"
+        state={state()}
+        call={call}
+        readOnly={false}
+        item={state().data.items[0]}
+        onDone={vi.fn()}
+        onSelectEntry={vi.fn()}
+        deleteEntry={vi.fn()}
+        onCancelCreate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await expectNoViolations(document.body);
+  });
+
   it("GroupEditor (edit mode) passes axe", async () => {
     render(
       <aside aria-label="Details">

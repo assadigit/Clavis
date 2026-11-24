@@ -15,3 +15,4 @@ frontend/dist-e2e/
 .env
 .env.*
 backups/
+frontend/dist-harness/
