@@ -2,6 +2,7 @@
  * CLAVIS — manager list column (SPEC §5.3): instant search, New menu,
  * items and groups mixed; rows select on click and with Up/Down arrows.
  * Every row carries an instant-copy button and a working pin toggle.
+ * Item rows also carry the full-editor launch button (v1.13.0, §55).
  */
 "use client";
 
@@ -39,6 +40,9 @@ export interface EntryListProps {
   copyEntry: (kind: "item" | "group", id: string) => Promise<boolean>;
   /** Pin/unpin straight from the row. */
   togglePin: (kind: "item" | "group", id: string, pinned: boolean) => void;
+  /** v1.13.0 (DECISIONS §55): open an item directly in the full-modal
+   *  editor from its row. Passed down to item rows only. */
+  onOpenEditor?: (sel: { kind: "item"; id: string }) => void;
 }
 
 type ListRow = EntryRowData;
@@ -55,6 +59,7 @@ export function EntryList({
   readOnly,
   copyEntry,
   togglePin,
+  onOpenEditor,
 }: EntryListProps) {
   const data = state.data;
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -300,6 +305,11 @@ export function EntryList({
               onSelect={onSelect}
               copyEntry={copyEntry}
               togglePin={togglePin}
+              onOpenEditor={
+                row.kind === "item" && onOpenEditor
+                  ? () => onOpenEditor({ kind: "item", id: row.id })
+                  : undefined
+              }
             />
           ))}
           {results.length === 0 ? (

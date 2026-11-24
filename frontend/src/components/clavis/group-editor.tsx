@@ -2,6 +2,8 @@
  * CLAVIS — group editor (SPEC §5.5): fields plus the member well (a
  * compact summary of the group's items). All member management — drag
  * reorder, add, remove — happens in the dedicated Manage items modal.
+ * v1.13.0 (DECISIONS §55): member rows can pop an item straight into the
+ * full-modal editor (onOpenFullEditor, carrying this group's context).
  */
 "use client";
 
@@ -33,6 +35,9 @@ export interface GroupEditorProps {
   onSelectEntry: (sel: Selection) => void;
   deleteEntry: (kind: "item" | "group", id: string) => void;
   onManageItems?: () => void;
+  /** v1.13.0 (§55): pop a member into the full-modal editor — called with
+   *  the item's selection INCLUDING this group's context (SPEC §5.6). */
+  onOpenFullEditor?: (sel: Selection) => void;
   onCancelCreate: () => void;
 }
 
@@ -48,7 +53,7 @@ function draftFromGroup(group: Group): GroupDraft {
 }
 
 export function GroupEditor(props: GroupEditorProps) {
-  const { mode, state, call, readOnly, group, onDone, onSelectEntry, deleteEntry, onManageItems, onCancelCreate } = props;
+  const { mode, state, call, readOnly, group, onDone, onSelectEntry, deleteEntry, onManageItems, onOpenFullEditor, onCancelCreate } = props;
 
   const [draft, setDraft] = useState<GroupDraft>(() =>
     group
@@ -332,6 +337,11 @@ export function GroupEditor(props: GroupEditorProps) {
                   readOnly={readOnly}
                   onSelect={() => onSelectEntry({ kind: "item", id: m.item.id, groupContextId: group.id })}
                   onDelete={() => deleteEntry("item", m.item.id)}
+                  onOpenFull={
+                    onOpenFullEditor
+                      ? () => onOpenFullEditor({ kind: "item", id: m.item.id, groupContextId: group.id })
+                      : undefined
+                  }
                 />
               ))}
             </div>

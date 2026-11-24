@@ -56,6 +56,17 @@ export function Manager(props: ManagerProps) {
    *  behind) never closes the modal mid-edit. */
   const [fullEditId, setFullEditId] = useState<string | null>(null);
   const closeFullEditor = useCallback(() => setFullEditId(null), []);
+  /* v1.13.0 (DECISIONS §55): one open-handler for every full-editor launch
+   *  point outside the modal itself — entry-list rows (manager list column)
+   *  and group member rows. Selects the entry first so the inline editor
+   *  behind the modal matches and the §5.6 shared-split context
+   *  (groupContextId, wired by the member rows) keeps flowing; clears any
+   *  create form; then opens the modal. */
+  const openFullEditor = useCallback((sel: Selection) => {
+    setSelection(sel);
+    setCreating(null);
+    if (sel.kind === "item") setFullEditId(sel.id);
+  }, []);
 
   const data = state.data;
   const liveCount = liveItems(data).length + liveGroups(data).length;
@@ -195,6 +206,7 @@ export function Manager(props: ManagerProps) {
           onSelectEntry={(sel) => setSelection(sel)}
           deleteEntry={deleteEntry}
           onManageItems={() => setManagingGroupId(selGroup.id)}
+          onOpenFullEditor={openFullEditor}
           onCancelCreate={() => setCreating(null)}
         />
       );
@@ -343,6 +355,7 @@ export function Manager(props: ManagerProps) {
                 readOnly={readOnly}
                 copyEntry={copyEntry}
                 togglePin={togglePin}
+                onOpenEditor={openFullEditor}
               />
               <aside
                 aria-label="Details"

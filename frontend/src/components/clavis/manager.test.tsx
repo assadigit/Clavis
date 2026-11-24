@@ -238,4 +238,30 @@ describe("Manager smoke", () => {
       }),
     );
   });
+
+  /* v1.13.0 (DECISIONS §55): the entry-list row's expand button opens the
+     full-modal editor directly — no detour through the inline editor — and
+     hands the selection up so the editor behind the modal matches. */
+  it("the list row's full-editor button opens the modal directly from the list", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { setSelection } = setup(null);
+    /* Nothing selected yet: the detail column shows the empty panel. */
+    expect(screen.getByText("Nothing selected")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Open FAKE GitHub token in the full editor" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.getAttribute("aria-label")).toBe("Edit item FAKE GitHub token");
+    /* The key field is visible by default in the full editor. */
+    expect(within(dialog).getByLabelText("Key — used as NAME=value when the group is copied")).toBeTruthy();
+    /* The selection follows the open. */
+    expect(setSelection).toHaveBeenCalledWith({ kind: "item", id: "fake-item-1" });
+  });
+
+  /* v1.13.0 (§55): group rows never get the full-editor button (the full
+     editor is an item editor; groups open their own editor on click). */
+  it("group rows show no full-editor button", () => {
+    setup(null);
+    /* The item rows carry the button; the group row does not. */
+    expect(screen.getByRole("button", { name: "Open FAKE GitHub token in the full editor" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open FAKE Deploy set in the full editor" })).toBeNull();
+  });
 });

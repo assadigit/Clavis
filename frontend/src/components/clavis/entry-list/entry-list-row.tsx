@@ -4,11 +4,16 @@
  * Moved move-only from entry-list.tsx in UI-audit round 1 Phase 11 (F-026);
  * the per-row copy feedback moved with it (identical behavior — only one
  * row is ever in the copied state, and the 1400 ms beat is unchanged).
+ *
+ * v1.13.0 (DECISIONS §55): item rows carry a full-editor launch button
+ * (the Maximize2 glyph, like the inline editor's affordances) — one click
+ * from the list opens the item in the big modal editor, no detour through
+ * the tight inline editor first.
  */
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ClipboardCopy, Link2, Pin } from "lucide-react";
+import { Check, ClipboardCopy, Link2, Maximize2, Pin } from "lucide-react";
 import { EntryTile, Ix } from "../icons";
 
 export interface EntryRowData {
@@ -38,6 +43,7 @@ export function EntryListRow({
   onSelect,
   copyEntry,
   togglePin,
+  onOpenEditor,
 }: {
   row: EntryRowData;
   index: number;
@@ -49,6 +55,9 @@ export function EntryListRow({
   /** Instant copy: returns true when the value reached the clipboard. */
   copyEntry: (kind: "item" | "group", id: string) => Promise<boolean>;
   togglePin: (kind: "item" | "group", id: string, pinned: boolean) => void;
+  /** v1.13.0 (§55): open this item in the full-modal editor. Provided for
+   *  item rows only — group rows never see the button. */
+  onOpenEditor?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   /* The ✓ feedback beat (1400 ms) — moved verbatim from the list. */
@@ -108,6 +117,26 @@ export function EntryListRow({
         <span className="t-muted" style={{ fontSize: "var(--text-xs)", flexShrink: 0 }}>
           {row.isDocument ? `document · ${(row.docChars ?? 0).toLocaleString()} chars` : `${row.memberCount ?? 0} items`}
         </span>
+      ) : null}
+      {/* v1.13.0 (§55): open the full editor straight from the row — the
+          same action and glyph as the inline editor's expand button, so the
+          owner sees one consistent affordance wherever items are listed.
+          Not disabled in read-only: it opens the read-only full view. */}
+      {onOpenEditor ? (
+        <button
+          type="button"
+          className="clavis-btn clavis-btn-ghost clavis-focusable clavis-row-action"
+          aria-label={`Open ${row.name} in the full editor`}
+          title="Open the full editor — every field, more room"
+          style={{ padding: "var(--space-1)", flexShrink: 0 }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenEditor();
+          }}
+        >
+          <Ix icon={Maximize2} size="sm" />
+        </button>
       ) : null}
       {/* Instant copy — one click, no round-trip through the editor. */}
       <button

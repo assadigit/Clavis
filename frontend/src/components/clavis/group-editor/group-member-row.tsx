@@ -5,6 +5,11 @@
  * state snapshot never carries it), URL detection with a clickable open
  * action, edit (the row body) and delete — every action stops propagation
  * so the row's own edit click still works.
+ *
+ * v1.13.0 (DECISIONS §55): the full-editor launch button (Maximize2, like
+ * every other full-editor affordance) — one click pops the member into the
+ * big modal editor with the group's context, no detour through the inline
+ * editor.
  */
 "use client";
 
@@ -16,6 +21,7 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  Maximize2,
   Trash2,
 } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
@@ -39,9 +45,12 @@ export interface GroupMemberRowProps {
   readOnly: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  /** v1.13.0 (§55): open this member in the full-modal editor (with the
+   *  group's context — the caller wires the groupContextId). */
+  onOpenFull?: () => void;
 }
 
-export function GroupMemberRow({ item, valueKey, sharedCount, call, readOnly, onSelect, onDelete }: GroupMemberRowProps) {
+export function GroupMemberRow({ item, valueKey, sharedCount, call, readOnly, onSelect, onDelete, onOpenFull }: GroupMemberRowProps) {
   const [copied, setCopied] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [value, setValue] = useState<string | null>(null);
@@ -125,6 +134,22 @@ export function GroupMemberRow({ item, valueKey, sharedCount, call, readOnly, on
           ) : null}
         </span>
       </button>
+
+      {/* v1.13.0 (§55): the full editor, straight from the member row — the
+          same Maximize2 affordance as the entry list rows and the inline
+          editor. Not disabled in read-only: it opens the read-only view. */}
+      {onOpenFull ? (
+        <button
+          type="button"
+          className="clavis-btn clavis-btn-ghost clavis-focusable clavis-row-action"
+          aria-label={`Open ${item.name} in the full editor`}
+          title="Open the full editor — every field, more room"
+          style={{ padding: "var(--space-1)", flexShrink: 0 }}
+          onClick={onOpenFull}
+        >
+          <Ix icon={Maximize2} size="sm" />
+        </button>
+      ) : null}
 
       {/* Open link — appears only when the revealed value is an http(s) URL. */}
       {url ? (

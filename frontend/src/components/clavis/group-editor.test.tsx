@@ -138,6 +138,36 @@ describe("GroupEditor smoke", () => {
     expect(downloadExport).toHaveBeenCalledWith("group-md", "fake-group-1");
   });
 
+  /* v1.13.0 (DECISIONS §55): the member row's expand button pops the item
+     into the full-modal editor WITH the group's context (SPEC §5.6). */
+  it("the member row's full-editor button calls onOpenFullEditor with the group context", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const onOpenFullEditor = vi.fn();
+    const call = vi.fn(async () => ({ ok: true, status: 200 })) as unknown as CallFn;
+    cleanup();
+    render(
+      <GroupEditor
+        mode="edit"
+        state={state()}
+        call={call}
+        readOnly={false}
+        group={group()}
+        onDone={vi.fn()}
+        onSelectEntry={vi.fn()}
+        deleteEntry={vi.fn()}
+        onManageItems={vi.fn()}
+        onOpenFullEditor={onOpenFullEditor}
+        onCancelCreate={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Open FAKE GitHub token in the full editor" }));
+    expect(onOpenFullEditor).toHaveBeenCalledWith({
+      kind: "item",
+      id: "fake-item-1",
+      groupContextId: "fake-group-1",
+    });
+  });
+
   it("Export JSON (backup-safe) sits after the markdown copy and calls downloadExport with group-json (Phase 4)", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     setup();
