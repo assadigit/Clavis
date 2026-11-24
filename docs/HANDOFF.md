@@ -8,8 +8,36 @@ Rewritten at the end of each session (AGENTS.md §10). Newest session at the top
 button so u can edit/work on them in a bigger editor" — v1.12.0's full-modal editor
 is only reachable through the tight inline editor; add the launch button directly
 on the rows where items are listed (manager entry list + group member well).
-Milestones: M1 audit + spec · M2 the buttons + wiring + tests · M3 docs, version
-bump 1.13.0, tag, release. Status: in progress.
+
+**Status: DONE — v1.13.0.** Commits: `3ad1bf7` (audit + spec), `aece364` (the
+feature), docs+version commit, tag `v1.13.0`.
+
+**What shipped** (details DECISIONS §55): item rows in the manager's list column
+and member rows in a group's member well carry the expand button (Maximize2, the
+same glyph as the inline editor's affordances, first row action) — one click opens
+that item directly in the full-modal editor. One `openFullEditor` handler in the
+manager (select → clear create form → `setFullEditId`); the member-row path passes
+`groupContextId`, so the "editing within …" chip and the SPEC §5.6 shared-item
+choices work inside the modal. Group rows, the Manage items modal and the popup
+are untouched; read-only opens the read-only full view; the modal, its dirty-close
+guard and `followFullEdit` are unchanged.
+
+**Verification this session:** `bun run build` (tsc+vite) clean; **148/148**
+vitest (+3: the row button opens the modal from an unselected list and hands the
+selection up; group rows show no such button; the member-row callback carries the
+group context); `lint:tokens` + `check:contrast` pass; visual verification in the
+dev harness (real browser, FAKE-* data) — four screenshots
+`docs/assets/2026-11-24-harness-7..10-*.png`: the buttons on the rows, the modal
+opened straight from a row (all fields, key visible, focus on Name), and the
+member-row open carrying the "editing within 'FAKE Deploy set'" chip. Go untouched
+(CI runs the Windows matrix).
+
+**Note for the owner's install:** if the installed Clavis is still ≤ 1.12.0, its
+updater predates the v1.12.1 proxy fix — that one update needs the manual path
+(Settings → About → "Release page", or VPN/TUN on); from 1.12.1 on, self-updates
+route through the system proxy.
+
+---
 
 ## Session 2026-11-24 (later) — self-update download resilience (v1.12.1) — DONE
 

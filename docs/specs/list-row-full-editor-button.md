@@ -53,15 +53,15 @@ full-modal editor — no detour through the tight inline editor first.
 
 ## Done-criteria
 
-- [ ] Item rows in the manager's list column show the full-editor button; clicking
+- [x] Item rows in the manager's list column show the full-editor button; clicking
       it opens the item in the full-modal editor (dialog with all fields, key
       visible) and selects the item behind it.
-- [ ] Group rows show no new button; Copy/Pin behave exactly as before.
-- [ ] Member rows of an open group show the button; it opens the full editor with
+- [x] Group rows show no new button; Copy/Pin behave exactly as before.
+- [x] Member rows of an open group show the button; it opens the full editor with
       the group context (shared-item save still offers the §5.6 choices).
-- [ ] The button works in read-only mode (read-only full view) and is keyboard
+- [x] The button works in read-only mode (read-only full view) and is keyboard
       reachable with correct labels (axe clean).
-- [ ] `bun run build`, `bun run test`, `lint:tokens`, `check:contrast` pass; CI
+- [x] `bun run build`, `bun run test`, `lint:tokens`, `check:contrast` pass; CI
       green on GitHub after push.
-- [ ] Docs + five-place version bump committed; `v1.13.0` tag pushed; release
+- [x] Docs + five-place version bump committed; `v1.13.0` tag pushed; release
       artifacts verified on the releases page.

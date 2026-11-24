@@ -2,6 +2,13 @@
 
 What changed, per session, newest first. Started 2026-11-24 during the AGENTS.md §12 first-time setup — deeper engineering history for earlier versions lives in `docs/BUILD_LOG.md` and `docs/DECISIONS.md` (decision log, add-only).
 
+## 2026-11-24 — session: full-editor button on list rows (v1.13.0)
+
+- New feature (owner report: "when you have items showing in sidebar, I want a button so u can edit/work on them in a bigger editor"; audit `docs/audits/2026-11-24-list-row-full-editor-button.md`, spec `docs/specs/list-row-full-editor-button.md`, DECISIONS §55): item rows in the manager's list column and member rows inside an open group now carry the expand button (the same Maximize2 glyph as the inline editor's affordances, first row action) — one click opens that item directly in the full-modal editor from v1.12.0, no detour through the tight inline editor first.
+- The open selects the item behind the modal; member rows carry the group's context, so the "editing within '<group>'" chip and the SPEC §5.6 shared-item choices ("Only for this group") work inside the modal exactly as inline. Group rows get no button (they open their own full-height editor on click); the Manage items modal and the popup are untouched; read-only opens the read-only full view.
+- Tests: 145 → 148 (+3: row button opens the modal directly from an unselected list and hands the selection up; group rows show no such button; the member-row callback carries the group context), all green; tsc, token lint and AA contrast gates pass; four new harness screenshots verify the flows in a real browser. Go untouched.
+- Version 1.13.0 (five places: `app.go`, `clavis.nsi`, `winres/info.json`, `types.ts`, tag).
+
 ## 2026-11-24 — session: self-update download resilience (v1.12.1)
 
 - Bug fix (owner report: in-app update to 1.12.0 failed with `net/http: TLS handshake timeout` on the GitHub asset CDN): the updater now survives censored/throttled networks. Root cause: Go's net/http ignores the Windows system proxy (the setting every VPN client writes); on the owner's network the CDN host's TLS handshake starves while `api.github.com`/`github.com` answer fine (audit: `docs/audits/2026-11-24-self-update-download-failure.md`, spec: `docs/specs/self-update-download-resilience.md`, DECISIONS §54).
