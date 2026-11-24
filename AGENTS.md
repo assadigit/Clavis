@@ -154,9 +154,16 @@ Next session: <prompt below / nothing needed>
 
 ## 11. Project facts (maintained by the agent)
 
-On the first session in a repo, fill this section from your audit and keep it correct. Keep it short and factual: tech stack, hosting, default branch and deploy method, commands to run, test and deploy, database and backup commands, key folders, and any standing limits from the owner.
+- **What it is:** Clavis — a Windows 10/11 tray app for people who copy the same credentials, prompts and notes all day. Global shortcut (default Ctrl+Shift+Space) opens a keyboard-first quick-search popup; a manager window (three columns, ~1000×680 DIP) curates items and project groups.
+- **Tech stack:** Wails **v3.0.0-beta.33** (pinned in `go.mod`; Go 1.27.3) + React 19 + TypeScript 5 (strict) + Vite 6 + Tailwind 4. Frontend tests: vitest + Testing Library + axe (a11y gate). Styling is token-driven (`frontend/src/design-tokens.css`); CI enforces the token lint and an AA contrast gate.
+- **Default branch:** `main`. Direct commits to main are the norm; releases are git tags `v*` pushed to origin.
+- **Deploy/release:** GitHub Actions. `ci.yml` (frontend: bun install → `bun run build` (tsc+vite) → vitest → lint:tokens → check:contrast; Go: fmt, vet, tests, release build, govulncheck, audit) and `release.yml` (triggered by `v*` tags; windows-latest; NSIS installer + portable exe → GitHub Releases). The app has in-app self-update pulling from GitHub Releases (two GETs to github.com, no telemetry).
+- **Build/test commands (from repo root):** `cd frontend && bun install && bun run build` · `bun run test` (vitest) · `bun run lint:tokens` · `bun run check:contrast` · Go: `go test ./internal/...` · release build: see README ("Build from source", requires `-tags production`).
+- **Data:** no SQL database. A JSON vault (UTF-8, indented, human-readable) at `%APPDATA%\Clavis` shared by installed and portable builds; atomic writes; automatic daily backups + pre-import/migration backups in `%APPDATA%\Clavis\backups`; soft delete with tombstones (30-day trash). Values are redacted out of the state snapshot sent to the webview — the UI fetches a single item's value on demand via `getValue`.
+- **Key folders:** `main.go`/`app.go`/`app_exports.go`/`app_update.go` (window/tray/export/update shells) · `internal/service` (pure dispatcher: GetState/Dispatch) · `internal/store` (data model, atomic writes, backups, trash, undo) · `internal/exchange` (dotenv/Markdown/TXT import+export) · `internal/search` · `internal/clipboard` (privacy formats) · `internal/updater` · `frontend/src/components/clavis/` (manager + popup trees, `ui/` kit re-exported by `ui-bits.tsx`) · `docs/SPEC.md` (product spec), `docs/DECISIONS.md` (decision log, add-only), `docs/BUILD_LOG.md` (engineering log).
+- **Version bump places:** `app.go` (`AppVersion` const) and `build/winres/info.json` (`product_version`, N.N.N.0 form). Bump together with the release commit; the tag carries the same version.
+- **Standing limits from the owner:** none recorded. Standing approval (section 5) applies.
 
-(Not yet filled in.)
 
 ## 12. First-time setup of a repo (do this automatically)
 

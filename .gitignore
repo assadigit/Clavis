@@ -10,3 +10,8 @@ build/png/
 *.log
 .DS_Store
 frontend/dist-e2e/
+
+# Secrets and local artifacts (AGENTS.md section 12 step 5)
+.env
+.env.*
+backups/
