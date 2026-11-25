@@ -12,7 +12,12 @@ Audit `docs/audits/2026-11-25-rich-text-document-editor.md`, spec
 **Status: DONE — v1.15.0.** Commits: `ee06ec4` (audit + spec), `cbeca5b`
 (format layer + WYSIWYG editor + emoji picker), `6376197` (dual-mode editors
 + Go plain-text copies/stats + harness), `ab565d3` (picker anchor/flip fix
-from the harness round), docs+version commit, tag `v1.15.0`.
+from the harness round), `9518c80` (docs + version), `4338f35` (gofmt
+restoration — 6376197's edits had silently rewritten store.go/service.go
+with space indentation; tabs restored, and with a local Go toolchain in the
+sandbox this time `go vet` + `go test ./internal/...` were run and green
+BEFORE the push), tag `v1.15.0` (CI green on `4338f35`; release artifacts
+verified: Clavis-Setup-1.15.0.exe + Clavis-Portable-1.15.0.exe published).
 
 **What shipped** (details DECISIONS §57): both document editors (inline
 panel + full modal) are dual-mode — a **Plain text / Rich text** switch; the
@@ -38,9 +43,10 @@ emoji picker with the flip fix, full modal, plain→rich flip, strip guard);
 **"Copy formatted" verified against a real Chromium clipboard** (Playwright
 context with clipboard permissions: toast + both flavors byte-checked). Go
 changes (`internal/store/richdoc.go` + `richdoc_test.go`, `Copy`/
-`GroupCopyText`/`redactState` wiring, `docRich` flag) run in CI — **this
-sandbox has no Go toolchain, so `go test ./internal/...` was NOT run
-locally**; CI is the Go gate for this session.
+`GroupCopyText`/`redactState` wiring, `docRich` flag) were ultimately run
+**locally too** (a Go 1.27.4 toolchain was installed into the sandbox mid-
+session to chase the gofmt gate): `go vet` clean, `go test ./internal/...`
+all green on Linux; the Windows-only clipboard e2e ran in CI (green).
 
 **Known limits / for the owner's real machine:** the webview clipboard call
 in "Copy formatted" is standard Chromium API and worked in a real Chrome
