@@ -38,6 +38,10 @@ export interface GroupEditorProps {
   /** v1.13.0 (§55): pop a member into the full-modal editor — called with
    *  the item's selection INCLUDING this group's context (SPEC §5.6). */
   onOpenFullEditor?: (sel: Selection) => void;
+  /** v1.14.0 (§56): open this document group's content in the full-modal
+   *  document editor — called with the group's id and the inline draft the
+   *  document panel is holding (null = fetch the stored document). */
+  onOpenDocumentEditor?: (groupId: string, initialText: string | null) => void;
   onCancelCreate: () => void;
 }
 
@@ -53,7 +57,7 @@ function draftFromGroup(group: Group): GroupDraft {
 }
 
 export function GroupEditor(props: GroupEditorProps) {
-  const { mode, state, call, readOnly, group, onDone, onSelectEntry, deleteEntry, onManageItems, onOpenFullEditor, onCancelCreate } = props;
+  const { mode, state, call, readOnly, group, onDone, onSelectEntry, deleteEntry, onManageItems, onOpenFullEditor, onOpenDocumentEditor, onCancelCreate } = props;
 
   const [draft, setDraft] = useState<GroupDraft>(() =>
     group
@@ -297,6 +301,9 @@ export function GroupEditor(props: GroupEditorProps) {
           readOnly={readOnly}
           docChars={group.docChars ?? 0}
           docLines={group.docLines ?? 0}
+          onOpenFullEditor={
+            onOpenDocumentEditor ? (text) => onOpenDocumentEditor(group.id, text) : undefined
+          }
         />
       ) : mode === "edit" && group ? (
         <section className="flex flex-col" style={{ gap: "var(--space-2)" }} aria-label="Members">

@@ -45,9 +45,32 @@ interface HarnessVault {
   state: ClavisState;
   /** True values — the state snapshot is redacted like the real backend's. */
   values: Map<string, string>;
+  /** Whole-document groups' stored documents (never in the state snapshot,
+     mirroring the backend's redaction — fetched via getGroupDocument). */
+  docs: Map<string, string>;
   undo: Map<string, { kind: "item" | "group"; id: string }>;
   nextId: number;
 }
+
+/** The FAKE document group's stored content (v1.14.0 §56 harness data). */
+const FAKE_DOC = `FAKE credentials file
+=====================
+
+Source: https://github.com/assadigit/FAKE-project
+
+Cloudflare:
+  CLOUDFLARE_API_TOKEN=FAKE-cf-token-abcdef123456
+  CLOUDFLARE_ACCOUNT_ID=FAKE-account-id-998877
+
+GitHub:
+  GITHUB_TOKEN=FAKE-ghp-token-000111222333
+  GITHUB_ORG=assadigit
+
+Notes:
+  Rotate every 90 days.
+  Never paste this into a chat window.
+  The tail line exists so the full editor's scroll is exercised.
+`;
 
 function makeVault(): HarnessVault {
   const values = new Map<string, string>();
@@ -57,6 +80,8 @@ function makeVault(): HarnessVault {
     "FAKE prompt — a cinematic wide shot of a lighthouse at dawn,\nslow dolly forward, volumetric fog, warm rim light on the rocks,\nshot on 35mm film, muted teal-and-amber palette, gentle grain.\n\n(Negative: text, watermark, oversaturated colors.)",
   );
   values.set("fake-item-3", "FAKE-grafana-token-9988776655");
+  const docs = new Map<string, string>();
+  docs.set("fake-doc-group-1", FAKE_DOC);
   const state: ClavisState = {
     data: {
       schemaVersion: 1,
@@ -108,6 +133,23 @@ function makeVault(): HarnessVault {
       groups: [
         fakeGroup("fake-group-1", "FAKE Deploy set", ["fake-item-1"]),
         fakeGroup("fake-group-2", "FAKE Side project", ["fake-item-1"]),
+        {
+          id: "fake-doc-group-1",
+          name: "FAKE Credentials file",
+          categoryId: "c1",
+          tags: [],
+          itemIds: [],
+          mode: "document",
+          isSecret: true,
+          docChars: [...FAKE_DOC].length,
+          docLines: FAKE_DOC.split("\n").length,
+          pinned: false,
+          useCount: 5,
+          lastUsedAt: T0,
+          createdAt: T0,
+          updatedAt: T0,
+          deletedAt: null,
+        },
       ],
     },
     backups: [],
@@ -118,7 +160,7 @@ function makeVault(): HarnessVault {
     appVersion: "dev-harness",
     osTransparency: true,
   };
-  return { state, values, undo: new Map(), nextId: 10 };
+  return { state, values, docs, undo: new Map(), nextId: 10 };
 }
 
 function fakeGroup(id: string, name: string, itemIds: string[]): Group {
@@ -281,6 +323,22 @@ function HarnessRoot() {
         group.updatedAt = now;
         publish();
         return { ok: true, status: 200, id };
+      }
+      case "getGroupDocument": {
+        const doc = vault.docs.get(String(p.id));
+        if (doc === undefined) return { ok: false, status: 404, error: "not found" };
+        return { ok: true, status: 200, document: doc };
+      }
+      case "setGroupDocument": {
+        const group = vault.state.data.groups.find((g) => g.id === p.id);
+        if (!group) return { ok: false, status: 404, error: "not found" };
+        const doc = String(p.document ?? "");
+        vault.docs.set(group.id, doc);
+        group.docChars = [...doc].length;
+        group.docLines = doc === "" ? 0 : doc.split("\n").length;
+        group.updatedAt = now;
+        publish();
+        return { ok: true, status: 200 };
       }
       case "updateGroup": {
         const group = vault.state.data.groups.find((g) => g.id === p.id);

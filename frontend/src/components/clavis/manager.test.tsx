@@ -264,4 +264,72 @@ describe("Manager smoke", () => {
     expect(screen.getByRole("button", { name: "Open FAKE GitHub token in the full editor" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open FAKE Deploy set in the full editor" })).toBeNull();
   });
+  /* v1.14.0 (DECISIONS §56): the document panel's Full editor button opens
+     the document group's content in the full-modal editor, and saving there
+     persists through setGroupDocument. */
+  it("the document panel's Full editor button opens the modal and saving persists", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    /* A local state variant with a whole-document group (the default state
+       stays untouched for the other tests). */
+    const docState: ClavisState = {
+      ...state(),
+      data: {
+        ...state().data,
+        groups: [
+          ...state().data.groups,
+          {
+            id: "fake-doc-group-1", name: "FAKE Credentials file", categoryId: null, tags: [],
+            itemIds: [], mode: "document", isSecret: true, docChars: 57, docLines: 3,
+            pinned: false, useCount: 5, lastUsedAt: null,
+            createdAt: "2025-01-01T00:00:00.000Z",
+            updatedAt: "2025-01-01T00:00:00.000Z", deletedAt: null,
+          },
+        ],
+      },
+    };
+    const call = vi.fn(async (action: string) => {
+      if (action === "getGroupDocument") {
+        return { ok: true, status: 200, document: "FAKE doc line 1\nFAKE doc line 2" };
+      }
+      return { ok: true, status: 200 };
+    }) as unknown as CallFn;
+    render(
+      <Manager
+        state={docState}
+        call={call}
+        readOnly={false}
+        filter={{ view: "all" } as ListFilter}
+        setFilter={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        selection={{ kind: "group", id: "fake-doc-group-1" }}
+        setSelection={vi.fn()}
+        creating={null}
+        setCreating={vi.fn()}
+        onHide={vi.fn()}
+        deleteEntry={vi.fn()}
+      />,
+    );
+    /* Start the inline editor, make an unsaved edit, then move up. */
+    await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
+    const inline = await screen.findByLabelText("Document content — paste the whole file here");
+    await user.type(inline, " + inline edit");
+    await user.click(screen.getByRole("button", { name: "Open the full document editor" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.getAttribute("aria-label")).toBe("Edit document FAKE Credentials file");
+    /* The carried draft (inline edit included) seeds the modal — and the
+       inline session behind it is closed, so only the modal's editor lives. */
+    const editor = within(dialog).getByLabelText("Document content — paste the whole file here");
+    expect((editor as HTMLTextAreaElement).value).toContain(" + inline edit");
+    /* Edit in the modal and save: byte-exact through setGroupDocument. */
+    await user.type(editor, " + modal edit");
+    await user.click(within(dialog).getByRole("button", { name: "Save document" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("setGroupDocument", {
+        id: "fake-doc-group-1",
+        document: expect.stringContaining(" + inline edit + modal edit"),
+      }),
+    );
+  });
 });
+

@@ -13,7 +13,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Copy, FileText, Pencil, RefreshCw, Save, X } from "lucide-react";
+import { Copy, FileText, Maximize2, Pencil, RefreshCw, Save, X } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { messages } from "@/lib/clavis/messages";
 import type { Group } from "@/lib/clavis/types";
@@ -28,9 +28,13 @@ export interface DocumentPanelProps {
   /** Live doc stats from the redacted state (no text travels in state). */
   docChars: number;
   docLines: number;
+  /** v1.14.0 (DECISIONS §56): opens the whole document in the full-modal
+   *  editor. Receives the current inline draft so the session — including
+   *  unsaved edits — continues in the bigger editor. */
+  onOpenFullEditor?: (initialText: string | null) => void;
 }
 
-export function DocumentPanel({ group, call, readOnly, docChars, docLines }: DocumentPanelProps) {
+export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpenFullEditor }: DocumentPanelProps) {
   /* The document text lives in the backend only; both the copy fallback and
      the editor fetch it on demand ("getGroupDocument"), mirroring how the
      item editor fetches one value. */
@@ -152,13 +156,34 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines }: Doc
         <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
           <div className="flex items-center justify-between" style={{ gap: "var(--space-2)" }}>
             <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>Replace document</span>
-            <Btn
-              variant="ghost"
-              icon={RefreshCw}
-              label={dirty ? "Edited" : "Loaded"}
-              disabled
-              ariaLabel={dirty ? "The document has local edits" : "The stored document is loaded below"}
-            />
+            <div className="flex items-center" style={{ gap: "var(--space-1)", flexShrink: 0 }}>
+              <Btn
+                variant="ghost"
+                icon={RefreshCw}
+                label={dirty ? "Edited" : "Loaded"}
+                disabled
+                ariaLabel={dirty ? "The document has local edits" : "The stored document is loaded below"}
+              />
+              {/* v1.14.0 (§56): the launch button at the owner's marked spot —
+                  moves this editing session (draft included) into the
+                  full-modal editor; the inline session closes so no stale
+                  draft can overwrite a save made up there. */}
+              {onOpenFullEditor ? (
+                <Btn
+                  variant="ghost"
+                  icon={Maximize2}
+                  label="Full editor"
+                  onClick={() => {
+                    const carry = draft;
+                    onOpenFullEditor(carry);
+                    cancelEditing();
+                  }}
+                  disabled={saving}
+                  ariaLabel="Open the full document editor"
+                  title="Open the full editor — the whole document, more room"
+                />
+              ) : null}
+            </div>
           </div>
           {loading || draft === null ? (
             <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)" }} role="status">

@@ -236,3 +236,105 @@ describe("GroupEditor tolerant paste (v1.6.0)", () => {
     expect(vi.mocked(call).mock.calls.find(([a]) => a === "createGroup")).toBeUndefined();
   });
 });
+
+/* ---- v1.14.0 (DECISIONS §56): the document panel's Full editor button ---- */
+
+describe("GroupEditor document panel — Full editor hand-off", () => {
+  function docGroup(): Group {
+    return {
+      id: "fake-doc-group-1",
+      name: "FAKE Credentials file",
+      categoryId: null,
+      tags: [],
+      itemIds: [],
+      mode: "document",
+      isSecret: true,
+      docChars: 57,
+      docLines: 3,
+      pinned: false,
+      useCount: 5,
+      lastUsedAt: null,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+      deletedAt: null,
+    };
+  }
+
+  function setupDoc() {
+    const call = vi.fn(async (action: string) => {
+      if (action === "getGroupDocument") {
+        return { ok: true, status: 200, document: "FAKE doc line 1\nFAKE doc line 2" };
+      }
+      return { ok: true, status: 200 };
+    }) as unknown as CallFn;
+    const onOpenDocumentEditor = vi.fn();
+    const base = state();
+    base.data.groups = [docGroup()];
+    render(
+      <GroupEditor
+        mode="edit"
+        state={base}
+        call={call}
+        readOnly={false}
+        group={docGroup()}
+        onDone={vi.fn()}
+        onSelectEntry={vi.fn()}
+        deleteEntry={vi.fn()}
+        onManageItems={vi.fn()}
+        onOpenDocumentEditor={onOpenDocumentEditor}
+        onCancelCreate={vi.fn()}
+      />,
+    );
+    return { call, onOpenDocumentEditor };
+  }
+
+  it("carries the inline draft (unsaved edits included) up with the group id and closes the inline session", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { onOpenDocumentEditor } = setupDoc();
+    /* Start the inline editor (the pencil on the stats row). */
+    await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
+    const inline = await screen.findByLabelText("Document content — paste the whole file here");
+    expect((inline as HTMLTextAreaElement).value).toContain("FAKE doc line 1");
+    /* An unsaved inline edit must survive the move into the full editor. */
+    await user.type(inline, " + edited inline");
+    await user.click(screen.getByRole("button", { name: "Open the full document editor" }));
+    expect(onOpenDocumentEditor).toHaveBeenCalledTimes(1);
+    const [groupId, carried] = vi.mocked(onOpenDocumentEditor).mock.calls[0];
+    expect(groupId).toBe("fake-doc-group-1");
+    expect(carried).toContain(" + edited inline");
+    /* The inline editing session is closed: its editor and the launch
+       button are gone; the pencil is back. */
+    expect(screen.queryByLabelText("Document content — paste the whole file here")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open the full document editor" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Replace the stored document" })).toBeTruthy();
+  });
+
+  it("renders no Full editor button when the handler is not wired", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const base = state();
+    base.data.groups = [docGroup()];
+    const call = vi.fn(async (action: string) => {
+      if (action === "getGroupDocument") {
+        return { ok: true, status: 200, document: "FAKE doc" };
+      }
+      return { ok: true, status: 200 };
+    }) as unknown as CallFn;
+    render(
+      <GroupEditor
+        mode="edit"
+        state={base}
+        call={call}
+        readOnly={false}
+        group={docGroup()}
+        onDone={vi.fn()}
+        onSelectEntry={vi.fn()}
+        deleteEntry={vi.fn()}
+        onManageItems={vi.fn()}
+        onCancelCreate={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
+    await screen.findByLabelText("Document content — paste the whole file here");
+    expect(screen.queryByRole("button", { name: "Open the full document editor" })).toBeNull();
+  });
+});

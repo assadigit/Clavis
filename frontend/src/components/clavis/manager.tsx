@@ -12,6 +12,7 @@ import { platform } from "@/desktop/platform";
 import type { Creating, ListFilter, Selection } from "./app-types";
 import { EntryList } from "./entry-list";
 import { GroupEditor } from "./group-editor";
+import { DocumentFullEditor } from "./group-editor/document-full-editor";
 import { Ix, ShortcutKeycaps } from "./icons";
 import { ItemEditor } from "./item-editor";
 import { ManageItemsModal } from "./manage-items-modal";
@@ -23,6 +24,7 @@ import { Btn, useMaximized } from "./ui-bits";
 import { liveGroups, liveItems } from "./derive";
 import type { CallFn } from "@/lib/clavis/client";
 import { messages } from "@/lib/clavis/messages";
+import { isDocumentGroup } from "@/lib/clavis/types";
 import type { ClavisState } from "@/lib/clavis/types";
 
 export interface ManagerProps {
@@ -67,6 +69,17 @@ export function Manager(props: ManagerProps) {
     setCreating(null);
     if (sel.kind === "item") setFullEditId(sel.id);
   }, []);
+  /* v1.14.0 (DECISIONS §56): the whole-document group's full-modal editor —
+   *  owned HERE for the same reason as the two above: setGroupDocument
+   *  bumps the group's updatedAt, which re-keys the group editor (and the
+   *  document panel inside it); a panel-owned modal would be torn down by
+   *  its own save. The carried inline draft is captured at open time. */
+  const [docEdit, setDocEdit] = useState<{ groupId: string; initialText: string | null } | null>(null);
+  const openDocumentEditor = useCallback(
+    (groupId: string, initialText: string | null) => setDocEdit({ groupId, initialText }),
+    []
+  );
+  const closeDocEditor = useCallback(() => setDocEdit(null), []);
 
   const data = state.data;
   const liveCount = liveItems(data).length + liveGroups(data).length;
@@ -74,6 +87,7 @@ export function Manager(props: ManagerProps) {
   const selGroup = selection?.kind === "group" ? data.groups.find((g) => g.id === selection.id && !g.deletedAt) : undefined;
   const managingGroup = managingGroupId ? data.groups.find((g) => g.id === managingGroupId && !g.deletedAt) : undefined;
   const fullEditItem = fullEditId ? data.items.find((i) => i.id === fullEditId && !i.deletedAt) : undefined;
+  const docEditGroup = docEdit ? data.groups.find((g) => g.id === docEdit.groupId && !g.deletedAt && isDocumentGroup(g)) : undefined;
   const activeSelection: Selection | null =
     selItem || selGroup ? (selection as Selection) : null;
 
@@ -207,6 +221,7 @@ export function Manager(props: ManagerProps) {
           deleteEntry={deleteEntry}
           onManageItems={() => setManagingGroupId(selGroup.id)}
           onOpenFullEditor={openFullEditor}
+          onOpenDocumentEditor={openDocumentEditor}
           onCancelCreate={() => setCreating(null)}
         />
       );
@@ -403,6 +418,21 @@ export function Manager(props: ManagerProps) {
           deleteEntry={deleteEntry}
           onClose={closeFullEditor}
           onCancelCreate={() => setCreating(null)}
+        />
+      ) : null}
+
+      {/* v1.14.0 (DECISIONS §56): the document group's full-modal editor.
+          Keyed by id only — deliberately WITHOUT updatedAt: a save bumps the
+          group behind this modal, and the session (draft, dirty state) must
+          survive that re-render; the modal closes itself after saving. */}
+      {docEdit && docEditGroup ? (
+        <DocumentFullEditor
+          key={`doc-full-${docEditGroup.id}`}
+          group={docEditGroup}
+          call={call}
+          readOnly={readOnly}
+          initialText={docEdit.initialText}
+          onClose={closeDocEditor}
         />
       ) : null}
     </div>
