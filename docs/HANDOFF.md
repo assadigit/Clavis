@@ -2,6 +2,20 @@
 
 Rewritten at the end of each session (AGENTS.md §10). Newest session at the top.
 
+## Session 2026-11-25 (evening) — window chrome fixes (v1.16.0, in progress)
+
+**Goal:** four owner-requested fixes: (1) the Manager window is not
+draggable — add the Wails `--wails-draggable` title-bar region; (2) remove
+the bold "Replace document" label and the dim "Loaded" chip from the
+document panel's inline editor; (3) the "⋯ More actions" menu must
+overlay (portal + fixed) instead of growing the editor's scroll area;
+(4) round the window edges on Windows 11 (explicit DWM
+`DWMWA_WINDOW_CORNER_PREFERENCE`). Audit
+`docs/audits/2026-11-25-window-chrome-fixes.md`, spec
+`docs/specs/window-chrome-fixes.md`, DECISIONS §58. Milestones: docs →
+four fixes → frontend verification + harness round → CI → version bump
+v1.16.0 + docs.
+
 ## Session 2026-11-25 (later) — basic text formatting for the document editors (v1.15.0)
 
 **Goal:** the owner asked for "some basic text editing options, like Bold
