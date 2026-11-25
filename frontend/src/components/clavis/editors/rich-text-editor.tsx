@@ -34,7 +34,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Ix } from "../icons";
-import { EmojiPickerButton } from "./emoji-picker";
+import { useDismiss } from "../ui/dismiss";
+import { EmojiPanel, EmojiTrigger } from "./emoji-picker";
 
 export interface RichTextEditorProps {
   /** HTML body, no sentinel. Sanitized by the caller on load. */
@@ -112,6 +113,31 @@ export function RichTextEditor({ value, onChange, disabled, ariaLabel, placehold
      search box) and an insert arrives. */
   const savedRange = useRef<Range | null>(null);
   const [active, setActive] = useState<ActiveMap>({});
+  /* The emoji picker: the trigger rides in the toolbar, the panel is
+     rendered against the toolbar wrapper (anchoring it to the 28px trigger
+     squeezed the panel to a sliver — harness round v1.15.0), and one dismiss
+     ref covers both. When the toolbar sits too low for the panel to fit
+     below (the inline editor at the bottom of the detail column), the panel
+     flips open ABOVE the toolbar. */
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiFlip, setEmojiFlip] = useState(false);
+  const toolbarWrapRef = useRef<HTMLDivElement | null>(null);
+  const closeEmoji = () => setEmojiOpen(false);
+  const dismissRef = useDismiss(emojiOpen, closeEmoji);
+
+  function toggleEmoji() {
+    if (!emojiOpen) {
+      const wrap = toolbarWrapRef.current;
+      if (wrap) {
+        const r = wrap.getBoundingClientRect();
+        /* The panel is ~9 space-6 rows tall (search + tabs + 5-row grid);
+           flip up only when below does not fit and above does. */
+        const need = 9 * 32;
+        setEmojiFlip(r.bottom + need > window.innerHeight && r.top >= need);
+      }
+    }
+    setEmojiOpen((o) => !o);
+  }
 
   /* External value → DOM. Only when it is not the echo of our own input. */
   useLayoutEffect(() => {
@@ -198,25 +224,31 @@ export function RichTextEditor({ value, onChange, disabled, ariaLabel, placehold
   };
 
   return (
-    <div className="flex flex-col" style={{ gap: "var(--space-1)" }}>
-      <div className="clavis-tool-bar" role="toolbar" aria-label="Text formatting">
-        {INLINE_TOOLS.map((t) => (
-          <ToolButton key={t.cmd} tool={t} pressed={active[t.stateKey as string]} disabled={disabled} onExec={exec} />
-        ))}
-        <ToolDivider />
-        {ALIGN_TOOLS.map((t) => (
-          <ToolButton key={t.cmd} tool={t} pressed={active[t.stateKey as string]} disabled={disabled} onExec={exec} />
-        ))}
-        <ToolDivider />
-        {LIST_TOOLS.map((t) => (
-          <ToolButton key={t.cmd} tool={t} pressed={active[t.stateKey as string]} disabled={disabled} onExec={exec} />
-        ))}
-        <ToolDivider />
-        <EmojiPickerButton onInsert={insertEmoji} disabled={disabled} />
-        <ToolDivider />
-        {HISTORY_TOOLS.map((t) => (
-          <ToolButton key={t.cmd} tool={t} disabled={disabled} onExec={exec} />
-        ))}
+    <div ref={dismissRef} className="relative flex flex-col" style={{ gap: "var(--space-1)" }}>
+      {/* The picker anchors to the toolbar wrapper (top: 100% = directly
+          under the toolbar, over the editable area) and spans the editor's
+          full width — never the 28px trigger (harness round v1.15.0). */}
+      <div ref={toolbarWrapRef} className="relative">
+        <div className="clavis-tool-bar" role="toolbar" aria-label="Text formatting">
+          {INLINE_TOOLS.map((t) => (
+            <ToolButton key={t.cmd} tool={t} pressed={active[t.stateKey as string]} disabled={disabled} onExec={exec} />
+          ))}
+          <ToolDivider />
+          {ALIGN_TOOLS.map((t) => (
+            <ToolButton key={t.cmd} tool={t} pressed={active[t.stateKey as string]} disabled={disabled} onExec={exec} />
+          ))}
+          <ToolDivider />
+          {LIST_TOOLS.map((t) => (
+            <ToolButton key={t.cmd} tool={t} pressed={active[t.stateKey as string]} disabled={disabled} onExec={exec} />
+          ))}
+          <ToolDivider />
+          <EmojiTrigger open={emojiOpen} onToggle={toggleEmoji} disabled={disabled} />
+          <ToolDivider />
+          {HISTORY_TOOLS.map((t) => (
+            <ToolButton key={t.cmd} tool={t} disabled={disabled} onExec={exec} />
+          ))}
+        </div>
+        {emojiOpen ? <EmojiPanel onInsert={insertEmoji} onClose={closeEmoji} flip={emojiFlip} /> : null}
       </div>
       <div
         ref={edRef}

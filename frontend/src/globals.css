@@ -203,12 +203,15 @@ html.clavis-root body {
   margin: var(--space-1) 0;
   padding-left: var(--space-5);
 }
+/* Anchored to the toolbar wrapper (position: relative around the toolbar):
+   the panel opens directly under the toolbar, over the editable area, and
+   spans the editor's width — capped for very wide editors. */
 .clavis-emoji-panel {
   position: absolute;
   top: 100%;
   left: 0;
   margin-top: var(--space-1);
-  width: min(100%, calc(var(--space-6) * 24));
+  width: min(100%, calc(var(--space-6) * 22));
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-panel);
@@ -218,6 +221,14 @@ html.clavis-root body {
   flex-direction: column;
   gap: var(--space-2);
   z-index: 2;
+}
+/* The toolbar sat too low for the panel to fit below (the inline editor at
+   the bottom of the detail column): open above the toolbar instead. */
+.clavis-emoji-panel[data-flip="true"] {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: var(--space-1);
 }
 .clavis-emoji-tabs {
   display: flex;
@@ -236,7 +247,7 @@ html.clavis-root body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-6) + var(--space-2)), 1fr));
   overflow-y: auto;
-  max-height: calc(var(--space-6) * 6);
+  max-height: calc(var(--space-6) * 5);
 }
 .clavis-emoji-cell {
   font-size: var(--text-xl);

@@ -143,8 +143,10 @@ describe("RichTextEditor emoji picker", () => {
     await user.click(screen.getByRole("option", { name: "grinning face emoji" }));
     expect(execMock).toHaveBeenCalledWith("insertText", false, "😀");
 
-    /* Reopen: a Recent tab exists and holds the pick. */
+    /* Reopen: a Recent tab exists and holds the pick (the panel remounts
+       per open — the cached dataset resolves a beat later). */
     await user.click(screen.getByRole("button", { name: "Insert an emoji" }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Recent" })).toBeTruthy());
     await user.click(screen.getByRole("tab", { name: "Recent" }));
     expect(screen.getByRole("option", { name: "grinning face emoji" })).toBeTruthy();
     expect(localStorage.getItem("clavis.recentEmoji")).toContain("😀");
