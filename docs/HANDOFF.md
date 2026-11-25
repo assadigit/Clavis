@@ -2,53 +2,54 @@
 
 Rewritten at the end of each session (AGENTS.md §10). Newest session at the top.
 
-## Session 2026-11-25 (latest) — full-modal editor for whole-document groups (v1.14.0)
+## Session 2026-11-25 (later) — basic text formatting for the document editors (v1.15.0)
 
-**Goal:** the owner sent a screenshot with a black/yellow mark on the document
-panel's "Replace document" row — "I want a button where I drawn a black/yellow
-one, to edit the content of each item in a full modal editor." A whole-document
-group's stored file was the last content still confined to the tight 12-row
-inline editor (the item editor got its full modal in v1.12.0, row buttons in
-v1.13.0).
+**Goal:** the owner asked for "some basic text editing options, like Bold
+Italic Emoji (full pack), Alignment etc (just the basic ones)" in the editor.
+Audit `docs/audits/2026-11-25-rich-text-document-editor.md`, spec
+`docs/specs/rich-text-document-editor.md`, DECISIONS §57.
 
-**Status: DONE — v1.14.0.** Commits: `0730d9d` (audit + spec), `fc7a5f7` (the
-feature + harness + tests + screenshots), docs+version commit, tag `v1.14.0`.
+**Status: DONE — v1.15.0.** Commits: `ee06ec4` (audit + spec), `cbeca5b`
+(format layer + WYSIWYG editor + emoji picker), `6376197` (dual-mode editors
++ Go plain-text copies/stats + harness), `ab565d3` (picker anchor/flip fix
+from the harness round), docs+version commit, tag `v1.15.0`.
 
-**What shipped** (details DECISIONS §56): the "Full editor" button sits at the
-marked spot — right end of the "Replace document" row, same Maximize2 glyph as
-every other launch point. One click moves the whole editing session into a
-~900px modal (`DocumentFullEditor`, manager-owned like the other two modals
-because `setGroupDocument` bumps `updatedAt` and re-keys the group editor):
-the inline draft — unsaved edits included — carries over as `initialText`, a
-24-row mono editor opens with live draft stats (the backend's rune/newline
-rule), and the inline session closes behind it so no stale draft can ever
-overwrite a save made in the modal. Saving is byte-exact through the unchanged
-`setGroupDocument`, toasts, and closes; Esc/scrim/×/Cancel on a dirty draft
-shows the same "Discard changes?" guard as the item full editor. Read-only
-hides the button (like the pencil). The backend, the modal shell, the inline
-editor and the §40 redaction rules are untouched.
+**What shipped** (details DECISIONS §57): both document editors (inline
+panel + full modal) are dual-mode — a **Plain text / Rich text** switch; the
+mode rides inside the stored string (`<!--clavis-rich-->` + HTML), so every
+existing plain document stays byte-identical until flipped, and the §56
+inline ↔ modal carry needed no changes. Rich mode: WYSIWYG toolbar (Bold,
+Italic, Underline, Strikethrough, Align L/C/R, lists, **full emoji pack** —
+1,914 emojis, 9 categories, search, recents, lazy offline chunk —, Undo,
+Redo, Clear), sanitized saves (allowlist; scripts never reach the vault),
+plain-text live stats, "Remove formatting?" guard on lossy switches.
+Copying: "Copy document" everywhere stays the privacy-guarded backend copy
+(Go now strips rich markup to clean plain text — rule-identical TS/Go
+conversions, pinned on both sides); the full editor adds **"Copy
+formatted"** (webview clipboard, text/html + text/plain) for paste targets
+that keep styling. Item values/notes stay plain by design (masked values,
+dotenv pairing, note search — see the audit).
 
-**Verification this session:** `bun run build` clean; **159/159** vitest (+11);
-`lint:tokens` + `check:contrast` pass; real-browser verification through the
-dev harness (which gained a FAKE document group + `getGroupDocument`/
-`setGroupDocument` handlers) — four screenshots
-`docs/assets/2026-11-25-harness-11..14-*.png`: the button on the marked row,
-the open modal (24-row editor, carried content, live stats updating
-416→444 chars while typing), the dirty-close guard, and the stats row after
-save (the save round-tripped through the fake store; reopening the inline
-editor showed the saved content). Browser console clean. Go untouched (CI
-runs the Windows matrix).
+**Verification this session:** `bun run build` clean; **207/207** vitest
+(+48); `lint:tokens` + `check:contrast` pass; real-browser harness
+verification with a new FAKE rich document group — screenshots
+`docs/assets/2026-11-25-harness-rich-1..5-*.png` (inline rich editor,
+emoji picker with the flip fix, full modal, plain→rich flip, strip guard);
+**"Copy formatted" verified against a real Chromium clipboard** (Playwright
+context with clipboard permissions: toast + both flavors byte-checked). Go
+changes (`internal/store/richdoc.go` + `richdoc_test.go`, `Copy`/
+`GroupCopyText`/`redactState` wiring, `docRich` flag) run in CI — **this
+sandbox has no Go toolchain, so `go test ./internal/...` was NOT run
+locally**; CI is the Go gate for this session.
 
-**Note for the owner's install:** if the installed Clavis is still ≤ 1.12.0,
-its updater predates the v1.12.1 proxy fix — that one update needs the manual
-path (Settings → About → "Release page", or VPN/TUN on); from 1.12.1 on,
-self-updates route through the system proxy.
+**Known limits / for the owner's real machine:** the webview clipboard call
+in "Copy formatted" is standard Chromium API and worked in a real Chrome
+with permissions granted, but Windows WebView2 clipboard behavior (and the
+AA/contrast look of the toolbar in the real app) deserves one manual smoke
+test after installing 1.15.0. If a formatted copy ever fails there, it
+falls back honestly (plain text + a toast saying so).
 
----
-
-## Session 2026-11-24 (later) — full-editor button on list rows (v1.13.0)
-
-**Goal:** the owner reported "when you have items showing in sidebar, I want a
+items showing in sidebar, I want a
 button so u can edit/work on them in a bigger editor" — v1.12.0's full-modal editor
 is only reachable through the tight inline editor; add the launch button directly
 on the rows where items are listed (manager entry list + group member well).

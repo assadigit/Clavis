@@ -23,7 +23,12 @@ Copied secrets are automatically kept out of the Windows clipboard history
   (an entire markdown/text file stored byte-exact, one prominent Copy button
   that hands back the identical bytes, re-paste to replace it later — and a
   Full editor button that opens the whole document in a large modal editor
-  with live stats, v1.14.0). The
+  with live stats, v1.14.0). Document editors are dual-mode: flip to
+  **Rich text** for a basic formatting toolbar — Bold, Italic, Underline,
+  Strikethrough, alignment, lists, and the full emoji pack with search —
+  while plain documents stay byte-exact; "Copy document" always pastes
+  clean plain text, and the full editor's "Copy formatted" keeps the
+  styling for paste targets like Word or Gmail (v1.15.0). The
   bulk paste accepts more than strict `.env`: `KEY=value`, spaced
   `KEY = value`, `Name: value` and markdown bullets all become items, and a
   paste that parses to nothing is rejected loudly instead of vanishing into

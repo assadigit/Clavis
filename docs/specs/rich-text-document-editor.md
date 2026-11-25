@@ -110,24 +110,24 @@ the draft carried along.
 
 ## Done-criteria
 
-- [ ] A plain document group opens exactly as today (mono TextArea, no
+- [x] A plain document group opens exactly as today (mono TextArea, no
       toolbar, byte-exact save). Flipping to rich converts the text visibly
       (one paragraph per line) without confirmation; flipping back asks
       when formatting would be lost.
-- [ ] The toolbar applies Bold/Italic/Underline/Strikethrough, the three
+- [x] The toolbar applies Bold/Italic/Underline/Strikethrough, the three
       alignments and both list kinds; Undo/Redo/Clear formatting work;
       active states reflect the selection.
-- [ ] The emoji picker shows the full 1,914-emoji pack in 9 categories with
+- [x] The emoji picker shows the full 1,914-emoji pack in 9 categories with
       working search and recents, and inserts at the caret, offline.
-- [ ] Saving a rich document stores sentinel + sanitized HTML; the editor
+- [x] Saving a rich document stores sentinel + sanitized HTML; the editor
       refuses an empty (plain-text-empty) rich draft; stats show plain-text
       counts; the carry between inline and modal keeps the mode and draft.
-- [ ] "Copy document" (every window) and the manual-copy fallback hand back
+- [x] "Copy document" (every window) and the manual-copy fallback hand back
       clean plain text for rich documents (Go tests pin the conversion);
       "Copy formatted" puts styled text on the clipboard in the harness
       browser.
-- [ ] `bun run build`, `bun run test`, `lint:tokens`, `check:contrast` pass
+- [x] `bun run build`, `bun run test`, `lint:tokens`, `check:contrast` pass
       locally; Go tests + vet pass in CI; harness screenshots in
       `docs/assets/`.
-- [ ] Docs + five-place version bump committed; `v1.15.0` tagged after CI
+- [x] Docs + five-place version bump committed; `v1.15.0` tagged after CI
       green; release artifacts verified.

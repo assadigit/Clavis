@@ -2,6 +2,17 @@
 
 What changed, per session, newest first. Started 2026-11-24 during the AGENTS.md §12 first-time setup — deeper engineering history for earlier versions lives in `docs/BUILD_LOG.md` and `docs/DECISIONS.md` (decision log, add-only).
 
+## 2026-11-25 (later) — session: basic text formatting for the document editors (v1.15.0)
+
+- New feature (owner request: "I want the editor to have some basic text editing options, like Bold Italic Emoji (full pack), Alignment etc (just the basic ones)"; audit `docs/audits/2026-11-25-rich-text-document-editor.md`, spec `docs/specs/rich-text-document-editor.md`, DECISIONS §57): both document editors — the inline panel and the full modal — are now dual-mode with a **Plain text / Rich text** switch. Rich mode is a WYSIWYG editor with the basic toolbar: **Bold, Italic, Underline, Strikethrough, Align left/center/right, bulleted + numbered lists, the full emoji pack (1,914 emojis, 9 categories, search, recents), Undo, Redo, Clear formatting**.
+- The mode is stored in the document itself (`<!--clavis-rich-->` + HTML), so every existing plain document stays byte-identical until you flip the switch — and plain mode remains exactly the byte-exact editor of v1.14.0. Plain → rich converts losslessly (one paragraph per line); rich → plain asks "Remove formatting?" when formatting would be lost.
+- Saving sanitizes the HTML (an allowlist — scripts and event handlers can never reach the vault), refuses an empty draft, and the live stats count the plain text (the bytes a copy produces), matching the backend.
+- **Copying:** "Copy document" everywhere stays the privacy-guarded backend copy and hands back clean plain text for rich documents too (the backend strips the markup). The full editor adds **"Copy formatted"** — styled text (`text/html` + `text/plain`) on the standard clipboard, so pasting into Word/Gmail/Slack keeps the styling; the hint says which copy keeps what.
+- Item values and notes deliberately stay plain (masked secrets, dotenv pairing and note search would break — see the audit). The markdown export/import round-trip is untouched.
+- Dev harness gained a FAKE rich document group; five screenshots in `docs/assets/2026-11-25-harness-rich-1..5-*.png` verify in a real browser, and "Copy formatted" was verified against a real Chromium clipboard (both flavors byte-checked). Go changes (`DocumentPlainText` for copies + stats, a `docRich` state flag) are pinned by `internal/store/richdoc_test.go` and run in CI.
+- Tests: 159 → 207 (+48: format layer, editor, picker, dual-mode editors, carry), all green; tsc, token lint and AA contrast gates pass. One new frontend dependency: `unicode-emoji-json` (MIT, the full emoji dataset, lazy-loaded, offline).
+- Version 1.15.0 (five places: `app.go`, `clavis.nsi`, `winres/info.json`, `types.ts`, tag).
+
 ## 2026-11-25 — session: full-modal editor for whole-document groups (v1.14.0)
 
 - New feature (owner report with a screenshot marking the spot on the "Replace document" row: "I want a button where I drawn a black/yellow one, to edit the content of each item in a full modal editor"; audit `docs/audits/2026-11-25-document-full-editor.md`, spec `docs/specs/document-full-editor.md`, DECISIONS §56): a whole-document group's stored file now has the big editor too — the item editor got its full modal in v1.12.0 and row launch buttons in v1.13.0, but a document group's content was still confined to the tight 12-row inline editor.

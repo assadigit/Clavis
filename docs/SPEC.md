@@ -213,6 +213,30 @@ The editor has two presentations of one form (v1.12.0, DECISIONS §53): the **in
   dirty-close guard as the item full editor ("Discard changes?" — Keep
   editing / Discard). Read-only hides the button (like the pencil); the
   backend actions and the §40 redaction rules are untouched.
+- **Rich text (v1.15.0, DECISIONS §57)** — both document editors (inline
+  and full modal) are dual-mode with a **Plain text / Rich text** switch
+  above the editor. The mode lives in the stored string itself: a rich
+  document is `<!--clavis-rich-->` + HTML, so every existing plain document
+  stays byte-identical until the owner flips the switch, and the inline ↔
+  modal carry needs no extra plumbing. **Rich mode** is a WYSIWYG editor
+  with the basic toolbar the owner asked for — Bold, Italic, Underline,
+  Strikethrough · Align left / center / right · bulleted and numbered lists
+  · the **full emoji pack** (all 1,914 Unicode 15.1 emojis in their nine
+  groups, searchable, with recents; a lazy-loaded offline chunk) · Undo,
+  Redo, Clear formatting. Plain → rich converts losslessly (one paragraph
+  per line); rich → plain with any formatting present asks "Remove
+  formatting?" first. Saving sanitizes the HTML (tag/property allowlist —
+  scripts and event handlers never reach the vault) and refuses a draft
+  whose plain text is empty; the live stats count the **plain text** (the
+  bytes a copy produces), matching the backend. **Copying**: "Copy
+  document" (every window) stays the backend, privacy-guarded path and
+  hands back the plain text for rich documents too (the backend strips the
+  markup — §40's byte-exact promise is untouched for plain documents); the
+  full editor adds **Copy formatted**, which puts `text/html` + `text/plain`
+  on the standard webview clipboard so pasting into Word/Gmail/Slack keeps
+  the styling — an explicit, opt-in affordance, with the hint saying which
+  copy keeps what. Item values and notes stay plain text (masked values,
+  dotenv pairing and note search would all break — see the v1.15.0 audit).
 
 ### 5.6 Editing and deleting shared items
 Only when an item belongs to **two or more groups** do these modals appear. For items in one group or none, edits and deletes happen immediately with no modal.
