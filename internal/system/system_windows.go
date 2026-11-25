@@ -90,18 +90,18 @@ func cursorPoint() (int, int) {
 	return int(pt.X), int(pt.Y)
 }
 
-/* v1.16.0 (DECISIONS §58): Windows 11 rounded window corners. Wails'
-   frameless windows keep the DWM frame decorations (v1.10.0), but the
-   system's automatic rounding follows style heuristics that an
-   NCCALCSIZE-zeroed frameless window does not reliably meet — the owner
-   saw square edges. The explicit DWMWA_WINDOW_CORNER_PREFERENCE attribute
-   (Windows 11 build 22000+) forces the system round corners; on Windows
-   10 the attribute does not exist, DwmSetWindowAttribute returns an
-   error and this is a silent no-op (square corners are the OS standard
-   there). The constant is defined here because wails' w32 (beta.33)
-   stops at DWMWA_BORDER_COLOR=34. */
+// v1.16.0 (DECISIONS §58): Windows 11 rounded window corners. Wails'
+// frameless windows keep the DWM frame decorations (v1.10.0), but the
+// system's automatic rounding follows style heuristics that an
+// NCCALCSIZE-zeroed frameless window does not reliably meet — the owner
+// saw square edges. The explicit DWMWA_WINDOW_CORNER_PREFERENCE attribute
+// (Windows 11 build 22000+) forces the system round corners; on Windows
+// 10 the attribute does not exist, DwmSetWindowAttribute returns an
+// error and this is a silent no-op (square corners are the OS standard
+// there). The constant is defined here because wails' w32 (beta.33)
+// stops at DWMWA_BORDER_COLOR=34.
 const dwmwaWindowCornerPreference = 33 // DWMWA_WINDOW_CORNER_PREFERENCE (Windows 11 build 22000+)
-const dwmwcpRound = 2 // DWMWCP_ROUND — the standard ~8px system radius
+const dwmwcpRound = 2                  // DWMWCP_ROUND — the standard ~8px system radius
 
 func roundWindowCorners(hwnd unsafe.Pointer) {
 	if hwnd == nil {

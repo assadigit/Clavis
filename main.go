@@ -140,8 +140,8 @@ func main() {
 		popup.Hide()
 		e.Cancel()
 	})
-	/* v1.16.0 (DECISIONS §58): round this window's corners on Windows 11
-	   (first show — see roundCornersOnFirstShow). */
+	// v1.16.0 (DECISIONS §58): round this window's corners on Windows 11
+	// (first show — see roundCornersOnFirstShow).
 	popup.RegisterHook(events.Common.WindowShow, roundCornersOnFirstShow(popup))
 
 	// The Manager (§3.4): normal resizable window, frameless with the app's
@@ -172,7 +172,7 @@ func main() {
 		svc.HideManager()
 		e.Cancel()
 	})
-	/* v1.16.0 (DECISIONS §58): same rounding for the Manager. */
+	// v1.16.0 (DECISIONS §58): same rounding for the Manager.
 	manager.RegisterHook(events.Common.WindowShow, roundCornersOnFirstShow(manager))
 
 	// Tray (§3.2): left click → Popup; right click → the menu.
@@ -221,12 +221,12 @@ func main() {
 	}
 }
 
-/* roundCornersOnFirstShow applies the Windows 11 rounded corners (DECISIONS
-§58) on a window's first show. The native HWND exists only once app.Run()
-has processed the deferred window creation, so this cannot run at
-NewWithOptions time; Common.WindowShow (Wails' default mapping of the
-native show event) fires at first show and on every later show, and the
-once guard keeps it to a single DWM call. */
+// roundCornersOnFirstShow applies the Windows 11 rounded corners (DECISIONS
+// §58) on a window's first show. The native HWND exists only once app.Run()
+// has processed the deferred window creation, so this cannot run at
+// NewWithOptions time; Common.WindowShow (Wails' default mapping of the
+// native show event) fires at first show and on every later show, and the
+// once guard keeps it to a single DWM call.
 func roundCornersOnFirstShow(w *application.WebviewWindow) func(*application.WindowEvent) {
 	var once sync.Once
 	return func(*application.WindowEvent) {
