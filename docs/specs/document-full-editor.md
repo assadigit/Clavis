@@ -102,5 +102,7 @@ unchanged `setGroupDocument` action.
       CI green on GitHub after push.
 - [x] Harness screenshots (real browser) in `docs/assets/` show the button on
       the marked row and the open modal with a long FAKE document.
-- [ ] Docs + five-place version bump committed; `v1.14.0` tag pushed; release
-      artifacts verified on the releases page.
+- [x] Docs + five-place version bump committed; `v1.14.0` tag pushed; release
+      artifacts verified on the releases page (CI green on `fc7a5f7` and
+      `bcd54d4`; `Clavis-Setup-1.14.0.exe` + `Clavis-Portable-1.14.0.exe`
+      published).
