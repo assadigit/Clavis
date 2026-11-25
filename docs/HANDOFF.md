@@ -2,9 +2,9 @@
 
 Rewritten at the end of each session (AGENTS.md §10). Newest session at the top.
 
-## Session 2026-11-25 (evening) — window chrome fixes (v1.16.0, in progress)
+## Session 2026-11-25 (evening) — window chrome fixes (v1.16.0)
 
-**Goal:** four owner-requested fixes: (1) the Manager window is not
+**Goal:** four owner-requested fixes: (1) the Manager window was not
 draggable — add the Wails `--wails-draggable` title-bar region; (2) remove
 the bold "Replace document" label and the dim "Loaded" chip from the
 document panel's inline editor; (3) the "⋯ More actions" menu must
@@ -12,9 +12,50 @@ overlay (portal + fixed) instead of growing the editor's scroll area;
 (4) round the window edges on Windows 11 (explicit DWM
 `DWMWA_WINDOW_CORNER_PREFERENCE`). Audit
 `docs/audits/2026-11-25-window-chrome-fixes.md`, spec
-`docs/specs/window-chrome-fixes.md`, DECISIONS §58. Milestones: docs →
-four fixes → frontend verification + harness round → CI → version bump
-v1.16.0 + docs.
+`docs/specs/window-chrome-fixes.md`, DECISIONS §58.
+
+**Status: DONE — v1.16.0.** Commits: `72b2f3f` (audit + spec), `13e13d1`
+(the four fixes + tests + harness screenshots — tripped the CI gofmt gate
+with hand-formatted block comments), `57b2e5b` (gofmt restoration, this
+time with a real Go toolchain installed in the sandbox: gofmt clean,
+`GOOS=windows go vet ./...` clean, `go test ./internal/...` green before
+the push), docs + version commit, tag `v1.16.0`.
+
+**What shipped** (details DECISIONS §58):
+1. **The Manager window is movable** — the title bar is now the Wails drag
+   region (`--wails-draggable: drag` on the header; the three window
+   buttons opt out with `no-drag` so their clicks stay clicks). The popup
+   stays auto-centered by design (it re-centers at every show).
+2. **The document panel's inline editor** lost the bold "Replace document"
+   label and the dim "Loaded/Edited" chip; only the right-aligned
+   "Full editor" launch button remains (no row at all without the
+   handler).
+3. **The "⋯ More actions" menu is a true overlay** — portaled to
+   document.body with `position: fixed` anchored to its button, flipping
+   above when the space below is short, z-index 100 above the modals,
+   closing on scroll/resize/outside/Esc and on item choice (the old panel
+   lingered open after exports). No more scroll-area growth or dead
+   space, in the inline editors and both full-editor modals.
+4. **Rounded window edges on Windows 11** — both windows force the DWM
+   corner preference (attribute 33 / DWMWCP_ROUND) on first show;
+   Windows 10 keeps its native square standard (the attribute does not
+   exist there).
+
+**Verification this session:** 212/212 vitest (+5), tsc, vite build,
+token lint, AA contrast; gofmt + `GOOS=windows go vet` + internal tests
+green locally before the push; real-browser harness round with four
+screenshots (`docs/assets/2026-11-25-window-chrome-1..4-*.png`) pinning
+the overlay behavior (scrollHeight unchanged on open in both the inline
+editor and the modal footer; menu above the trigger; texts removed).
+**The one thing this sandbox cannot exercise:** real window dragging and
+the DWM corners need Windows — both are one-contract changes verified by
+CI on windows-latest; the owner's real-machine smoke test is the final
+word.
+
+**Next session candidates:** none queued from this session. Standing:
+the owner's real-machine smoke tests for WebView2 clipboard "Copy
+formatted" (v1.15.0) and now window dragging + rounded corners (this
+session).
 
 ## Session 2026-11-25 (later) — basic text formatting for the document editors (v1.15.0)
 

@@ -2,6 +2,16 @@
 
 What changed, per session, newest first. Started 2026-11-24 during the AGENTS.md §12 first-time setup — deeper engineering history for earlier versions lives in `docs/BUILD_LOG.md` and `docs/DECISIONS.md` (decision log, add-only).
 
+## 2026-11-25 (evening) — session: window chrome fixes (v1.16.0)
+
+- Four owner-requested fixes (audit `docs/audits/2026-11-25-window-chrome-fixes.md`, spec `docs/specs/window-chrome-fixes.md`, DECISIONS §58):
+- **The Manager window can be moved.** It was genuinely locked: both windows are frameless and nothing ever defined a drag region. The title bar is now the Wails drag region (`--wails-draggable`), with the Minimize/Maximize/Close buttons excluded so their clicks can never turn into drags. The popup stays auto-centered by design — it re-centers at every quick-search show.
+- **The document editor's inline panel is quieter:** the bold "Replace document" label and the dim "Loaded/Edited" chip are gone (owner request); the row keeps only the right-aligned "Full editor" button.
+- **The "⋯ More actions" menu overlays instead of pushing the page.** It now floats in a fixed-position layer anchored to its button — above it when there is no room below (the usual case at the editor footers) — instead of growing the editor's scroll area and leaving dead space. Choosing an item, clicking outside, pressing Esc, or scrolling closes it. Works identically inside the full-editor modals.
+- **Rounded window edges on Windows 11:** both windows now ask the OS explicitly for the system rounded corners (DWM corner preference). Windows 10 keeps its native square look — that OS has no rounded-corner support for solid windows.
+- Tests: 207 → 212 (menu portal + document-panel regression), tsc, token lint, AA contrast green; real-browser harness round with four screenshots (`docs/assets/2026-11-25-window-chrome-1..4-*.png`) pinning the overlay behavior (scroll area unchanged on open, menu above the trigger). Window dragging and the DWM corners are Windows-only behaviors — CI builds and tests them on windows-latest; the owner's machine is the final smoke test.
+- Version 1.16.0 (five places: `app.go`, the NSIS installer, `winres/info.json`, `types.ts`, tag).
+
 ## 2026-11-25 (later) — session: basic text formatting for the document editors (v1.15.0)
 
 - New feature (owner request: "I want the editor to have some basic text editing options, like Bold Italic Emoji (full pack), Alignment etc (just the basic ones)"; audit `docs/audits/2026-11-25-rich-text-document-editor.md`, spec `docs/specs/rich-text-document-editor.md`, DECISIONS §57): both document editors — the inline panel and the full modal — are now dual-mode with a **Plain text / Rich text** switch. Rich mode is a WYSIWYG editor with the basic toolbar: **Bold, Italic, Underline, Strikethrough, Align left/center/right, bulleted + numbered lists, the full emoji pack (1,914 emojis, 9 categories, search, recents), Undo, Redo, Clear formatting**.
