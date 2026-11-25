@@ -197,6 +197,22 @@ The editor has two presentations of one form (v1.12.0, DECISIONS §53): the **in
 - **Manage items modal** (the dedicated, bigger screen — 720px): opened by the "Add item" button; the modal is owned by the manager (not the group editor) so it survives the editor remounts that membership changes trigger. Layout: title + group subtitle; **Current items** well with tall drag-reorder cards (grip, move up/down, and × — which **removes the item from this group**, never deletes it — behind a full-height hairline, quiet until hover); **Add items** — search over existing items with multi-select checkbox cards, an `Add N items` primary button (Enter adds), and "Create new item here" (closes the modal and opens the item form bound to the group); footer shows the count and the copy order with a **Done** button. Every action applies immediately through the store API — no draft state. Keys typed in the modal never reach the editor behind it (its Enter-saves handler is isolated).
 - **Copy group** button (copies the `KEY=value` block).
 - Deleting a group never deletes its items; they remain as standalone items.
+- **Whole-document groups (MODE 1, §40)** — the group IS one verbatim pasted
+  file: the editor shows one prominent **Copy document** button (backend-side
+  copy; the manual-copy fallback opens pre-selected on failure), the size
+  stats (characters · lines), the Secret toggle, and an **Edit document**
+  pencil that opens a re-paste editor saving byte-exact over the stored
+  document (an empty draft is refused). **The full editor (v1.14.0, DECISIONS
+  §56)**: the "Replace document" row carries a **Full editor** button (the
+  Maximize2 glyph, right end of the row) that moves the whole editing session
+  into a large centered modal — the inline draft, unsaved edits included,
+  carries over and the inline session closes, so a stale draft can never
+  overwrite a save made up there. The modal (manager-owned, ~900px) holds a
+  24-row mono editor with **live draft stats** (the backend's rune/newline
+  rule) under it, a byte-exact **Save document** and Cancel, and the same
+  dirty-close guard as the item full editor ("Discard changes?" — Keep
+  editing / Discard). Read-only hides the button (like the pencil); the
+  backend actions and the §40 redaction rules are untouched.
 
 ### 5.6 Editing and deleting shared items
 Only when an item belongs to **two or more groups** do these modals appear. For items in one group or none, edits and deletes happen immediately with no modal.

@@ -2,7 +2,51 @@
 
 Rewritten at the end of each session (AGENTS.md §10). Newest session at the top.
 
-## Session 2026-11-24 (latest) — full-editor button on list rows (v1.13.0)
+## Session 2026-11-25 (latest) — full-modal editor for whole-document groups (v1.14.0)
+
+**Goal:** the owner sent a screenshot with a black/yellow mark on the document
+panel's "Replace document" row — "I want a button where I drawn a black/yellow
+one, to edit the content of each item in a full modal editor." A whole-document
+group's stored file was the last content still confined to the tight 12-row
+inline editor (the item editor got its full modal in v1.12.0, row buttons in
+v1.13.0).
+
+**Status: DONE — v1.14.0.** Commits: `0730d9d` (audit + spec), `fc7a5f7` (the
+feature + harness + tests + screenshots), docs+version commit, tag `v1.14.0`.
+
+**What shipped** (details DECISIONS §56): the "Full editor" button sits at the
+marked spot — right end of the "Replace document" row, same Maximize2 glyph as
+every other launch point. One click moves the whole editing session into a
+~900px modal (`DocumentFullEditor`, manager-owned like the other two modals
+because `setGroupDocument` bumps `updatedAt` and re-keys the group editor):
+the inline draft — unsaved edits included — carries over as `initialText`, a
+24-row mono editor opens with live draft stats (the backend's rune/newline
+rule), and the inline session closes behind it so no stale draft can ever
+overwrite a save made in the modal. Saving is byte-exact through the unchanged
+`setGroupDocument`, toasts, and closes; Esc/scrim/×/Cancel on a dirty draft
+shows the same "Discard changes?" guard as the item full editor. Read-only
+hides the button (like the pencil). The backend, the modal shell, the inline
+editor and the §40 redaction rules are untouched.
+
+**Verification this session:** `bun run build` clean; **159/159** vitest (+11);
+`lint:tokens` + `check:contrast` pass; real-browser verification through the
+dev harness (which gained a FAKE document group + `getGroupDocument`/
+`setGroupDocument` handlers) — four screenshots
+`docs/assets/2026-11-25-harness-11..14-*.png`: the button on the marked row,
+the open modal (24-row editor, carried content, live stats updating
+416→444 chars while typing), the dirty-close guard, and the stats row after
+save (the save round-tripped through the fake store; reopening the inline
+editor showed the saved content). Browser console clean. Go untouched (CI
+runs the Windows matrix).
+
+**Note for the owner's install:** if the installed Clavis is still ≤ 1.12.0,
+its updater predates the v1.12.1 proxy fix — that one update needs the manual
+path (Settings → About → "Release page", or VPN/TUN on); from 1.12.1 on,
+self-updates route through the system proxy.
+
+---
+
+## Session 2026-11-24 (later) — full-editor button on list rows (v1.13.0)
 
 **Goal:** the owner reported "when you have items showing in sidebar, I want a
 button so u can edit/work on them in a bigger editor" — v1.12.0's full-modal editor

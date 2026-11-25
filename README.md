@@ -21,7 +21,9 @@ Copied secrets are automatically kept out of the Windows clipboard history
 - **Two group modes** — "Add items one by one" (named credentials, each with
   its own Copy button, added inside the open group) or "Paste whole document"
   (an entire markdown/text file stored byte-exact, one prominent Copy button
-  that hands back the identical bytes, re-paste to replace it later). The
+  that hands back the identical bytes, re-paste to replace it later — and a
+  Full editor button that opens the whole document in a large modal editor
+  with live stats, v1.14.0). The
   bulk paste accepts more than strict `.env`: `KEY=value`, spaced
   `KEY = value`, `Name: value` and markdown bullets all become items, and a
   paste that parses to nothing is rejected loudly instead of vanishing into

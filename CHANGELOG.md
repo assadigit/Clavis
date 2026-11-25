@@ -2,6 +2,16 @@
 
 What changed, per session, newest first. Started 2026-11-24 during the AGENTS.md §12 first-time setup — deeper engineering history for earlier versions lives in `docs/BUILD_LOG.md` and `docs/DECISIONS.md` (decision log, add-only).
 
+## 2026-11-25 — session: full-modal editor for whole-document groups (v1.14.0)
+
+- New feature (owner report with a screenshot marking the spot on the "Replace document" row: "I want a button where I drawn a black/yellow one, to edit the content of each item in a full modal editor"; audit `docs/audits/2026-11-25-document-full-editor.md`, spec `docs/specs/document-full-editor.md`, DECISIONS §56): a whole-document group's stored file now has the big editor too — the item editor got its full modal in v1.12.0 and row launch buttons in v1.13.0, but a document group's content was still confined to the tight 12-row inline editor.
+- The "Full editor" button sits exactly where the owner marked it (right end of the "Replace document" row, same Maximize2 glyph as every other launch point). Clicking it moves the whole editing session into a ~900px modal: the inline draft — unsaved edits included — carries over, a 24-row mono editor with live draft stats (rune count / line count, the backend's rule) opens, and saving writes byte-exact through the unchanged `setGroupDocument`, toasts, and closes.
+- The inline session closes when the full one opens, so a stale inline draft can never sit behind the modal and overwrite a save made there. The dirty-close guard ("Discard changes?" — Keep editing / Discard) matches the item full editor's exactly. The modal is owned by the manager (like the Manage items and item full editor modals) because a document save bumps the group's `updatedAt`, which re-keys the group editor behind it.
+- Read-only hides the button (same as the "Edit document" pencil); the backend is untouched — documents still never travel in the state snapshot.
+- Dev harness (unshipped dev tool) gained a FAKE document group and `getGroupDocument`/`setGroupDocument` handlers, enabling real-browser verification: four screenshots in `docs/assets/2026-11-25-harness-11..14-*.png`.
+- Tests: 148 → 159 (+11: the modal's fetch/seed/save/empty/guard/stats paths, the panel hand-off carrying an unsaved inline draft with the group id, the manager-level open+save), all green; tsc, token lint and AA contrast gates pass. Go untouched.
+- Version 1.14.0 (five places: `app.go`, `clavis.nsi`, `winres/info.json`, `types.ts`, tag).
+
 ## 2026-11-24 — session: full-editor button on list rows (v1.13.0)
 
 - New feature (owner report: "when you have items showing in sidebar, I want a button so u can edit/work on them in a bigger editor"; audit `docs/audits/2026-11-24-list-row-full-editor-button.md`, spec `docs/specs/list-row-full-editor-button.md`, DECISIONS §55): item rows in the manager's list column and member rows inside an open group now carry the expand button (the same Maximize2 glyph as the inline editor's affordances, first row action) — one click opens that item directly in the full-modal editor from v1.12.0, no detour through the tight inline editor first.

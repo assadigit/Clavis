@@ -90,17 +90,17 @@ unchanged `setGroupDocument` action.
 
 ## Done-criteria
 
-- [ ] With a whole-document group open, "Edit document" then the "Full editor"
+- [x] With a whole-document group open, "Edit document" then the "Full editor"
       button on the "Replace document" row opens the full-modal editor with
       the inline draft carried over (unsaved inline edits survive the move).
-- [ ] The inline editing session is closed by the move; saving in the modal
+- [x] The inline editing session is closed by the move; saving in the modal
       persists byte-exact through `setGroupDocument`, toasts, and closes.
-- [ ] Esc/scrim/×/Cancel on a dirty draft asks "Discard changes?"; a clean
+- [x] Esc/scrim/×/Cancel on a dirty draft asks "Discard changes?"; a clean
       draft closes directly; an empty draft refuses to save.
-- [ ] The button does not render in read-only mode or without the handler.
-- [ ] `bun run build`, `bun run test`, `lint:tokens`, `check:contrast` pass;
+- [x] The button does not render in read-only mode or without the handler.
+- [x] `bun run build`, `bun run test`, `lint:tokens`, `check:contrast` pass;
       CI green on GitHub after push.
-- [ ] Harness screenshots (real browser) in `docs/assets/` show the button on
+- [x] Harness screenshots (real browser) in `docs/assets/` show the button on
       the marked row and the open modal with a long FAKE document.
 - [ ] Docs + five-place version bump committed; `v1.14.0` tag pushed; release
       artifacts verified on the releases page.
