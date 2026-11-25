@@ -19,7 +19,10 @@ overlay (portal + fixed) instead of growing the editor's scroll area;
 with hand-formatted block comments), `57b2e5b` (gofmt restoration, this
 time with a real Go toolchain installed in the sandbox: gofmt clean,
 `GOOS=windows go vet ./...` clean, `go test ./internal/...` green before
-the push), docs + version commit, tag `v1.16.0`.
+the push), `194648b` (docs + version), tag `v1.16.0` (CI green on
+`194648b`; Release workflow green; artifacts verified:
+Clavis-Setup-1.16.0.exe 7.5 MB + Clavis-Portable-1.16.0.exe 13.9 MB
+published, non-draft).
 
 **What shipped** (details DECISIONS §58):
 1. **The Manager window is movable** — the title bar is now the Wails drag
