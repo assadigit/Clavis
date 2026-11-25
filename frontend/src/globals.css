@@ -147,6 +147,101 @@ html.clavis-root body {
   box-shadow: var(--focus-ring);
 }
 
+/* ---- Rich-text document editor (v1.15.0, DECISIONS §57) ---- */
+.clavis-tool-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-row);
+}
+.clavis-tool {
+  padding: var(--space-1);
+}
+.clavis-tool[aria-pressed="true"] {
+  background: var(--glass-bg-selected);
+}
+.clavis-tool-sep {
+  align-self: stretch;
+  border-left: 1px solid var(--glass-border);
+  margin: var(--space-1) 0;
+}
+.clavis-rich-area {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-row);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  padding: var(--space-2) var(--space-3);
+  overflow-y: auto;
+  min-width: 0;
+}
+.clavis-rich-area:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+}
+.clavis-rich-area[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.clavis-rich-area ul,
+.clavis-rich-area ol {
+  margin: var(--space-1) 0;
+  padding-left: var(--space-5);
+}
+.clavis-emoji-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: var(--space-1);
+  width: min(100%, calc(var(--space-6) * 24));
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--overlay-shadow);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 2;
+}
+.clavis-emoji-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.clavis-emoji-tab {
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border-radius: var(--radius-chip);
+  font-size: var(--text-xs);
+}
+.clavis-emoji-tab[aria-selected="true"] {
+  background: var(--glass-bg-selected);
+}
+.clavis-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--space-6) + var(--space-2)), 1fr));
+  overflow-y: auto;
+  max-height: calc(var(--space-6) * 6);
+}
+.clavis-emoji-cell {
+  font-size: var(--text-xl);
+  line-height: var(--leading-normal);
+  padding: var(--space-1);
+  border-radius: var(--radius-row);
+  justify-self: center;
+}
+.clavis-emoji-cell:hover {
+  background: var(--glass-bg-hover);
+}
+
 /* ---- Icon tile: the Bitwarden list-row / detail-header icon container ---- */
 .clavis-icon-tile {
   display: inline-flex;
