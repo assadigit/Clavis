@@ -286,13 +286,21 @@ export function Manager(props: ManagerProps) {
           height: "100%",
         }}
       >
+        {/* v1.16.0: clavis-titlebar makes this row the frameless window's
+            drag region (Wails --wails-draggable contract — see globals.css);
+            the three clavis-titlebar-btn buttons opt out so their clicks
+            can never become drags. */}
         <header
-          className="flex select-none items-center justify-between"
+          className="clavis-titlebar flex select-none items-center justify-between"
           style={{ height: "calc(var(--space-5) * 2)", padding: "0 var(--space-2)", borderBottom: "1px solid var(--glass-border)", background: "var(--glass-bg)", flexShrink: 0 }}
         >
-          <div className="flex items-center" style={{ gap: "var(--space-2)" }}>
-            <Ix icon={Key} size="md" style={{ color: "var(--color-accent-text)" }} />
-            <span style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)" }}>Clavis</span>
+          <div className="flex items-center" style={{ gap: "var(--space-2)", minWidth: 0 }}>
+            <Ix icon={Key} size="md" style={{ color: "var(--color-accent-text)", flexShrink: 0 }} />
+            {/* inline-block as a guard: the drag runtime bounds-checks
+                against clientWidth, which is 0 for inline elements. A flex
+                child is blockified anyway, but this keeps the title
+                draggable even if the row stops being flex one day. */}
+            <span style={{ fontSize: "var(--text-md)", fontWeight: "var(--weight-semibold)", display: "inline-block" }}>Clavis</span>
           </div>
           <div className="flex items-center">
             <button

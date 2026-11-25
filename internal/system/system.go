@@ -30,6 +30,14 @@ func InstallDir() string { return installDir() }
 // safe no-op. Non-Windows builds stub it out.
 func ForceForeground(hwnd unsafe.Pointer) { forceForeground(hwnd) }
 
+// RoundWindowCorners asks the OS to round the window's corners (v1.16.0,
+// DECISIONS §58 — Windows 11 DWMWA_WINDOW_CORNER_PREFERENCE; the DWM frame
+// decorations alone do not reliably round a frameless window). hwnd is the
+// native window handle (WebviewWindow.NativeWindow()); nil is a safe no-op.
+// On Windows 10 the attribute does not exist and this is a silent no-op.
+// Non-Windows builds stub it out.
+func RoundWindowCorners(hwnd unsafe.Pointer) { roundWindowCorners(hwnd) }
+
 // OpenURL opens an http(s) link in the user's default browser. Callers must
 // validate the scheme (only http/https pass) — this is a plain shell exec.
 func OpenURL(rawURL string) error { return openURL(rawURL) }

@@ -10,10 +10,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"clavis/internal/service"
 	"clavis/internal/store"
+	"clavis/internal/system"
 	"clavis/internal/updater"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -111,9 +113,10 @@ func main() {
 
 	// The Popup (§3.3b): frameless, always on top, no taskbar entry,
 	// hidden until the shortcut/tray shows it. v1.10.0: the DWM frame
-	// decorations stay ON (no DisableFramelessWindowDecorations) so
-	// Windows 11 rounds the corners and draws the Aero shadow — the
-	// "modern edges" look, native; Windows 10 falls back to square.
+	// decorations stay ON (no DisableFramelessWindowDecorations) so the
+	// Aero shadow stays. v1.16.0: the rounded corners are forced
+	// explicitly on first show (DECISIONS §58) — the decorations alone do
+	// not reliably round a frameless window.
 	popup := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "popup",
 		Title:            "Clavis",
@@ -137,11 +140,15 @@ func main() {
 		popup.Hide()
 		e.Cancel()
 	})
+	/* v1.16.0 (DECISIONS §58): round this window's corners on Windows 11
+	   (first show — see roundCornersOnFirstShow). */
+	popup.RegisterHook(events.Common.WindowShow, roundCornersOnFirstShow(popup))
 
 	// The Manager (§3.4): normal resizable window, frameless with the app's
-	// own title bar, remembers its bounds. v1.10.0: DWM frame decorations
-	// stay ON — native Windows 11 rounded corners + shadow (square on
-	// Windows 10, the OS standard there).
+	// own title bar (the drag region — globals.css clavis-titlebar,
+	// v1.16.0), remembers its bounds. v1.10.0: DWM frame decorations stay
+	// ON (Aero shadow); v1.16.0 rounds the corners explicitly on first
+	// show (DECISIONS §58; square on Windows 10, the OS standard there).
 	managerOpts := application.WebviewWindowOptions{
 		Name:             "manager",
 		Title:            "Clavis",
@@ -165,6 +172,8 @@ func main() {
 		svc.HideManager()
 		e.Cancel()
 	})
+	/* v1.16.0 (DECISIONS §58): same rounding for the Manager. */
+	manager.RegisterHook(events.Common.WindowShow, roundCornersOnFirstShow(manager))
 
 	// Tray (§3.2): left click → Popup; right click → the menu.
 	tray := app.SystemTray.New()
@@ -209,6 +218,23 @@ func main() {
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+/* roundCornersOnFirstShow applies the Windows 11 rounded corners (DECISIONS
+§58) on a window's first show. The native HWND exists only once app.Run()
+has processed the deferred window creation, so this cannot run at
+NewWithOptions time; Common.WindowShow (Wails' default mapping of the
+native show event) fires at first show and on every later show, and the
+once guard keeps it to a single DWM call. */
+func roundCornersOnFirstShow(w *application.WebviewWindow) func(*application.WindowEvent) {
+	var once sync.Once
+	return func(*application.WindowEvent) {
+		once.Do(func() {
+			if hwnd := w.NativeWindow(); hwnd != nil {
+				system.RoundWindowCorners(hwnd)
+			}
+		})
 	}
 }
 

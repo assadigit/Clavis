@@ -494,7 +494,18 @@ html.solid .clavis-keycap { background: var(--solid-surface-raised); }
    zero usages since the glass-intensity slider feature was removed) */
 
 /* ---- Manager title bar buttons ---- */
+/* v1.16.0: the title bar is the frameless window's drag region. Wails'
+   runtime (dist/drag.js) arms a native window drag when the primary
+   button goes down on an element whose computed --wails-draggable is
+   "drag" and stays inside its box, then a move invokes wails:drag. The
+   custom property INHERITS, so every descendant of the header qualifies —
+   the window buttons must explicitly opt out or a jittered click on
+   Minimize would become a drag and swallow the click. */
+.clavis-titlebar {
+  --wails-draggable: drag;
+}
 .clavis-titlebar-btn {
+  --wails-draggable: no-drag;
   display: inline-flex;
   align-items: center;
   justify-content: center;

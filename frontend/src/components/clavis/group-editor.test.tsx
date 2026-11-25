@@ -337,6 +337,22 @@ describe("GroupEditor document panel — Full editor hand-off", () => {
     await screen.findByLabelText("Document content — paste the whole file here");
     expect(screen.queryByRole("button", { name: "Open the full document editor" })).toBeNull();
   });
+
+  /* v1.16.0 (DECISIONS §58): the owner asked for the bold "Replace
+     document" label and the dim "Loaded"/"Edited" status chip to go. */
+  it("shows neither the 'Replace document' label nor the 'Loaded/Edited' chip in the inline editor", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setupDoc();
+    await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
+    await screen.findByLabelText("Document content — paste the whole file here");
+    expect(screen.queryByText("Replace document")).toBeNull();
+    expect(screen.queryByText("Loaded")).toBeNull();
+    expect(screen.queryByText("Edited")).toBeNull();
+    expect(screen.queryByRole("button", { name: "The stored document is loaded below" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "The document has local edits" })).toBeNull();
+    /* The launch button is the row's one remaining control. */
+    expect(screen.getByRole("button", { name: "Open the full document editor" })).toBeTruthy();
+  });
 });
 
 /* ---- v1.15.0 (DECISIONS §57): the inline document editor is dual-mode ---- */

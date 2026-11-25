@@ -19,7 +19,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Copy, FileText, Maximize2, Pencil, RefreshCw, Save, X } from "lucide-react";
+import { Copy, FileText, Maximize2, Pencil, Save, X } from "lucide-react";
 import type { CallFn } from "@/lib/clavis/client";
 import { messages } from "@/lib/clavis/messages";
 import type { Group } from "@/lib/clavis/types";
@@ -207,38 +207,32 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
 
       {editing ? (
         <div className="flex flex-col" style={{ gap: "var(--space-2)" }}>
-          <div className="flex items-center justify-between" style={{ gap: "var(--space-2)" }}>
-            <span style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>Replace document</span>
-            <div className="flex items-center" style={{ gap: "var(--space-1)", flexShrink: 0 }}>
-              <Btn
-                variant="ghost"
-                icon={RefreshCw}
-                label={dirty ? "Edited" : "Loaded"}
-                disabled
-                ariaLabel={dirty ? "The document has local edits" : "The stored document is loaded below"}
-              />
+          {/* v1.16.0: the row that carried the bold "Replace document" label
+              and the disabled "Loaded/Edited" chip (owner request: both
+              removed). What remains is the §56 launch button, right-aligned;
+              with no handler wired the row renders nothing at all. */}
+          {onOpenFullEditor ? (
+            <div className="flex items-center justify-end" style={{ gap: "var(--space-1)", flexShrink: 0 }}>
               {/* v1.14.0 (§56): the launch button at the owner's marked spot —
                   moves this editing session (draft included) into the
                   full-modal editor; the inline session closes so no stale
                   draft can overwrite a save made up there. The mode travels
                   inside the draft string itself (§57). */}
-              {onOpenFullEditor ? (
-                <Btn
-                  variant="ghost"
-                  icon={Maximize2}
-                  label="Full editor"
-                  onClick={() => {
-                    const carry = draft;
-                    onOpenFullEditor(carry);
-                    cancelEditing();
-                  }}
-                  disabled={saving}
-                  ariaLabel="Open the full document editor"
-                  title="Open the full editor — the whole document, more room"
-                />
-              ) : null}
+              <Btn
+                variant="ghost"
+                icon={Maximize2}
+                label="Full editor"
+                onClick={() => {
+                  const carry = draft;
+                  onOpenFullEditor(carry);
+                  cancelEditing();
+                }}
+                disabled={saving}
+                ariaLabel="Open the full document editor"
+                title="Open the full editor — the whole document, more room"
+              />
             </div>
-          </div>
+          ) : null}
           {loading || draft === null ? (
             <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)" }} role="status">
               Loading…

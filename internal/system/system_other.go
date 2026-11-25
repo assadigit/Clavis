@@ -19,6 +19,8 @@ func installDir() string { return "" }
 
 func forceForeground(hwnd unsafe.Pointer) { _ = hwnd /* development builds only */ }
 
+func roundWindowCorners(hwnd unsafe.Pointer) { _ = hwnd /* development builds only */ }
+
 type sysErr string
 
 func (e sysErr) Error() string { return string(e) }
