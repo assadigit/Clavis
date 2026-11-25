@@ -1,13 +1,19 @@
 /**
  * CLAVIS — the document panel of an open whole-document group (v1.5.0,
- * DECISIONS.md §40).
+ * DECISIONS.md §40; dual-mode since v1.15.0, §57).
  *
  * MODE 1 "Paste whole document": the group IS one verbatim pasted file.
  * This panel shows the ONE prominent Copy button that hands back the
- * EXACT stored bytes (backend-side copy; on failure the manual-copy dialog
- * opens with the payload pre-selected), the size stats, the Secret toggle
- * (clipboard-history exclusion) and the re-paste editor that saves over
- * the stored document byte-exact.
+ * document as clean PLAIN text (backend-side copy with the §5.2 privacy
+ * formats; rich documents are stripped to their words by the backend), the
+ * size stats, the Secret toggle (clipboard-history exclusion) and the
+ * re-paste editor that saves over the stored document byte-exact.
+ *
+ * v1.15.0: the editor is dual-mode — the plain byte-exact TextArea, or the
+ * rich WYSIWYG editor (Bold/Italic/Emoji/Alignment…). The mode lives in the
+ * stored string (the rich sentinel), so the "Full editor" carry needs no
+ * extra plumbing and a plain document never changes form until the owner
+ * flips the switch. Rich → plain with formatting present asks first.
  */
 "use client";
 
@@ -19,7 +25,10 @@ import { messages } from "@/lib/clavis/messages";
 import type { Group } from "@/lib/clavis/types";
 import { ManualCopyModal } from "../manual-copy-modal";
 import { Ix } from "../icons";
-import { Btn, FieldHint, TextArea, Toggle } from "../ui-bits";
+import { Btn, FieldHint, Modal, TextArea, Toggle } from "../ui-bits";
+import { DocModeToggle, type DocMode } from "../editors/doc-mode-toggle";
+import { RichTextEditor } from "../editors/rich-text-editor";
+import { htmlFromRichDoc, isRichDoc, plainToRich, richDocFromHtml, richHasFormatting, richToPlain, sanitizeRich } from "../editors/rich-text";
 
 export interface DocumentPanelProps {
   group: Group;
@@ -40,15 +49,23 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
      item editor fetches one value. */
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [mode, setMode] = useState<DocMode>("plain");
+  /* The document as loaded — the dirty baseline (a mode round-trip that
+     lands on the identical string is not dirty). */
+  const [baseline, setBaseline] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [manual, setManual] = useState<string | null>(null);
+  /* v1.15.0 (§57): the rich → plain formatting-loss guard. */
+  const [confirmStrip, setConfirmStrip] = useState(false);
   const editRequestId = useRef(0);
+
+  const dirty = draft !== null && baseline !== null && draft !== baseline;
 
   async function copyDocument() {
     /* Backend-side copy: the document's bytes never enter the webview on
-       the success path; the §5.2 privacy formats apply when Secret is on. */
+       the success path; the §5.2 privacy formats apply when Secret is on.
+       Rich documents are stripped to plain text by the backend (§57). */
     const res = await call("copy", { kind: "group", id: group.id });
     if (res.ok && res.copied) {
       toast.success(
@@ -78,7 +95,8 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
     setLoading(false);
     if (res.ok && typeof res.document === "string") {
       setDraft(res.document);
-      setDirty(false);
+      setBaseline(res.document);
+      setMode(isRichDoc(res.document) ? "rich" : "plain");
     } else {
       setEditing(false);
     }
@@ -88,25 +106,58 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
     editRequestId.current++;
     setEditing(false);
     setDraft(null);
-    setDirty(false);
+    setBaseline(null);
+    setConfirmStrip(false);
+  }
+
+  function switchMode(next: DocMode) {
+    if (saving || next === mode || draft === null) return;
+    if (next === "rich") {
+      /* Lossless: the words are untouched, one paragraph per line. */
+      setDraft(richDocFromHtml(plainToRich(draft)));
+      setMode("rich");
+      return;
+    }
+    const html = htmlFromRichDoc(draft);
+    if (richHasFormatting(html)) {
+      setConfirmStrip(true);
+      return;
+    }
+    setDraft(richToPlain(html));
+    setMode("plain");
+  }
+
+  function stripFormatting() {
+    if (draft === null) return;
+    setDraft(richToPlain(htmlFromRichDoc(draft)));
+    setMode("plain");
+    setConfirmStrip(false);
   }
 
   async function saveDocument() {
     if (readOnly || saving || draft === null) return;
-    if (draft === "") {
-      /* Byte-exact means byte-exact in both directions: saving an empty
-         editor would wipe the document — require the user to re-paste. */
+    let payload = draft;
+    if (mode === "rich") {
+      const html = sanitizeRich(htmlFromRichDoc(draft));
+      if (richToPlain(html).trim() === "") {
+        /* Byte-exact means byte-exact in both directions: saving an empty
+           editor would wipe the document — require the user to write. */
+        toast.error(messages.docEmptyWarning);
+        return;
+      }
+      payload = richDocFromHtml(html);
+    } else if (draft === "") {
       toast.error(messages.docEmptyWarning);
       return;
     }
     setSaving(true);
-    const res = await call("setGroupDocument", { id: group.id, document: draft });
+    const res = await call("setGroupDocument", { id: group.id, document: payload });
     setSaving(false);
     if (res.ok) {
       toast.success(messages.docSaved(group.name));
       setEditing(false);
       setDraft(null);
-      setDirty(false);
+      setBaseline(null);
     }
   }
 
@@ -119,12 +170,14 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
         label="Copy document"
         onClick={() => void copyDocument()}
         disabled={readOnly}
-        title="Copy the entire pasted document, byte-identical to the original"
+        title="Copy the document as plain text (formatting is not included)"
         ariaLabel="Copy the entire document"
         style={{ alignSelf: "flex-start", minWidth: "calc(var(--space-6) * 8)" }}
       />
       <FieldHint>
-        The whole pasted file is stored verbatim — every character, line break and blank line. Copy hands back the identical bytes.
+        {group.docRich
+          ? messages.docRichHint
+          : "The whole pasted file is stored verbatim — every character, line break and blank line. Copy hands back the identical bytes."}
       </FieldHint>
 
       <div className="glass-row flex flex-wrap items-center" style={{ gap: "var(--space-2)", padding: "var(--space-2) var(--space-3)" }}>
@@ -167,7 +220,8 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
               {/* v1.14.0 (§56): the launch button at the owner's marked spot —
                   moves this editing session (draft included) into the
                   full-modal editor; the inline session closes so no stale
-                  draft can overwrite a save made up there. */}
+                  draft can overwrite a save made up there. The mode travels
+                  inside the draft string itself (§57). */}
               {onOpenFullEditor ? (
                 <Btn
                   variant="ghost"
@@ -191,22 +245,35 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
             </p>
           ) : (
             <>
-              <TextArea
-                mono
-                dir="auto"
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  setDirty(true);
-                }}
-                disabled={readOnly || saving}
-                rows={12}
-                spellCheck={false}
-                aria-label="Document content — paste the whole file here"
-                placeholder="Paste the whole file — it will be stored exactly as pasted…"
-                style={{ fontSize: "var(--text-sm)" }}
-              />
-              <FieldHint>Save overwrites the stored document with exactly this text (byte-exact).</FieldHint>
+              <DocModeToggle mode={mode} onChange={switchMode} disabled={readOnly || saving} />
+              {mode === "plain" ? (
+                <TextArea
+                  mono
+                  dir="auto"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  disabled={readOnly || saving}
+                  rows={12}
+                  spellCheck={false}
+                  aria-label="Document content — paste the whole file here"
+                  placeholder="Paste the whole file — it will be stored exactly as pasted…"
+                  style={{ fontSize: "var(--text-sm)" }}
+                />
+              ) : (
+                <RichTextEditor
+                  value={htmlFromRichDoc(draft)}
+                  onChange={(html) => setDraft(richDocFromHtml(html))}
+                  disabled={readOnly || saving}
+                  ariaLabel="Document content"
+                  placeholder="Write the document — formatting is kept…"
+                  rows={12}
+                />
+              )}
+              <FieldHint>
+                {mode === "rich"
+                  ? messages.docRichHint
+                  : "Save overwrites the stored document with exactly this text (byte-exact)."}
+              </FieldHint>
               <div className="flex items-center" style={{ gap: "var(--space-2)" }}>
                 <Btn
                   variant="primary"
@@ -228,6 +295,21 @@ export function DocumentPanel({ group, call, readOnly, docChars, docLines, onOpe
         text={manual ?? ""}
         onClose={() => setManual(null)}
       />
+      <Modal
+        open={confirmStrip}
+        onClose={() => setConfirmStrip(false)}
+        title={messages.docStripTitle}
+        footer={
+          <>
+            <Btn variant="ghost" label={messages.docStripKeep} onClick={() => setConfirmStrip(false)} />
+            <Btn variant="danger" label={messages.docStripConfirm} onClick={stripFormatting} />
+          </>
+        }
+      >
+        <p className="t-muted" style={{ margin: 0, fontSize: "var(--text-sm)", lineHeight: "var(--leading-relaxed)" }}>
+          {messages.docStripBody(group.name)}
+        </p>
+      </Modal>
     </section>
   );
 }

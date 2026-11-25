@@ -28,6 +28,16 @@ export const messages = {
   docEmptyWarning: "The document is empty — paste the whole file first.",
   itemAddedToGroup: (name: string) => `Added “${name}” to this group.`,
 
+  /* ---- rich-text documents (v1.15.0 §57) ---- */
+  docRichHint: "Rich text — formatting is kept in Clavis. “Copy document” pastes plain text; “Copy formatted” keeps the styling.",
+  copiedFormatted: "Formatted copy ready — paste keeps the styling.",
+  copyFormattedFallback: "Formatted copy is unavailable here — copied the plain text instead.",
+  docStripTitle: "Remove formatting?",
+  docStripBody: (name: string) =>
+    `Switching “${name}” to plain text removes bold, italic, lists and alignment. The words stay.`,
+  docStripKeep: "Keep rich text",
+  docStripConfirm: "Remove formatting",
+
   /* ---- manual-copy fallback (the browser/shell blocked the copy) ---- */
   manualCopyTitle: "Copy manually",
   manualCopyHint:

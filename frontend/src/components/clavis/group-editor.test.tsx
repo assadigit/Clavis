@@ -6,7 +6,7 @@
  * mocked.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { GroupEditor } from "./group-editor";
 import { downloadExport } from "@/lib/clavis/client";
@@ -336,5 +336,144 @@ describe("GroupEditor document panel — Full editor hand-off", () => {
     await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
     await screen.findByLabelText("Document content — paste the whole file here");
     expect(screen.queryByRole("button", { name: "Open the full document editor" })).toBeNull();
+  });
+});
+
+/* ---- v1.15.0 (DECISIONS §57): the inline document editor is dual-mode ---- */
+
+describe("GroupEditor document panel — dual mode", () => {
+  function richDocGroup(): Group {
+    return {
+      id: "fake-doc-group-2",
+      name: "FAKE Launch brief",
+      categoryId: null,
+      tags: [],
+      itemIds: [],
+      mode: "document",
+      isSecret: false,
+      docChars: 40,
+      docLines: 3,
+      docRich: true,
+      pinned: true,
+      useCount: 2,
+      lastUsedAt: null,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+      deletedAt: null,
+    };
+  }
+
+  function setupRichDoc() {
+    const call = vi.fn(async (action: string) => {
+      if (action === "getGroupDocument") {
+        return {
+          ok: true,
+          status: 200,
+          document: "<!--clavis-rich--><div><b>FAKE</b> launch brief 🚀</div><div>line two</div>",
+        };
+      }
+      return { ok: true, status: 200 };
+    }) as unknown as CallFn;
+    const onOpenDocumentEditor = vi.fn();
+    const base = state();
+    base.data.groups = [richDocGroup()];
+    render(
+      <GroupEditor
+        mode="edit"
+        state={base}
+        call={call}
+        readOnly={false}
+        group={richDocGroup()}
+        onDone={vi.fn()}
+        onSelectEntry={vi.fn()}
+        deleteEntry={vi.fn()}
+        onManageItems={vi.fn()}
+        onOpenDocumentEditor={onOpenDocumentEditor}
+        onCancelCreate={vi.fn()}
+      />,
+    );
+    return { call, onOpenDocumentEditor };
+  }
+
+  /** A PLAIN document group (same shape as the hand-off suite's setupDoc). */
+  function setupPlainDoc() {
+    const call = vi.fn(async (action: string) => {
+      if (action === "getGroupDocument") {
+        return { ok: true, status: 200, document: "FAKE doc line 1\nFAKE doc line 2" };
+      }
+      return { ok: true, status: 200 };
+    }) as unknown as CallFn;
+    const onOpenDocumentEditor = vi.fn();
+    const base = state();
+    base.data.groups = [
+      {
+        ...richDocGroup(),
+        id: "fake-doc-group-1",
+        name: "FAKE Credentials file",
+        isSecret: true,
+        docRich: undefined,
+        pinned: false,
+      },
+    ];
+    render(
+      <GroupEditor
+        mode="edit"
+        state={base}
+        call={call}
+        readOnly={false}
+        group={base.data.groups[0]}
+        onDone={vi.fn()}
+        onSelectEntry={vi.fn()}
+        deleteEntry={vi.fn()}
+        onManageItems={vi.fn()}
+        onOpenDocumentEditor={onOpenDocumentEditor}
+        onCancelCreate={vi.fn()}
+      />,
+    );
+    return { call, onOpenDocumentEditor };
+  }
+
+  it("shows the rich hint for a rich document and opens the inline editor in rich mode", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setupRichDoc();
+    expect(screen.getByText(/Rich text — formatting is kept in Clavis/i)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    expect(ed.textContent).toContain("FAKE launch brief 🚀");
+    expect(screen.getByRole("button", { name: "Bold" })).toBeTruthy();
+  });
+
+  it("flips a plain inline draft to rich and carries the mode up to the full editor", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { onOpenDocumentEditor } = setupPlainDoc();
+    await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
+    await screen.findByLabelText("Document content — paste the whole file here");
+    /* The stored FAKE doc is plain: flip it to rich — the words become one
+       div per line, toolbar appears. */
+    await user.click(screen.getByRole("radio", { name: "Rich text" }));
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    expect(ed.innerHTML).toBe("<div>FAKE doc line 1</div><div>FAKE doc line 2</div>");
+    /* The carry up to the full editor keeps the mode: the sentinel rides
+       inside the draft string itself. */
+    await user.click(screen.getByRole("button", { name: "Open the full document editor" }));
+    expect(onOpenDocumentEditor).toHaveBeenCalledTimes(1);
+    const [, carried] = vi.mocked(onOpenDocumentEditor).mock.calls[0];
+    expect(String(carried).startsWith("<!--clavis-rich-->")).toBe(true);
+  });
+
+  it("saves an inline rich draft under the sentinel through setGroupDocument", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { call } = setupRichDoc();
+    await user.click(screen.getByRole("button", { name: "Replace the stored document" }));
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    ed.innerHTML = "<div><b>FAKE</b> edited inline ✅</div>";
+    fireEvent.input(ed);
+    await user.click(screen.getByRole("button", { name: "Save document" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("setGroupDocument", {
+        id: "fake-doc-group-2",
+        document: "<!--clavis-rich--><div><b>FAKE</b> edited inline ✅</div>",
+      }),
+    );
   });
 });

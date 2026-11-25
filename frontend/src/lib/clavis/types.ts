@@ -73,6 +73,10 @@ export interface Group {
   /** Document size hints (redacted state carries no text, just stats). */
   docChars?: number;
   docLines?: number;
+  /** Document groups only (v1.15.0 §57): the stored document is rich text
+   *  (sentinel-prefixed HTML) — the UI switches its hint and editor mode.
+   *  The text itself still never travels in the state. */
+  docRich?: boolean;
   pinned: boolean;
   useCount: number;
   lastUsedAt: string | null;

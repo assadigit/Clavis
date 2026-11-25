@@ -7,7 +7,7 @@
  * Wails runtime mocked.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocumentFullEditor } from "./document-full-editor";
 import type { Group } from "@/lib/clavis/types";
@@ -154,5 +154,149 @@ describe("DocumentFullEditor", () => {
     await screen.findByLabelText("Document content — paste the whole file here");
     /* 5 runes (one newline), 2 lines. */
     expect(screen.getByText("5 characters · 2 lines")).toBeTruthy();
+  });
+});
+
+/* ---- v1.15.0 (DECISIONS §57): dual-mode (plain ↔ rich) ---- */
+
+const FAKE_RICH_DOC = "<!--clavis-rich--><div><b>FAKE</b> launch brief 🚀</div><div>line two</div>";
+
+function setupRich(initialText: string | null, fetchDoc = FAKE_RICH_DOC) {
+  const call = vi.fn(async (action: string) => {
+    if (action === "getGroupDocument") {
+      return { ok: true, status: 200, document: fetchDoc };
+    }
+    return { ok: true, status: 200 };
+  }) as unknown as CallFn;
+  const onClose = vi.fn();
+  render(
+    <DocumentFullEditor
+      group={docGroup()}
+      call={call}
+      readOnly={false}
+      initialText={initialText}
+      onClose={onClose}
+    />,
+  );
+  return { call, onClose };
+}
+
+describe("DocumentFullEditor dual mode (v1.15.0 §57)", () => {
+  it("opens in rich mode for a sentinel-prefixed document, with the toolbar", async () => {
+    const { call } = setupRich(null);
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    expect(ed.textContent).toContain("FAKE launch brief 🚀");
+    expect(screen.getByRole("button", { name: "Bold" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Insert an emoji" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy formatted" })).toBeTruthy();
+    /* No mono plain textarea in rich mode. */
+    expect(screen.queryByLabelText("Document content — paste the whole file here")).toBeNull();
+    expect(call).toHaveBeenCalledWith("getGroupDocument", { id: "fake-doc-group-1" });
+  });
+
+  it("opens in rich mode from a carried rich draft without fetching", async () => {
+    const { call } = setupRich(FAKE_RICH_DOC);
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    expect(ed.textContent).toContain("launch brief");
+    expect(call).not.toHaveBeenCalledWith("getGroupDocument", expect.anything());
+  });
+
+  it("keeps a plain document in plain mode — no toolbar, no Copy formatted", async () => {
+    setupRich("FAKE plain doc");
+    await screen.findByLabelText("Document content — paste the whole file here");
+    expect(screen.queryByRole("button", { name: "Bold" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy formatted" })).toBeNull();
+  });
+
+  it("flips a plain document to rich (one div per line) and back cleanly", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setupRich("line one\nline two");
+    await screen.findByLabelText("Document content — paste the whole file here");
+    await user.click(screen.getByRole("radio", { name: "Rich text" }));
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    expect(ed.innerHTML).toBe("<div>line one</div><div>line two</div>");
+    /* No formatting present: flipping back converts silently (no guard). */
+    await user.click(screen.getByRole("radio", { name: "Plain text" }));
+    const plain = await screen.findByLabelText("Document content — paste the whole file here");
+    expect((plain as HTMLTextAreaElement).value).toBe("line one\nline two");
+    /* The mode round-trip landed on the identical string: not dirty. */
+    expect((screen.getByRole("button", { name: "Save document" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("asks before stripping formatting on rich → plain, and can keep rich", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setupRich(FAKE_RICH_DOC);
+    await screen.findByRole("textbox", { name: "Document content" });
+    await user.click(screen.getByRole("radio", { name: "Plain text" }));
+    const confirm = await screen.findByRole("dialog", { name: "Remove formatting?" });
+    await user.click(within(confirm).getByRole("button", { name: "Keep rich text" }));
+    /* Still rich: the toolbar is right there. */
+    expect(screen.getByRole("button", { name: "Bold" })).toBeTruthy();
+  });
+
+  it("strips the formatting after the confirmation", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setupRich(FAKE_RICH_DOC);
+    await screen.findByRole("textbox", { name: "Document content" });
+    await user.click(screen.getByRole("radio", { name: "Plain text" }));
+    const confirm = await screen.findByRole("dialog", { name: "Remove formatting?" });
+    await user.click(within(confirm).getByRole("button", { name: "Remove formatting" }));
+    const plain = await screen.findByLabelText("Document content — paste the whole file here");
+    expect((plain as HTMLTextAreaElement).value).toBe("FAKE launch brief 🚀\nline two");
+  });
+
+  it("saves rich mode sanitized, under the sentinel", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { call } = setupRich("<!--clavis-rich--><div>seed</div>");
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    /* A paste that smuggles a script past the editor must not reach the
+       vault: save runs the sanitizer over the draft. */
+    ed.innerHTML = "<div><b>bold</b> words</div><script>alert(1)</script>";
+    fireEvent.input(ed);
+    await user.click(screen.getByRole("button", { name: "Save document" }));
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith("setGroupDocument", {
+        id: "fake-doc-group-1",
+        document: "<!--clavis-rich--><div><b>bold</b> words</div>",
+      }),
+    );
+  });
+
+  it("refuses to save a rich draft whose plain text is empty", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { call } = setupRich("<!--clavis-rich--><div>words</div>");
+    const ed = await screen.findByRole("textbox", { name: "Document content" });
+    ed.innerHTML = "<div><br></div>";
+    fireEvent.input(ed);
+    await user.click(screen.getByRole("button", { name: "Save document" }));
+    expect(call).not.toHaveBeenCalledWith("setGroupDocument", expect.anything());
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("shows the stats of the plain text for a rich draft", async () => {
+    setupRich("<!--clavis-rich--><div><b>ab</b></div><div>cd</div>");
+    await screen.findByRole("textbox", { name: "Document content" });
+    /* 5 runes (one newline), 2 lines — of the PLAIN text, not the markup. */
+    expect(screen.getByText("5 characters · 2 lines")).toBeTruthy();
+  });
+
+  it("Copy formatted puts html + plain text on the webview clipboard", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const write = vi.fn(async (_items: unknown[]) => {});
+    Object.defineProperty(navigator, "clipboard", { value: { write }, configurable: true });
+    (globalThis as unknown as { ClipboardItem: unknown }).ClipboardItem = class {
+      map: Map<string, unknown>;
+      constructor(map: Record<string, unknown>) {
+        this.map = new Map(Object.entries(map));
+      }
+    };
+    setupRich("<!--clavis-rich--><div><b>styled</b> words</div>");
+    await screen.findByRole("textbox", { name: "Document content" });
+    await user.click(screen.getByRole("button", { name: "Copy formatted" }));
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    const items = write.mock.calls[0]?.[0] as unknown[];
+    const item = items[0] as { map: Map<string, Blob> };
+    expect(item.map.has("text/html")).toBe(true);
+    expect(item.map.has("text/plain")).toBe(true);
   });
 });

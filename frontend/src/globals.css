@@ -169,6 +169,13 @@ html.clavis-root body {
   border-left: 1px solid var(--glass-border);
   margin: var(--space-1) 0;
 }
+.clavis-mode {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+.clavis-mode[aria-checked="true"] {
+  background: var(--glass-bg-selected);
+}
 .clavis-rich-area {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);

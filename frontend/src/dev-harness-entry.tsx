@@ -12,6 +12,7 @@ import { Toaster } from "sonner";
 import { Manager } from "@/components/clavis/manager";
 import { applyTheme } from "@/components/clavis/glass";
 import { useMaximized } from "@/components/clavis/ui-bits";
+import { isRichDoc, richPlainText } from "@/components/clavis/editors/rich-text";
 import type { CallFn } from "@/lib/clavis/client";
 import type { ClavisState, Group, Item } from "@/lib/clavis/types";
 import type { Creating, ListFilter, Selection } from "@/components/clavis/app-types";
@@ -72,6 +73,19 @@ Notes:
   The tail line exists so the full editor's scroll is exercised.
 `;
 
+/** The FAKE rich document's stored content (v1.15.0 §57 harness data):
+ *  sentinel + the editor's own vocabulary, exercising every basic tool —
+ *  a centered bold heading, emoji, an italic nuance, a list and a right-
+ *  aligned sign-off. */
+const FAKE_RICH_DOC =
+  "<!--clavis-rich-->" +
+  '<div style="text-align: center"><b>FAKE Launch brief 🚀</b></div>' +
+  "<div><br></div>" +
+  "<div>The <b>bold</b> points matter, the <i>italic</i> ones are nuance.</div>" +
+  "<div>Ship checklist:</div>" +
+  "<ul><li>Rotate the FAKE tokens 🔑</li><li>Update the FAKE changelog ✅</li></ul>" +
+  '<div style="text-align: right">Signed, the FAKE crew 👋</div>';
+
 function makeVault(): HarnessVault {
   const values = new Map<string, string>();
   values.set("fake-item-1", "FAKE-ghp_1234567890abcdefGITHUB");
@@ -82,6 +96,10 @@ function makeVault(): HarnessVault {
   values.set("fake-item-3", "FAKE-grafana-token-9988776655");
   const docs = new Map<string, string>();
   docs.set("fake-doc-group-1", FAKE_DOC);
+  /* v1.15.0 §57 harness data: a FAKE rich document (the sentinel + the
+     editor's own vocabulary — centered bold heading, emoji, a list, right-
+     aligned sign-off) so the rich editor is exercised end to end. */
+  docs.set("fake-doc-group-2", FAKE_RICH_DOC);
   const state: ClavisState = {
     data: {
       schemaVersion: 1,
@@ -145,6 +163,24 @@ function makeVault(): HarnessVault {
           docLines: FAKE_DOC.split("\n").length,
           pinned: false,
           useCount: 5,
+          lastUsedAt: T0,
+          createdAt: T0,
+          updatedAt: T0,
+          deletedAt: null,
+        },
+        {
+          id: "fake-doc-group-2",
+          name: "FAKE Launch brief",
+          categoryId: "c2",
+          tags: [],
+          itemIds: [],
+          mode: "document",
+          isSecret: false,
+          docChars: [...richPlainText(FAKE_RICH_DOC)].length,
+          docLines: richPlainText(FAKE_RICH_DOC).split("\n").length,
+          docRich: true,
+          pinned: true,
+          useCount: 2,
           lastUsedAt: T0,
           createdAt: T0,
           updatedAt: T0,
@@ -334,8 +370,11 @@ function HarnessRoot() {
         if (!group) return { ok: false, status: 404, error: "not found" };
         const doc = String(p.document ?? "");
         vault.docs.set(group.id, doc);
-        group.docChars = [...doc].length;
-        group.docLines = doc === "" ? 0 : doc.split("\n").length;
+        /* Mirrors the backend (§57): stats of the PLAIN text + the rich flag. */
+        const plain = richPlainText(doc);
+        group.docChars = [...plain].length;
+        group.docLines = plain === "" ? 0 : plain.split("\n").length;
+        group.docRich = isRichDoc(doc);
         group.updatedAt = now;
         publish();
         return { ok: true, status: 200 };
